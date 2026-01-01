@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -13,12 +12,41 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
+            $table->string('name')->nullable();
+            $table->string('mobile')->nullable();
+            $table->string('email')->nullable();
             $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
+            $table->string('password')->nullable();
+            // roles
+            $table->string('primary_role')->nullable();
+            $table->boolean('has_secondary_role')->default(false);
+            $table->string('secondary_role')->nullable();
+
+            // operation area
+            $table->string('operation_area')->nullable(); // local , pan india , state
+
+            // company info
+            $table->string('company_name')->nullable();
+            $table->string('gst_in')->nullable();
+
+            // state and city 
+            $table->integer('state_id')->nullable();
+            $table->integer('city_id')->nullable();
+
+            // certificate
+            $table->string('udyam_certificate')->nullable();
+            $table->string('udyam_verified_at')->nullable();
+
+
+
+
             $table->rememberToken();
             $table->timestamps();
+
+            $table->unique('email');
+            $table->unique('mobile');
+            $table->index('primary_role');
+            $table->index('company_name');
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
