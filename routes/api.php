@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\api\AuthController;
 use App\Http\Controllers\api\UserController;
+use App\Http\Controllers\api\MaterialController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -22,6 +23,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/user/profile', [UserController::class, 'getProfile']);
         Route::post('/user/profile', [UserController::class, 'updateProfile']);
     });
+
+    #materials
+    Route::get('/materials', [MaterialController::class, 'getMaterials']);
+
 
 
 });
