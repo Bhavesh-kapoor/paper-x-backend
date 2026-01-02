@@ -40,7 +40,7 @@ class AuthController extends Controller
                 ? $e->getStatusCode()
                 : HttpResponse::HTTP_BAD_REQUEST
             );
-            ;
+
         }
     }
 }

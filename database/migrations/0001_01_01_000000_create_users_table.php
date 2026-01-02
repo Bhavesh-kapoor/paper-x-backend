@@ -30,8 +30,8 @@ return new class extends Migration {
             $table->string('gst_in')->nullable();
 
             // state and city 
-            $table->integer('state_id')->nullable();
-            $table->integer('city_id')->nullable();
+            $table->string('state')->nullable();
+            $table->string('city')->nullable();
 
             // certificate
             $table->string('udyam_certificate')->nullable();

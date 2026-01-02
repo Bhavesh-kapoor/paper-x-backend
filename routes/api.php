@@ -17,10 +17,10 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/otp/request', [AuthController::class, 'loginWithOtp'])->name('auth.otp.request');
     Route::post('auth/otp/verify', [AuthController::class, 'loginWithOtp'])->name('auth.otp.verify');
 
-    #user profile and update
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/profile', [UserController::class, 'getProfile']);
-        Route::put('/profile', [UserController::class, 'updateProfile']);
+    #user  -  get and update profile
+    Route::middleware(['token.exists', 'auth:sanctum'])->group(function () {
+        Route::get('/user/profile', [UserController::class, 'getProfile']);
+        Route::post('/user/profile', [UserController::class, 'updateProfile']);
     });
 
 

@@ -41,12 +41,13 @@ class User extends Authenticatable
         'gst_in',
 
         // location
-        'state_id',
-        'city_id',
+        'state',
+        'city',
 
         // certificates
         'udyam_certificate',
         'udyam_verified_at',
+        'avatar',
     ];
 
     protected $hidden = [
