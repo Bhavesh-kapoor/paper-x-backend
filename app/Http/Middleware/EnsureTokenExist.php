@@ -13,26 +13,23 @@ class EnsureTokenExist
 
     public function handle(Request $request, Closure $next): Response
     {
-
-
         $token = $request->bearerToken();
         if (!$token) {
-            return FacadesResponse::error('Token Missing', [
+            return FacadesResponse::error('Unauthenticated', [
                 "errors" => [
                     'token' => 'Token is missing'
                 ]
-            ], 404);
+            ], 401);
         }
         // if token is comming then verify it from the personal access token table 
         $exist = PersonalAccessToken::findToken($token);
         if (!$exist) {
-            return FacadesResponse::error('Invalid Token', [
+            return FacadesResponse::error('Unauthenticated', [
                 "errors" => [
-                    'token' => 'Invalid Token'
+                    'token' => 'Invalid token'
                 ]
             ], 401);
         }
         return $next($request);
-
     }
 }

@@ -15,4 +15,14 @@ class Material extends Model
     {
         return $this->hasMany(MaterialGrade::class);
     }
+
+    public function dealers(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Dealer::class, 'dealer_materials');
+    }
+
+    public function inquiries(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Inquiry::class, 'inquiry_materials');
+    }
 }

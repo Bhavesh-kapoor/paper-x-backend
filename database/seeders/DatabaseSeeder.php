@@ -15,6 +15,20 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call([
+            MaterialSeeder::class,
+            BrandSeeder::class,
+            MaterialFinishSeeder::class,
+            MaterialThicknessTypeSeeder::class,
+            MaterialMillSeeder::class,
+            MachineSeeder::class,
+            MachineBrandSeeder::class,
+            ConverterTypeSeeder::class,
+            BrandTypeSeeder::class,
+            FinishedProductSeeder::class,
+            ScrapTypeSeeder::class,
+        ]);
+
         // User::factory(10)->create();
 
         User::factory()->create([

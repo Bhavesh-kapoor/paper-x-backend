@@ -120,65 +120,7 @@ class MaterialSeeder extends Seeder
 
         DB::table('materials')->insert($materials);
 
-        // 2️⃣ Brands / Mills
-        $brands = [
-            'ITC Paperboards & Specialty Papers',
-            'JK Paper Ltd',
-            'West Coast Paper Mills',
-            'Tamil Nadu Newsprint & Papers (TNPL)',
-            'International Paper APPM (India)',
-            'Emami Paper Mills',
-            'Ballarpur Industries (BILT)',
-            'Shree Shyam Paper / Shyam Board',
-            'Pudumjee Paper Products',
-            'Seshasayee Paper & Boards',
-            'Andhra Paper',
-            'Century Pulp & Paper',
-            'Naini Papers',
-            'Orient Paper & Industries',
-            'West Coast Kraft Division',
-            'Shree Renuka Papers',
-            'Shree Krishna Papers',
-            'APP (Asia Pulp & Paper)',
-            'PaperOne',
-            'Paperline',
-            'Gold Coin',
-            'APRIL Fine',
-            'Chenming Group',
-            'Nine Dragons Paper',
-            'Sun Paper',
-            'Lee & Man Paper',
-            'SCG Paper',
-            'Double A (Thailand)',
-            'Stora Enso',
-            'Ensocoat',
-            'Ensoboard',
-            'UPM',
-            'BillerudKorsnäs',
-            'Invercote',
-            'Incada',
-            'Mondi Group',
-            'Mondi Kraft',
-            'Mondi Board',
-            'Arjowiggins',
-            'Curious',
-            'Conqueror',
-            'WestRock',
-            'Fedrigoni (Italy)',
-            'Favini (Italy)',
-            'Gmund (Germany)',
-            'Mohawk Fine Papers (USA)',
-            'Antalis (Europe Distributor Brand)',
-            'N R Agarwal Industries Ltd',
-            'Cheema Papers Ltd',
-            'KD Duplex',
-            'KD White Back',
-            'KD Grey Back',
-        ];
-
-        foreach ($brands as $brand) {
-            DB::table('brands')->insert(['name' => $brand]);
-        }
+        // Note: Brands are now seeded via BrandSeeder
 
         // 3️⃣ Material Grades / Finishes / Coatings / Variants
         $grades = [

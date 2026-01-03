@@ -1,0 +1,932 @@
+{
+	"info": {
+		"_postman_id": "paper-x-b2b-api-collection",
+		"name": "Paper X - B2B Matchmaking Platform API",
+		"description": "Complete API collection for Paper X B2B Matchmaking Platform - Packaging & Printing Industry\n\nIncludes:\n- Authentication\n- Reference Data (Materials, Machines, Finishes, etc.)\n- Dealer APIs\n- Machine Dealer APIs\n- Converter APIs\n- Brand APIs\n- Common APIs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Request OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mobile\": \"9876543210\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/request",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "request"]
+						}
+					}
+				},
+				{
+					"name": "Verify OTP & Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.environment.set(\"auth_token\", jsonData.data.token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mobile\": \"9876543210\",\n  \"otp\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/verify",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "verify"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Reference Data",
+			"item": [
+				{
+					"name": "Get Materials",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/materials",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "materials"]
+						}
+					}
+				},
+				{
+					"name": "Get Machines",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machines?type=printing",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machines"],
+							"query": [
+								{
+									"key": "type",
+									"value": "printing",
+									"description": "Filter by machine type (printing, die_cutting, folding_gluing, etc.)"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Material Finishes",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/material-finishes?material_id=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "material-finishes"],
+							"query": [
+								{
+									"key": "material_id",
+									"value": "1",
+									"description": "Filter by material ID"
+								},
+								{
+									"key": "type",
+									"value": "coating",
+									"description": "Filter by finish type (finish, coating, grade, variant)",
+									"disabled": true
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Material Mills",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/material-mills?material_id=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "material-mills"],
+							"query": [
+								{
+									"key": "material_id",
+									"value": "1",
+									"description": "Material ID (required)"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Material Thickness Types",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/material-thickness-types?material_id=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "material-thickness-types"],
+							"query": [
+								{
+									"key": "material_id",
+									"value": "1",
+									"description": "Material ID (required)"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Brands (Mills)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/brands",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brands"]
+						}
+					}
+				},
+				{
+					"name": "Get Material Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/materials/1/details",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "materials", "1", "details"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Common APIs",
+			"item": [
+				{
+					"name": "Get User Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "user", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Update User Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe Updated\",\n  \"email\": \"john.updated@example.com\",\n  \"company_name\": \"ABC Corp Updated\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "user", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Switch Role",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"role\": \"converter\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/switch-role",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "user", "switch-role"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Dealer APIs",
+			"item": [
+				{
+					"name": "Complete Dealer Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"materials\": [\n    {\n      \"material_id\": 1,\n      \"brand_id\": 1,\n      \"agent_type\": \"AUTHORIZED_AGENT\",\n      \"finish_ids\": [1, 2, 3],\n      \"thickness_ranges\": [\n        {\n          \"unit\": \"GSM\",\n          \"min\": 200,\n          \"max\": 400\n        }\n      ]\n    }\n  ],\n  \"machines_available\": [1, 2],\n  \"capacity_daily\": 1000.50,\n  \"capacity_monthly\": 30000.00,\n  \"capacity_unit\": \"kg\",\n  \"has_warehouse\": true,\n  \"locations\": [\n    {\n      \"type\": \"factory\",\n      \"address\": \"123 Industrial Street\",\n      \"latitude\": 28.6139,\n      \"longitude\": 77.2090,\n      \"city\": \"Delhi\",\n      \"state\": \"Delhi\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/profile/complete",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "profile", "complete"]
+						}
+					}
+				},
+				{
+					"name": "Get Dealer Dashboard",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "dashboard"]
+						}
+					}
+				},
+				{
+					"name": "Get Opportunities",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunities?urgency=urgent&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunities"],
+							"query": [
+								{
+									"key": "urgency",
+									"value": "urgent",
+									"description": "Filter by urgency (normal, urgent)"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Opportunity Details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunity/1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunity", "1"]
+						}
+					}
+				},
+				{
+					"name": "Accept Opportunity",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunity/1/accept",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunity", "1", "accept"]
+						}
+					}
+				},
+				{
+					"name": "Decline Opportunity",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reason\": \"Not available in required quantity\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunity/1/decline",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunity", "1", "decline"]
+						}
+					}
+				},
+				{
+					"name": "Get Session Details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/session/1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "session", "1"]
+						}
+					}
+				},
+				{
+					"name": "Get Session History",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/history",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "history"]
+						}
+					}
+				},
+				{
+					"name": "Get Chat Messages",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/chat/1?page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "chat", "1"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Send Chat Message",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"message\": \"Hello, I can deliver within 2 days\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/chat/1/message",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "chat", "1", "message"]
+						}
+					}
+				},
+				{
+					"name": "Submit Quotation",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"quoted_price\": 50000,\n  \"currency\": \"INR\",\n  \"delivery_days\": 5,\n  \"notes\": \"Can deliver within 5 days\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/quote/submit/1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "quote", "submit", "1"]
+						}
+					}
+				},
+				{
+					"name": "Get Notifications",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/notifications?unread_only=true",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "notifications"],
+							"query": [
+								{
+									"key": "unread_only",
+									"value": "true"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Mark Notification as Read",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/notification/1/read",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "notification", "1", "read"]
+						}
+					}
+				},
+				{
+					"name": "Mark All Notifications as Read",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/notifications/read-all",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "notifications", "read-all"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Machine Dealer APIs",
+			"item": [
+				{
+					"name": "Complete Machine Dealer Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"company_name\": \"ABC Machine Dealers\",\n  \"gst\": \"29ABCDE1234F1Z5\",\n  \"contact_person_name\": \"John Doe\",\n  \"mobile\": \"9876543210\",\n  \"email\": \"john@example.com\",\n  \"city\": \"Mumbai\",\n  \"location\": \"Andheri\",\n  \"latitude\": 19.1136,\n  \"longitude\": 72.8697\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/profile/complete",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "profile", "complete"]
+						}
+					}
+				},
+				{
+					"name": "Get Machine Dealer Dashboard",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "dashboard"]
+						}
+					}
+				},
+				{
+					"name": "Post Machine for Sale/Buy",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"machine_id\": 1,\n  \"machine_brand_id\": 1,\n  \"machine_type\": \"Automatic Folder Gluer\",\n  \"condition\": \"Working Condition\",\n  \"intent\": \"sell\",\n  \"urgency\": \"normal\",\n  \"description\": \"Well maintained machine\",\n  \"price\": 500000,\n  \"currency\": \"INR\",\n  \"location\": \"Mumbai\",\n  \"latitude\": 19.1136,\n  \"longitude\": 72.8697\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/machine/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "machine", "post"]
+						}
+					}
+				},
+				{
+					"name": "Get Active Listings",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/listings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "listings"]
+						}
+					}
+				},
+				{
+					"name": "Browse Active Requirements",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/requirements?intent=buy&urgency=urgent",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "requirements"],
+							"query": [
+								{
+									"key": "intent",
+									"value": "buy",
+									"description": "buy or sell"
+								},
+								{
+									"key": "urgency",
+									"value": "urgent",
+									"description": "normal or urgent"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Converter APIs",
+			"item": [
+				{
+					"name": "Complete Converter Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"converter_type_ids\": [1, 2, 3],\n  \"finished_product_ids\": [1, 2, 3],\n  \"machine_ids\": [1, 2, 3],\n  \"scrap_type_ids\": [1, 2],\n  \"raw_material_ids\": [1, 2, 3],\n  \"capacity_daily\": 1000,\n  \"capacity_monthly\": 30000,\n  \"capacity_unit\": \"pieces\",\n  \"factory_address\": \"123 Factory Street\",\n  \"factory_city\": \"Mumbai\",\n  \"factory_state\": \"Maharashtra\",\n  \"factory_latitude\": 19.1136,\n  \"factory_longitude\": 72.8697\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/converter/profile/complete",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "converter", "profile", "complete"]
+						}
+					}
+				},
+				{
+					"name": "Get Converter Dashboard",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/converter/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "converter", "dashboard"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Brand APIs",
+			"item": [
+				{
+					"name": "Complete Brand Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"company_name\": \"ABC Brands\",\n  \"brand_name\": \"ABC\",\n  \"contact_person_name\": \"John Doe\",\n  \"mobile\": \"9876543210\",\n  \"email\": \"john@example.com\",\n  \"gst\": \"29ABCDE1234F1Z5\",\n  \"city\": \"Mumbai\",\n  \"location\": \"Andheri\",\n  \"latitude\": 19.1136,\n  \"longitude\": 72.8697,\n  \"brand_type_ids\": [1, 2, 3]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/profile/complete",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "profile", "complete"]
+						}
+					}
+				},
+				{
+					"name": "Get Brand Dashboard",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "dashboard"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+

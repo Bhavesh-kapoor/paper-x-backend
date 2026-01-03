@@ -2,25 +2,23 @@
 
 namespace App\Models;
 
-use App\Enums\BrandStatus;
+use App\Enums\MachineDealerStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Brand extends Model
+class MachineDealer extends Model
 {
     use HasFactory;
 
     protected $fillable = [
         'user_id',
         'company_name',
-        'brand_name',
+        'gst',
         'contact_person_name',
         'mobile',
         'email',
-        'gst',
         'city',
         'location',
         'latitude',
@@ -30,7 +28,7 @@ class Brand extends Model
     ];
 
     protected $casts = [
-        'status' => BrandStatus::class,
+        'status' => MachineDealerStatus::class,
         'profile_complete' => 'boolean',
         'latitude' => 'decimal:8',
         'longitude' => 'decimal:8',
@@ -41,13 +39,8 @@ class Brand extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function brandTypes(): BelongsToMany
+    public function machineListings(): HasMany
     {
-        return $this->belongsToMany(BrandType::class, 'brand_brand_types');
-    }
-
-    public function inquiries(): HasMany
-    {
-        return $this->hasMany(Inquiry::class);
+        return $this->hasMany(MachineListing::class, 'machine_dealer_id');
     }
 }
