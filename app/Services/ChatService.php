@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 
 class ChatService
 {
-    public function getMessages(int $sessionId, int $userId): array
+    public function getMessages(int $sessionId, int $userId, array $filters = []): array
     {
         $dealer = Dealer::where('user_id', $userId)->firstOrFail();
 
@@ -25,12 +25,14 @@ class ChatService
             throw new \Exception('You are not part of this session', 403);
         }
 
+        $perPage = $filters['per_page'] ?? 50; // Default to 50 for chat messages
+
         $messages = ChatMessage::where('session_id', $sessionId)
             ->with('sender')
-            ->orderBy('created_at', 'asc')
-            ->get();
+            ->orderBy('created_at', 'desc') // Most recent first for pagination
+            ->paginate($perPage);
 
-        return $messages->map(function ($message) use ($userId) {
+        $messagesData = $messages->map(function ($message) use ($userId) {
             return [
                 'id' => $message->id,
                 'sender_id' => $message->sender_id,
@@ -43,7 +45,20 @@ class ChatService
                 'created_at' => $message->created_at->toIso8601String(),
                 'is_own_message' => $message->sender_id === $userId,
             ];
-        })->toArray();
+        });
+
+        // Reverse to get chronological order
+        $messagesData = $messagesData->reverse()->values();
+
+        return [
+            'messages' => $messagesData->toArray(),
+            'pagination' => [
+                'current_page' => $messages->currentPage(),
+                'total' => $messages->total(),
+                'per_page' => $messages->perPage(),
+                'last_page' => $messages->lastPage(),
+            ],
+        ];
     }
 
     public function sendMessage(int $sessionId, int $userId, array $data): ChatMessage
@@ -80,4 +95,7 @@ class ChatService
         ]);
     }
 }
+
+
+
 

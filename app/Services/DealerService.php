@@ -27,11 +27,23 @@ class DealerService
                 'capacity_unit' => $data['capacity_unit'],
             ]);
 
-            // Sync materials
-            $dealer->materials()->sync($data['materials_dealt_in']);
+            // Sync materials - extract material_ids from the materials array
+            $materialIds = [];
+            if (isset($data['materials']) && is_array($data['materials'])) {
+                $materialIds = array_column($data['materials'], 'material_id');
+            } elseif (isset($data['materials_dealt_in']) && is_array($data['materials_dealt_in'])) {
+                // Fallback for old format
+                $materialIds = $data['materials_dealt_in'];
+            }
+            
+            if (!empty($materialIds)) {
+                $dealer->materials()->sync($materialIds);
+            }
 
-            // Sync machines
-            $dealer->machines()->sync($data['machines_available']);
+            // Sync machines (optional)
+            if (isset($data['machines_available']) && !empty($data['machines_available'])) {
+                $dealer->machines()->sync($data['machines_available']);
+            }
 
             // Delete old locations and create new ones
             $dealer->locations()->delete();
@@ -107,12 +119,12 @@ class DealerService
     {
         $fields = [
             $dealer->materials()->count() > 0,
-            $dealer->machines()->count() > 0,
             $dealer->locations()->count() > 0,
             !is_null($dealer->capacity_daily),
             !is_null($dealer->capacity_monthly),
             !is_null($dealer->capacity_unit),
         ];
+        // Machines are optional, so they don't count towards completion percentage
 
         return (int) round((count(array_filter($fields)) / count($fields)) * 100);
     }

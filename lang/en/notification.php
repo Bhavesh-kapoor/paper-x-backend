@@ -6,3 +6,6 @@ return [
     'all_marked_read' => 'All notifications marked as read successfully!',
 ];
 
+
+
+

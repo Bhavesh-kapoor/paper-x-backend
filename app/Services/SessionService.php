@@ -46,18 +46,20 @@ class SessionService
         ];
     }
 
-    public function getHistory(int $userId): array
+    public function getHistory(int $userId, array $filters = []): array
     {
         $dealer = Dealer::where('user_id', $userId)->firstOrFail();
+
+        $perPage = $filters['per_page'] ?? 15;
 
         $sessions = MatchingSession::whereHas('inquiry.acceptances', function ($query) use ($dealer) {
             $query->where('dealer_id', $dealer->id);
         })
             ->with(['inquiry.brand', 'winningDealer'])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->paginate($perPage);
 
-        return $sessions->map(function ($session) use ($dealer) {
+        $history = $sessions->map(function ($session) use ($dealer) {
             $isWon = $session->winning_dealer_id === $dealer->id;
             $status = $session->status->value;
 
@@ -71,7 +73,17 @@ class SessionService
                 'locked_at' => $session->locked_at->toIso8601String(),
                 'expires_at' => $session->expires_at->toIso8601String(),
             ];
-        })->toArray();
+        });
+
+        return [
+            'history' => $history->toArray(),
+            'pagination' => [
+                'current_page' => $sessions->currentPage(),
+                'total' => $sessions->total(),
+                'per_page' => $sessions->perPage(),
+                'last_page' => $sessions->lastPage(),
+            ],
+        ];
     }
 
     private function determineResult(string $status, bool $isWon): string
@@ -89,4 +101,7 @@ class SessionService
         return 'PENDING';
     }
 }
+
+
+
 

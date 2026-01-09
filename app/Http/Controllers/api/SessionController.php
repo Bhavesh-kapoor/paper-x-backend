@@ -34,9 +34,10 @@ class SessionController extends Controller
     {
         try {
             $user = request()->user();
-            $history = $this->sessionService->getHistory($user->id);
+            $filters = request()->only(['page', 'per_page']);
+            $history = $this->sessionService->getHistory($user->id, $filters);
 
-            return Response::success('session.history', $history);
+            return Response::success('session.history', $history['history'], $history['pagination'] ?? null);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),
@@ -46,4 +47,7 @@ class SessionController extends Controller
         }
     }
 }
+
+
+
 

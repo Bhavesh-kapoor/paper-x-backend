@@ -9,3 +9,6 @@ enum DealStatus: string
     case REJECTED = 'REJECTED';
 }
 
+
+
+

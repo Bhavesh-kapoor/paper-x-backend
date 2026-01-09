@@ -25,8 +25,10 @@ class NotificationService
         ]);
     }
 
-    public function getNotifications(int $userId, bool $unreadOnly = false): \Illuminate\Database\Eloquent\Collection
+    public function getNotifications(int $userId, bool $unreadOnly = false, array $filters = []): array
     {
+        $perPage = $filters['per_page'] ?? 15;
+
         $query = Notification::where('user_id', $userId)
             ->orderBy('created_at', 'desc');
 
@@ -34,7 +36,17 @@ class NotificationService
             $query->where('read', false);
         }
 
-        return $query->get();
+        $notifications = $query->paginate($perPage);
+
+        return [
+            'notifications' => $notifications->items(),
+            'pagination' => [
+                'current_page' => $notifications->currentPage(),
+                'total' => $notifications->total(),
+                'per_page' => $notifications->perPage(),
+                'last_page' => $notifications->lastPage(),
+            ],
+        ];
     }
 
     public function markAsRead(int $notificationId, int $userId): bool
@@ -61,4 +73,7 @@ class NotificationService
             ]);
     }
 }
+
+
+
 

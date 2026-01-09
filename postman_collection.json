@@ -1,0 +1,1556 @@
+{
+	"info": {
+		"_postman_id": "paper-x-backend-detailed-api",
+		"name": "Paper X Backend - Complete API Collection",
+		"description": "Complete API collection for Paper X B2B Matchmaking Platform - Packaging & Printing Industry\n\n## Features:\n- Unified Dashboard API for all roles\n- Pagination support on all list endpoints\n- Dealer profile with optional machines\n- Complete CRUD operations for all entities\n\n## Authentication:\nAll protected endpoints require: `Authorization: Bearer {token}`\n\n## Base URL:\nUpdate `base_url` variable with your server URL",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "paper-x-backend"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"description": "Authentication endpoints for OTP-based login",
+			"item": [
+				{
+					"name": "Request OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    console.log('OTP requested successfully');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"mobile\": \"9876543210\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/request",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "request"]
+						},
+						"description": "Request OTP for mobile number. OTP will be sent to the provided mobile number."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify OTP & Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.environment.set('auth_token', jsonData.data.token);",
+									"        pm.collectionVariables.set('auth_token', jsonData.data.token);",
+									"        console.log('Token saved:', jsonData.data.token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"mobile\": \"9876543210\",\n    \"otp\": \"123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/verify",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "verify"]
+						},
+						"description": "Verify OTP and login. Returns auth token which will be automatically saved to collection variable."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dashboard",
+			"description": "Dashboard endpoints - Unified API for all roles",
+			"item": [
+				{
+					"name": "Unified Dashboard (All Roles)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dashboard?role=dealer",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dashboard"],
+							"query": [
+								{
+									"key": "role",
+									"value": "dealer",
+									"description": "Role type: dealer | machine-dealer | converter | brand. Defaults to user's primary role if not provided",
+									"disabled": false
+								}
+							]
+						},
+						"description": "**NEW**: Unified dashboard API for all roles. Pass role parameter to get dashboard data for specific role.\n\n**Response includes:**\n- Profile completion percentage\n- Counts based on role (opportunities, sessions, listings, etc.)\n- Unread notifications count"
+					},
+					"response": []
+				},
+				{
+					"name": "Dealer Dashboard (Legacy)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "dashboard"]
+						},
+						"description": "Get dealer-specific dashboard data. Returns:\n- Profile completion percentage\n- Active opportunities count\n- Locked sessions count\n- Expired sessions count\n- Unread notifications count"
+					},
+					"response": []
+				},
+				{
+					"name": "Machine Dealer Dashboard",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "dashboard"]
+						},
+						"description": "Get machine dealer dashboard data"
+					},
+					"response": []
+				},
+				{
+					"name": "Converter Dashboard",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/converter/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "converter", "dashboard"]
+						},
+						"description": "Get converter dashboard data"
+					},
+					"response": []
+				},
+				{
+					"name": "Brand Dashboard",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "dashboard"]
+						},
+						"description": "Get brand dashboard data"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "User Profile",
+			"description": "User profile management endpoints",
+			"item": [
+				{
+					"name": "Get User Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "user", "profile"]
+						},
+						"description": "Get current authenticated user's profile information"
+					},
+					"response": []
+				},
+				{
+					"name": "Update User Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "user", "profile"]
+						},
+						"description": "Update user profile information"
+					},
+					"response": []
+				},
+				{
+					"name": "Switch Role",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"role\": \"dealer\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/switch-role",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "user", "switch-role"]
+						},
+						"description": "Switch user's active role. Valid roles: dealer, machine-dealer, converter, brand"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dealer",
+			"description": "Dealer-specific endpoints for material dealers",
+			"item": [
+				{
+					"name": "Complete Dealer Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"materials\": [\n        {\n            \"material_id\": 1,\n            \"brand_id\": null,\n            \"agent_type\": null,\n            \"finish_ids\": [1, 2],\n            \"thickness_ranges\": [\n                {\n                    \"unit\": \"GSM\",\n                    \"min\": 200,\n                    \"max\": 400\n                },\n                {\n                    \"unit\": \"MM\",\n                    \"min\": 0.5,\n                    \"max\": 2.0\n                }\n            ]\n        },\n        {\n            \"material_id\": 2,\n            \"brand_id\": 1,\n            \"agent_type\": \"AUTHORIZED_AGENT\",\n            \"finish_ids\": [3, 4],\n            \"thickness_ranges\": [\n                {\n                    \"unit\": \"GSM\",\n                    \"min\": 150,\n                    \"max\": 300\n                }\n            ]\n        }\n    ],\n    \"machines_available\": [1, 2, 3],\n    \"capacity_daily\": 1000.50,\n    \"capacity_monthly\": 30000.00,\n    \"capacity_unit\": \"kg\",\n    \"has_warehouse\": true,\n    \"bulk_orders_note\": \"We specialize in bulk orders only\",\n    \"locations\": [\n        {\n            \"type\": \"factory\",\n            \"address\": \"123 Industrial Street, Sector 18\",\n            \"latitude\": 28.6139,\n            \"longitude\": 77.2090,\n            \"city\": \"Delhi\",\n            \"state\": \"Delhi\"\n        },\n        {\n            \"type\": \"warehouse\",\n            \"address\": \"456 Warehouse Road\",\n            \"latitude\": 28.7041,\n            \"longitude\": 77.1025,\n            \"city\": \"Noida\",\n            \"state\": \"Uttar Pradesh\"\n        }\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/profile/complete",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "profile", "complete"]
+						},
+						"description": "**UPDATED**: Complete dealer profile. \n\n**Changes:**\n- `machines_available` is now **OPTIONAL** - you can complete profile without machines\n- Machines are excluded from profile completion percentage calculation\n\n**Required Fields:**\n- materials (array with material details)\n- capacity_daily, capacity_monthly, capacity_unit\n- has_warehouse (boolean)\n- locations (required if has_warehouse is true)\n\n**Optional Fields:**\n- machines_available (array of machine IDs) - NOW OPTIONAL\n- bulk_orders_note (string)\n\n**Material Structure:**\nEach material object should include:\n- material_id (required)\n- brand_id (optional)\n- agent_type (required if brand_id provided: 'AUTHORIZED_AGENT' or 'DEALER')\n- finish_ids (optional array)\n- thickness_ranges (required array with unit, min, max)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Opportunities (Paginated)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunities?page=1&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunities"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page (default: 15, max: 100)"
+								}
+							]
+						},
+						"description": "**UPDATED WITH PAGINATION**: Get matched opportunities for dealer.\n\n**Response includes:**\n- opportunities (array)\n- pagination meta (current_page, total, per_page, last_page)\n\n**Each opportunity contains:**\n- inquiry_id\n- title\n- quantity, quantity_unit\n- urgency\n- location\n- time_left_to_accept\n- match_score (0-100)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Opportunity Details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunity/1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunity", "1"],
+							"variable": [
+								{
+									"key": "inquiry_id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get detailed information about a specific opportunity/inquiry"
+					},
+					"response": []
+				},
+				{
+					"name": "Accept Opportunity",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunity/1/accept",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunity", "1", "accept"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Accept an opportunity. Once 10 dealers accept, the session will be locked automatically."
+					},
+					"response": []
+				},
+				{
+					"name": "Decline Opportunity",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"reason\": \"Not available in required quantity or timeframe\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunity/1/decline",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunity", "1", "decline"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Decline an opportunity with optional reason"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Session Details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/session/1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "session", "1"],
+							"variable": [
+								{
+									"key": "session_id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get details of a locked session including brand information, inquiry details, and chat status"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Session History (Paginated)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/history?page=1&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "history"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page (default: 15)"
+								}
+							]
+						},
+						"description": "**UPDATED WITH PAGINATION**: Get paginated history of all sessions (active, expired, won, lost).\n\n**Response includes:**\n- history (array of session summaries)\n- pagination meta\n\n**Each history item contains:**\n- session_id, inquiry_id, inquiry_title\n- brand_name\n- status, result (DEAL_WON, DEAL_LOST, SESSION_EXPIRED, BRAND_CANCELLED, PENDING)\n- locked_at, expires_at timestamps"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Chat Messages (Paginated)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/chat/1?page=1&per_page=50",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "chat", "1"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "50",
+									"description": "Messages per page (default: 50, recommended for chat)"
+								}
+							],
+							"variable": [
+								{
+									"key": "session_id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "**UPDATED WITH PAGINATION**: Get paginated chat messages for a session.\n\n**Response includes:**\n- messages (array, in chronological order)\n- pagination meta\n\n**Each message contains:**\n- id, sender_id, sender_type, sender_name\n- message text\n- attachment_path, attachment_url (if any)\n- status (SENT, DELIVERED, READ)\n- created_at timestamp\n- is_own_message (boolean)"
+					},
+					"response": []
+				},
+				{
+					"name": "Send Chat Message",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "message",
+									"value": "Hello, I'm interested in this opportunity",
+									"type": "text"
+								},
+								{
+									"key": "attachment",
+									"type": "file",
+									"src": [],
+									"description": "Optional file attachment"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/chat/1/message",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "chat", "1", "message"],
+							"variable": [
+								{
+									"key": "session_id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Send a message in a chat session. Supports text message and optional file attachment."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Notifications (Paginated)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/notifications?page=1&per_page=15&unread_only=false",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "notifications"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page (default: 15)"
+								},
+								{
+									"key": "unread_only",
+									"value": "false",
+									"description": "Filter only unread notifications (true/false, default: false)"
+								}
+							]
+						},
+						"description": "**UPDATED WITH PAGINATION**: Get paginated list of notifications.\n\n**Response includes:**\n- notifications (array)\n- pagination meta\n\n**Each notification contains:**\n- id, type, title, message\n- read status, read_at timestamp\n- notifiable_type, notifiable_id (reference to related entity)\n- created_at timestamp"
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Notification as Read",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/notification/1/read",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "notification", "1", "read"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Mark a specific notification as read"
+					},
+					"response": []
+				},
+				{
+					"name": "Mark All Notifications as Read",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/notifications/read-all",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "notifications", "read-all"]
+						},
+						"description": "Mark all unread notifications as read. Returns count of marked notifications."
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Quotation",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"price_per_unit\": 50.00,\n    \"currency\": \"INR\",\n    \"total_price\": 50000.00,\n    \"validity_days\": 7,\n    \"terms_conditions\": \"Standard terms apply\",\n    \"notes\": \"Can deliver within 15 days\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/quote/submit/1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "quote", "submit", "1"],
+							"variable": [
+								{
+									"key": "inquiry_id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Submit a quotation for an inquiry during a locked session"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Machine Dealer",
+			"description": "Machine dealer specific endpoints",
+			"item": [
+				{
+					"name": "Complete Machine Dealer Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"company_name\": \"ABC Machine Dealers Pvt Ltd\",\n    \"gst\": \"29ABCDE1234F1Z5\",\n    \"contact_person_name\": \"John Doe\",\n    \"mobile\": \"9876543210\",\n    \"email\": \"john@abcdmachines.com\",\n    \"city\": \"Mumbai\",\n    \"location\": \"Andheri East\",\n    \"latitude\": 19.1136,\n    \"longitude\": 72.8697\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/profile/complete",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "profile", "complete"]
+						},
+						"description": "Complete machine dealer profile. All fields except GST are typically required."
+					},
+					"response": []
+				},
+				{
+					"name": "Post Machine Listing",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"machine_id\": 1,\n    \"machine_brand_id\": 1,\n    \"machine_type\": \"Offset Printing\",\n    \"condition\": \"USED\",\n    \"intent\": \"SELL\",\n    \"urgency\": \"normal\",\n    \"title\": \"High-speed Offset Printing Machine\",\n    \"description\": \"Well-maintained offset printing machine, 5 years old, excellent condition\",\n    \"price\": 5000000,\n    \"currency\": \"INR\",\n    \"location\": \"Mumbai, Maharashtra\",\n    \"latitude\": 19.0760,\n    \"longitude\": 72.8777,\n    \"attachments\": [],\n    \"posting_fee_paid\": false,\n    \"posting_fee_amount\": null\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/machine/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "machine", "post"]
+						},
+						"description": "Post a new machine listing (for sale or purchase). Creates both a machine listing and an inquiry."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Active Listings (Paginated)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/listings?page=1&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "listings"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page (default: 15)"
+								}
+							]
+						},
+						"description": "**UPDATED WITH PAGINATION**: Get paginated list of active machine listings posted by the authenticated machine dealer.\n\n**Response includes:**\n- listings (array)\n- pagination meta\n\n**Each listing contains:**\n- id, machine name, machine_brand\n- condition, intent (BUY/SELL), status\n- responses_count\n- created_at timestamp"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Active Requirements (Paginated)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/requirements?page=1&per_page=15&intent=buy&urgency=normal&machine_id=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "requirements"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page (default: 15)"
+								},
+								{
+									"key": "intent",
+									"value": "buy",
+									"description": "Filter by intent: buy | sell",
+									"disabled": true
+								},
+								{
+									"key": "urgency",
+									"value": "normal",
+									"description": "Filter by urgency: normal | urgent",
+									"disabled": true
+								},
+								{
+									"key": "machine_id",
+									"value": "1",
+									"description": "Filter by specific machine ID",
+									"disabled": true
+								}
+							]
+						},
+						"description": "**HAD PAGINATION - NOW DOCUMENTED**: Get paginated list of active machine requirements/inquiries.\n\n**Response includes:**\n- requirements (array)\n- pagination meta\n\n**Each requirement contains:**\n- id, inquiry_id, machine name\n- condition, intent, urgency\n- location, poster_type\n- status, created_at"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Converter",
+			"description": "Converter-specific endpoints",
+			"item": [
+				{
+					"name": "Complete Converter Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"converter_type_ids\": [1, 2],\n    \"converter_type_custom\": \"Custom Packaging Solutions\",\n    \"finished_product_ids\": [1, 2, 3],\n    \"machine_ids\": [1, 2],\n    \"scrap_type_ids\": [1],\n    \"raw_material_ids\": [1, 2],\n    \"capacity_daily\": 5000,\n    \"capacity_monthly\": 150000,\n    \"capacity_unit\": \"kg\",\n    \"factory_address\": \"123 Factory Lane\",\n    \"factory_city\": \"Pune\",\n    \"factory_state\": \"Maharashtra\",\n    \"factory_latitude\": 18.5204,\n    \"factory_longitude\": 73.8567\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/converter/profile/complete",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "converter", "profile", "complete"]
+						},
+						"description": "Complete converter profile with all business details"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Brand",
+			"description": "Brand-specific endpoints",
+			"item": [
+				{
+					"name": "Complete Brand Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"company_name\": \"ABC Brands Pvt Ltd\",\n    \"brand_name\": \"ABC Premium\",\n    \"contact_person_name\": \"Jane Smith\",\n    \"mobile\": \"9876543210\",\n    \"email\": \"jane@abcbrands.com\",\n    \"gst\": \"29ABCDE1234F1Z5\",\n    \"city\": \"Delhi\",\n    \"location\": \"Connaught Place\",\n    \"latitude\": 28.6139,\n    \"longitude\": 77.2090,\n    \"brand_type_ids\": [1, 2]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/profile/complete",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "profile", "complete"]
+						},
+						"description": "Complete brand profile"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Reference Data",
+			"description": "Reference data endpoints for profile completion and dropdowns - All now support pagination",
+			"item": [
+				{
+					"name": "Get Materials (Paginated)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/materials?page=1&per_page=50&category=paper",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "materials"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "50",
+									"description": "Items per page (default: 50)"
+								},
+								{
+									"key": "category",
+									"value": "paper",
+									"description": "Filter by category: paper | paperboard | etc",
+									"disabled": true
+								}
+							]
+						},
+						"description": "**UPDATED WITH PAGINATION**: Get paginated list of all materials with their grades.\n\n**Response includes:**\n- data (array of materials with MaterialResource structure)\n- meta (pagination information)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Material Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/materials/1/details",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "materials", "1", "details"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Get complete material details including mills, finishes, and thickness types for a specific material"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Machines (Paginated)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machines?page=1&per_page=50&type=printing",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machines"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "50",
+									"description": "Items per page (default: 50)"
+								},
+								{
+									"key": "type",
+									"value": "printing",
+									"description": "Filter by machine type",
+									"disabled": true
+								},
+								{
+									"key": "category",
+									"value": "",
+									"description": "Alternative filter by category",
+									"disabled": true
+								}
+							]
+						},
+						"description": "**UPDATED WITH PAGINATION**: Get paginated list of all machines.\n\n**Response includes:**\n- data (array of machines)\n- meta (pagination information)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Material Finishes (Paginated)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/material-finishes?page=1&per_page=50&material_id=1&type=coating",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "material-finishes"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "50",
+									"description": "Items per page (default: 50)"
+								},
+								{
+									"key": "material_id",
+									"value": "1",
+									"description": "Filter by material ID",
+									"disabled": true
+								},
+								{
+									"key": "type",
+									"value": "coating",
+									"description": "Filter by finish type",
+									"disabled": true
+								}
+							]
+						},
+						"description": "**UPDATED WITH PAGINATION**: Get paginated list of material finishes/grades/coatings.\n\n**Response includes:**\n- data (array of finishes)\n- meta (pagination information)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Material Mills (Paginated)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/material-mills?page=1&per_page=50&material_id=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "material-mills"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "50",
+									"description": "Items per page (default: 50)"
+								},
+								{
+									"key": "material_id",
+									"value": "1",
+									"description": "Required: Material ID to get mills for",
+									"disabled": false
+								}
+							]
+						},
+						"description": "**UPDATED WITH PAGINATION**: Get paginated list of mills/brands for a specific material.\n\n**Note:** material_id is required.\n\n**Response includes:**\n- data (array of mills with brand information)\n- meta (pagination information)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Material Thickness Types (Paginated)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/material-thickness-types?page=1&per_page=50&material_id=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "material-thickness-types"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "50",
+									"description": "Items per page (default: 50)"
+								},
+								{
+									"key": "material_id",
+									"value": "1",
+									"description": "Required: Material ID to get thickness types for",
+									"disabled": false
+								}
+							]
+						},
+						"description": "**UPDATED WITH PAGINATION**: Get paginated list of thickness types/units for a specific material.\n\n**Note:** material_id is required.\n\n**Response includes:**\n- data (array with id, unit, is_primary, material_id)\n- meta (pagination information)\n\n**Units can be:** GSM, MM, OUNCE, BF, MICRON"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Brands/Mills (Paginated)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/brands?page=1&per_page=50",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brands"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "50",
+									"description": "Items per page (default: 50)"
+								}
+							]
+						},
+						"description": "**UPDATED WITH PAGINATION**: Get paginated list of mill brands (not user brand profiles). Returns only mill brands where user_id is NULL.\n\n**Response includes:**\n- data (array of brands with id and name)\n- meta (pagination information)"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string",
+			"description": "Base URL of the API server. Update this with your server URL (e.g., https://api.example.com)"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string",
+			"description": "Authentication token. Automatically set after OTP verification, or set manually after login."
+		}
+	]
+}

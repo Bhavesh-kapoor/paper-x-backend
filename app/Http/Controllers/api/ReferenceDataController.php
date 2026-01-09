@@ -23,6 +23,7 @@ class ReferenceDataController extends Controller
     public function getMachines(Request $request)
     {
         try {
+            $perPage = $request->input('per_page', 50);
             $query = Machine::query();
 
             // Filter by type if provided
@@ -35,9 +36,16 @@ class ReferenceDataController extends Controller
                 $query->where('type', $request->category);
             }
 
-            $machines = $query->orderBy('name')->get();
+            $machines = $query->orderBy('name')->paginate($perPage);
 
-            return Response::success('Machines retrieved successfully', $machines);
+            $pagination = [
+                'current_page' => $machines->currentPage(),
+                'total' => $machines->total(),
+                'per_page' => $machines->perPage(),
+                'last_page' => $machines->lastPage(),
+            ];
+
+            return Response::success('Machines retrieved successfully', $machines->items(), $pagination);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),
@@ -54,6 +62,7 @@ class ReferenceDataController extends Controller
     public function getMaterialFinishes(Request $request)
     {
         try {
+            $perPage = $request->input('per_page', 50);
             $query = MaterialFinish::query();
 
             // Filter by material_id if provided
@@ -66,9 +75,16 @@ class ReferenceDataController extends Controller
                 $query->where('type', $request->type);
             }
 
-            $finishes = $query->orderBy('name')->get();
+            $finishes = $query->orderBy('name')->paginate($perPage);
 
-            return Response::success('Material finishes retrieved successfully', $finishes);
+            $pagination = [
+                'current_page' => $finishes->currentPage(),
+                'total' => $finishes->total(),
+                'per_page' => $finishes->perPage(),
+                'last_page' => $finishes->lastPage(),
+            ];
+
+            return Response::success('Material finishes retrieved successfully', $finishes->items(), $pagination);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),
@@ -91,18 +107,28 @@ class ReferenceDataController extends Controller
                 return Response::error('material_id is required', null, HttpResponse::HTTP_BAD_REQUEST);
             }
 
+            $perPage = $request->input('per_page', 50);
+
             $mills = MaterialMill::where('material_id', $materialId)
                 ->with('brand')
-                ->get()
-                ->map(function ($mill) {
-                    return [
-                        'id' => $mill->brand_id,
-                        'name' => $mill->brand->name,
-                        'material_id' => $mill->material_id,
-                    ];
-                });
+                ->paginate($perPage);
 
-            return Response::success('Material mills retrieved successfully', $mills);
+            $millsData = $mills->map(function ($mill) {
+                return [
+                    'id' => $mill->brand_id,
+                    'name' => $mill->brand->name,
+                    'material_id' => $mill->material_id,
+                ];
+            });
+
+            $pagination = [
+                'current_page' => $mills->currentPage(),
+                'total' => $mills->total(),
+                'per_page' => $mills->perPage(),
+                'last_page' => $mills->lastPage(),
+            ];
+
+            return Response::success('Material mills retrieved successfully', $millsData->toArray(), $pagination);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),
@@ -125,20 +151,30 @@ class ReferenceDataController extends Controller
                 return Response::error('material_id is required', null, HttpResponse::HTTP_BAD_REQUEST);
             }
 
+            $perPage = $request->input('per_page', 50);
+
             $thicknessTypes = MaterialThicknessType::where('material_id', $materialId)
                 ->orderBy('is_primary', 'desc')
                 ->orderBy('unit')
-                ->get()
-                ->map(function ($type) {
-                    return [
-                        'id' => $type->id,
-                        'unit' => $type->unit,
-                        'is_primary' => $type->is_primary,
-                        'material_id' => $type->material_id,
-                    ];
-                });
+                ->paginate($perPage);
 
-            return Response::success('Material thickness types retrieved successfully', $thicknessTypes);
+            $thicknessTypesData = $thicknessTypes->map(function ($type) {
+                return [
+                    'id' => $type->id,
+                    'unit' => $type->unit,
+                    'is_primary' => $type->is_primary,
+                    'material_id' => $type->material_id,
+                ];
+            });
+
+            $pagination = [
+                'current_page' => $thicknessTypes->currentPage(),
+                'total' => $thicknessTypes->total(),
+                'per_page' => $thicknessTypes->perPage(),
+                'last_page' => $thicknessTypes->lastPage(),
+            ];
+
+            return Response::success('Material thickness types retrieved successfully', $thicknessTypesData->toArray(), $pagination);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),
@@ -156,6 +192,8 @@ class ReferenceDataController extends Controller
     public function getBrands(Request $request)
     {
         try {
+            $perPage = $request->input('per_page', 50);
+            
             // Check if user_id column exists in brands table
             $hasUserIdColumn = DB::getSchemaBuilder()->hasColumn('brands', 'user_id');
             
@@ -174,9 +212,24 @@ class ReferenceDataController extends Controller
                 $query->select('id', 'company_name as name');
             }
             
-            $brands = $query->orderBy('name')->get();
+            $total = $query->count();
+            $currentPage = $request->input('page', 1);
+            $lastPage = (int) ceil($total / $perPage);
+            $offset = ($currentPage - 1) * $perPage;
+            
+            $brands = $query->orderBy('name')
+                ->offset($offset)
+                ->limit($perPage)
+                ->get();
 
-            return Response::success('Brands (mills) retrieved successfully', $brands);
+            $pagination = [
+                'current_page' => (int) $currentPage,
+                'total' => $total,
+                'per_page' => (int) $perPage,
+                'last_page' => $lastPage,
+            ];
+
+            return Response::success('Brands (mills) retrieved successfully', $brands->toArray(), $pagination);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),

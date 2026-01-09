@@ -23,7 +23,7 @@ class ProfileCompleteRequest extends ApiRequest
             'materials.*.thickness_ranges.*.min' => ['required', 'numeric', 'min:0'],
             'materials.*.thickness_ranges.*.max' => ['required', 'numeric', 'gte:materials.*.thickness_ranges.*.min'],
             
-            'machines_available' => ['required', 'array', 'min:1'],
+            'machines_available' => ['nullable', 'array'],
             'machines_available.*' => ['required', 'exists:machines,id'],
             
             'capacity_daily' => ['required', 'numeric', 'min:0'],

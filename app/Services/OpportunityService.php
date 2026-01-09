@@ -19,13 +19,24 @@ class OpportunityService
     ) {
     }
 
-    public function getOpportunities(int $userId): array
+    public function getOpportunities(int $userId, array $filters = []): array
     {
         $dealer = Dealer::where('user_id', $userId)->with(['materials', 'machines'])->firstOrFail();
 
         if (!$dealer->profile_complete || $dealer->status->value !== 'ACTIVE') {
-            return [];
+            return [
+                'opportunities' => [],
+                'pagination' => [
+                    'current_page' => 1,
+                    'total' => 0,
+                    'per_page' => $filters['per_page'] ?? 15,
+                    'last_page' => 1,
+                ],
+            ];
         }
+
+        $perPage = $filters['per_page'] ?? 15;
+        $page = $filters['page'] ?? 1;
 
         $inquiries = Inquiry::where('status', InquiryStatus::MATCHING)
             ->with(['materials', 'machines', 'brand'])
@@ -51,7 +62,21 @@ class OpportunityService
         // Sort by match score descending
         usort($matchedOpportunities, fn($a, $b) => $b['match_score'] <=> $a['match_score']);
 
-        return $matchedOpportunities;
+        // Manual pagination
+        $total = count($matchedOpportunities);
+        $lastPage = (int) ceil($total / $perPage);
+        $offset = ($page - 1) * $perPage;
+        $paginatedOpportunities = array_slice($matchedOpportunities, $offset, $perPage);
+
+        return [
+            'opportunities' => $paginatedOpportunities,
+            'pagination' => [
+                'current_page' => (int) $page,
+                'total' => $total,
+                'per_page' => (int) $perPage,
+                'last_page' => $lastPage,
+            ],
+        ];
     }
 
     public function getOpportunityDetails(int $inquiryId, int $userId): array

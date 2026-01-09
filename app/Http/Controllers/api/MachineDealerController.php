@@ -68,9 +68,10 @@ class MachineDealerController extends Controller
     {
         try {
             $user = request()->user();
-            $listings = $this->machineDealerService->getActiveListings($user->id);
+            $filters = request()->only(['page', 'per_page']);
+            $listings = $this->machineDealerService->getActiveListings($user->id, $filters);
 
-            return Response::success('Active listings retrieved successfully', ['listings' => $listings]);
+            return Response::success('Active listings retrieved successfully', $listings['listings'], $listings['pagination'] ?? null);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),

@@ -13,3 +13,6 @@ enum InquiryStatus: string
     case BRAND_CANCELLED = 'BRAND_CANCELLED';
 }
 
+
+
+

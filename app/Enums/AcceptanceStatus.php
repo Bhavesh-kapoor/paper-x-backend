@@ -8,3 +8,6 @@ enum AcceptanceStatus: string
     case DECLINED = 'DECLINED';
 }
 
+
+
+

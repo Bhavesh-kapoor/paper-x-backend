@@ -19,9 +19,10 @@ class ChatController extends Controller
     {
         try {
             $user = request()->user();
-            $messages = $this->chatService->getMessages($sessionId, $user->id);
+            $filters = request()->only(['page', 'per_page']);
+            $messages = $this->chatService->getMessages($sessionId, $user->id, $filters);
 
-            return Response::success('chat.messages', $messages);
+            return Response::success('chat.messages', $messages['messages'], $messages['pagination'] ?? null);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),
@@ -47,4 +48,7 @@ class ChatController extends Controller
         }
     }
 }
+
+
+
 

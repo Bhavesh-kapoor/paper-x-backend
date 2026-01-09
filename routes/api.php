@@ -10,6 +10,7 @@ use App\Http\Controllers\api\ChatController;
 use App\Http\Controllers\api\QuotationController;
 use App\Http\Controllers\api\NotificationController;
 use App\Http\Controllers\api\RoleController;
+use App\Http\Controllers\api\DashboardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -98,5 +99,8 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('user')->group(function () {
         Route::post('/switch-role', [RoleController::class, 'switchRole'])->name('user.switch-role');
     });
+
+    #unified dashboard API for all roles
+    Route::middleware(['token.exists', 'auth:sanctum'])->get('/dashboard', [DashboardController::class, 'getDashboard'])->name('dashboard');
 
 });

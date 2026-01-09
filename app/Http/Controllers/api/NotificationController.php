@@ -19,9 +19,10 @@ class NotificationController extends Controller
         try {
             $user = request()->user();
             $unreadOnly = request()->boolean('unread_only', false);
-            $notifications = $this->notificationService->getNotifications($user->id, $unreadOnly);
+            $filters = request()->only(['page', 'per_page']);
+            $notifications = $this->notificationService->getNotifications($user->id, $unreadOnly, $filters);
 
-            return Response::success('notification.list', $notifications);
+            return Response::success('notification.list', $notifications['notifications'], $notifications['pagination'] ?? null);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),
@@ -63,4 +64,7 @@ class NotificationController extends Controller
         }
     }
 }
+
+
+
 

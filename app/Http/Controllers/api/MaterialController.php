@@ -21,8 +21,21 @@ class MaterialController extends Controller
     public function getMaterials(Request $request)
     {
         try {
-            $materials = $this->materialService->getMaterials($request->all());
-            return Response::success("materials.fetch", MaterialResource::collection($materials));
+            $filters = $request->only(['category', 'page', 'per_page']);
+            $materials = $this->materialService->getMaterials($filters);
+            
+            // Extract pagination meta from paginated result
+            $pagination = null;
+            if ($materials instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator) {
+                $pagination = [
+                    'current_page' => $materials->currentPage(),
+                    'total' => $materials->total(),
+                    'per_page' => $materials->perPage(),
+                    'last_page' => $materials->lastPage(),
+                ];
+            }
+            
+            return Response::success("materials.fetch", MaterialResource::collection($materials), $pagination);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),

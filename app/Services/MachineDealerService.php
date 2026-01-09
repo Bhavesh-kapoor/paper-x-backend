@@ -130,16 +130,19 @@ class MachineDealerService
         });
     }
 
-    public function getActiveListings(int $userId): array
+    public function getActiveListings(int $userId, array $filters = []): array
     {
         $machineDealer = MachineDealer::where('user_id', $userId)->firstOrFail();
+
+        $perPage = $filters['per_page'] ?? 15;
 
         $listings = MachineListing::where('machine_dealer_id', $machineDealer->id)
             ->where('status', 'ACTIVE')
             ->with(['machine', 'machineBrand'])
-            ->get();
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage);
 
-        return $listings->map(function ($listing) {
+        $listingsData = $listings->map(function ($listing) {
             $inquiry = Inquiry::where('machine_listing_id', $listing->id)->first();
             return [
                 'id' => $listing->id,
@@ -151,7 +154,17 @@ class MachineDealerService
                 'responses_count' => $inquiry ? $inquiry->responses()->count() : 0,
                 'created_at' => $listing->created_at->toIso8601String(),
             ];
-        })->toArray();
+        });
+
+        return [
+            'listings' => $listingsData->toArray(),
+            'pagination' => [
+                'current_page' => $listings->currentPage(),
+                'total' => $listings->total(),
+                'per_page' => $listings->perPage(),
+                'last_page' => $listings->lastPage(),
+            ],
+        ];
     }
 
     public function getActiveRequirements(array $filters = []): array
@@ -200,4 +213,7 @@ class MachineDealerService
         ];
     }
 }
+
+
+
 

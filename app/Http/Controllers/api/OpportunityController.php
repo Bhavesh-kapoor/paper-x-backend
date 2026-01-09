@@ -20,9 +20,10 @@ class OpportunityController extends Controller
     {
         try {
             $user = request()->user();
-            $opportunities = $this->opportunityService->getOpportunities($user->id);
+            $filters = request()->only(['page', 'per_page']);
+            $opportunities = $this->opportunityService->getOpportunities($user->id, $filters);
 
-            return Response::success('opportunity.list', $opportunities);
+            return Response::success('opportunity.list', $opportunities['opportunities'], $opportunities['pagination'] ?? null);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),
@@ -80,4 +81,7 @@ class OpportunityController extends Controller
         }
     }
 }
+
+
+
 
