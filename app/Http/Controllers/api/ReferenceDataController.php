@@ -285,4 +285,142 @@ class ReferenceDataController extends Controller
             );
         }
     }
+
+    /**
+     * Manually add a mill/brand for dealer registration
+     * POST /api/v1/dealer/mill/add
+     */
+    public function addMillBrand(Request $request)
+    {
+        try {
+            $request->validate([
+                'mill_brand_id' => ['nullable', 'integer', 'exists:brands,id'],
+                'mill_brand_name' => ['required_without:mill_brand_id', 'string', 'max:255'],
+                'prefer_not_to_disclose' => ['nullable', 'boolean'],
+                'relationship' => ['nullable', 'string', 'in:authorized-agent,independent-dealer'],
+                'material_id' => ['nullable', 'exists:materials,id'],
+            ]);
+
+            // If mill_brand_id is provided, use existing brand
+            if ($request->has('mill_brand_id') && $request->mill_brand_id) {
+                $brand = DB::table('brands')->where('id', $request->mill_brand_id)->first();
+                if (!$brand) {
+                    return Response::error('Brand not found', null, HttpResponse::HTTP_NOT_FOUND);
+                }
+            } else {
+                // Check if brand already exists by name
+                // Try to find in original brands table (without user_id constraint)
+                $hasUserIdColumn = DB::getSchemaBuilder()->hasColumn('brands', 'user_id');
+                
+                $query = DB::table('brands')->where('name', $request->mill_brand_name);
+                if ($hasUserIdColumn) {
+                    $query->whereNull('user_id');
+                }
+                $brand = $query->first();
+
+                if (!$brand) {
+                    // Create new mill brand
+                    $brandData = [
+                        'name' => $request->mill_brand_name,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                    
+                    // Only add user_id if column exists and it should be null for mill brands
+                    if ($hasUserIdColumn) {
+                        $brandData['user_id'] = null;
+                    }
+                    
+                    $brandId = DB::table('brands')->insertGetId($brandData);
+                    $brand = (object) ['id' => $brandId, 'name' => $request->mill_brand_name];
+                }
+            }
+
+            // If material_id is provided, associate the brand with the material
+            if ($request->has('material_id') && $request->material_id) {
+                \App\Models\MaterialMill::firstOrCreate([
+                    'material_id' => $request->material_id,
+                    'brand_id' => $brand->id,
+                ]);
+            }
+
+            // Map relationship to database format
+            $agentType = null;
+            if ($request->relationship === 'authorized-agent') {
+                $agentType = 'AUTHORIZED_AGENT';
+            } elseif ($request->relationship === 'independent-dealer') {
+                $agentType = 'DEALER';
+            }
+
+            return Response::success('Mill brand added successfully', [
+                'mill_brand_id' => $brand->id,
+                'mill_brand_name' => $brand->name ?? $request->mill_brand_name,
+                'prefer_not_to_disclose' => $request->prefer_not_to_disclose ?? false,
+                'relationship' => $request->relationship ?? null,
+                'agent_type' => $agentType, // For use in dealer material details
+            ], null, HttpResponse::HTTP_CREATED);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return Response::error(
+                'Validation failed',
+                $e->errors(),
+                HttpResponse::HTTP_UNPROCESSABLE_ENTITY
+            );
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
+     * Manually add a finish for dealer registration
+     * POST /api/v1/dealer/finish/add
+     */
+    public function addFinish(Request $request)
+    {
+        try {
+            $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'material_id' => ['nullable', 'exists:materials,id'],
+                'type' => ['nullable', 'string', 'in:finish,coating,grade,variant,surface,treatment'],
+            ]);
+
+            // Check if finish already exists
+            $finish = MaterialFinish::where('name', $request->name)
+                ->when($request->has('material_id'), function ($query) use ($request) {
+                    return $query->where('material_id', $request->material_id);
+                })
+                ->first();
+
+            if (!$finish) {
+                // Create new finish
+                $finish = MaterialFinish::create([
+                    'name' => $request->name,
+                    'material_id' => $request->material_id ?? null,
+                    'type' => $request->type ?? 'finish',
+                ]);
+            }
+
+            return Response::success('Finish added successfully', [
+                'id' => $finish->id,
+                'name' => $finish->name,
+                'material_id' => $finish->material_id,
+                'type' => $finish->type,
+            ], null, HttpResponse::HTTP_CREATED);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return Response::error(
+                'Validation failed',
+                $e->errors(),
+                HttpResponse::HTTP_UNPROCESSABLE_ENTITY
+            );
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
 }

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\DealerStatus;
 use App\Models\Dealer;
 use App\Models\DealerLocation;
+use App\Models\DealerMaterialDetail;
 use App\Models\MatchingSession;
 use Illuminate\Support\Facades\DB;
 
@@ -40,6 +41,37 @@ class DealerService
                 $dealer->materials()->sync($materialIds);
             }
 
+            // Handle dealer material details (mill/brand relationships, finishes, thickness ranges)
+            if (isset($data['materials']) && is_array($data['materials'])) {
+                // Delete old material details
+                $dealer->materialDetails()->delete();
+                
+                // Create new material details
+                foreach ($data['materials'] as $materialData) {
+                    // Use mill_brand_id if provided, otherwise use brand_id
+                    $brandId = $materialData['mill_brand_id'] ?? $materialData['brand_id'] ?? null;
+                    
+                    // Map relationship to agent_type if provided
+                    $agentType = $materialData['agent_type'] ?? null;
+                    if (!$agentType && isset($materialData['relationship'])) {
+                        if ($materialData['relationship'] === 'authorized-agent') {
+                            $agentType = 'AUTHORIZED_AGENT';
+                        } elseif ($materialData['relationship'] === 'independent-dealer') {
+                            $agentType = 'DEALER';
+                        }
+                    }
+                    
+                    DealerMaterialDetail::create([
+                        'dealer_id' => $dealer->id,
+                        'material_id' => $materialData['material_id'],
+                        'brand_id' => $brandId,
+                        'agent_type' => $agentType,
+                        'finish_ids' => $materialData['finish_ids'] ?? null,
+                        'thickness_ranges' => $materialData['thickness_ranges'] ?? [],
+                    ]);
+                }
+            }
+
             // Sync machines (optional)
             if (isset($data['machines_available']) && !empty($data['machines_available'])) {
                 $dealer->machines()->sync($data['machines_available']);
@@ -47,16 +79,18 @@ class DealerService
 
             // Delete old locations and create new ones
             $dealer->locations()->delete();
-            foreach ($data['locations'] as $locationData) {
-                DealerLocation::create([
-                    'dealer_id' => $dealer->id,
-                    'type' => $locationData['type'],
-                    'address' => $locationData['address'] ?? null,
-                    'latitude' => $locationData['latitude'],
-                    'longitude' => $locationData['longitude'],
-                    'city' => $locationData['city'] ?? null,
-                    'state' => $locationData['state'] ?? null,
-                ]);
+            if (isset($data['locations']) && is_array($data['locations'])) {
+                foreach ($data['locations'] as $locationData) {
+                    DealerLocation::create([
+                        'dealer_id' => $dealer->id,
+                        'type' => $locationData['type'],
+                        'address' => $locationData['address'] ?? null,
+                        'latitude' => $locationData['latitude'],
+                        'longitude' => $locationData['longitude'],
+                        'city' => $locationData['city'] ?? null,
+                        'state' => $locationData['state'] ?? null,
+                    ]);
+                }
             }
 
             return $dealer->load(['materials', 'machines', 'locations']);

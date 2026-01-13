@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('scrap_type_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
 
-            $table->unique(['converter_id', 'scrap_type_id']);
+            $table->unique(['converter_id', 'scrap_type_id'], 'conv_scrap_unique');
         });
     }
 

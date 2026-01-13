@@ -60,4 +60,9 @@ class Dealer extends Model
     {
         return $this->hasMany(Quotation::class);
     }
+
+    public function materialDetails(): HasMany
+    {
+        return $this->hasMany(DealerMaterialDetail::class);
+    }
 }

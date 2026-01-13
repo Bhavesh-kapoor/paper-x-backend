@@ -42,6 +42,12 @@ Route::prefix('v1')->group(function () {
     Route::get('/material-thickness-types', [\App\Http\Controllers\api\ReferenceDataController::class, 'getMaterialThicknessTypes'])->name('reference.material-thickness-types');
     Route::get('/brands', [\App\Http\Controllers\api\ReferenceDataController::class, 'getBrands'])->name('reference.brands');
     Route::get('/materials/{id}/details', [\App\Http\Controllers\api\ReferenceDataController::class, 'getMaterialDetails'])->name('reference.material-details');
+    
+    #dealer profile completion - manual additions
+    Route::middleware(['token.exists', 'auth:sanctum'])->group(function () {
+        Route::post('/dealer/mill/add', [\App\Http\Controllers\api\ReferenceDataController::class, 'addMillBrand'])->name('dealer.mill.add');
+        Route::post('/dealer/finish/add', [\App\Http\Controllers\api\ReferenceDataController::class, 'addFinish'])->name('dealer.finish.add');
+    });
 
     #dealer routes
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('dealer')->group(function () {

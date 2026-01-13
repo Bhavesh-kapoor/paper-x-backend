@@ -15,7 +15,8 @@ class Brand extends Model
 
     protected $fillable = [
         'user_id',
-        'company_name',
+        'name', // For mill brands
+        'company_name', // For user brand profiles
         'brand_name',
         'contact_person_name',
         'mobile',

@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('material_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
 
-            $table->unique(['converter_id', 'material_id']);
+            $table->unique(['converter_id', 'material_id'], 'conv_mat_unique');
         });
     }
 

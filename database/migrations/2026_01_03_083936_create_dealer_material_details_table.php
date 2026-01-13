@@ -21,7 +21,7 @@ return new class extends Migration
             $table->json('thickness_ranges')->nullable(); // [{"unit": "GSM", "min": 200, "max": 400}, {"unit": "MM", "min": 0.5, "max": 2.0}]
             $table->timestamps();
 
-            $table->unique(['dealer_id', 'material_id', 'brand_id']);
+            $table->unique(['dealer_id', 'material_id', 'brand_id'], 'dealer_mat_brand_unique');
             $table->index('dealer_id');
             $table->index('material_id');
         });

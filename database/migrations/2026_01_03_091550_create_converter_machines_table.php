@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('machine_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
 
-            $table->unique(['converter_id', 'machine_id']);
+            $table->unique(['converter_id', 'machine_id'], 'conv_machine_unique');
         });
     }
 

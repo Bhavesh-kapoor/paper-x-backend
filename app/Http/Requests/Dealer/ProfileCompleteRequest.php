@@ -13,9 +13,10 @@ class ProfileCompleteRequest extends ApiRequest
             'materials' => ['required', 'array', 'min:1'],
             'materials.*.material_id' => ['required', 'exists:materials,id'],
             'materials.*.brand_id' => ['nullable', 'exists:brands,id'],
-            'materials.*.agent_type' => ['nullable', Rule::in(['AUTHORIZED_AGENT', 'DEALER']), Rule::requiredIf(function () {
-                return request()->input('materials.*.brand_id') !== null;
-            })],
+            'materials.*.mill_brand_id' => ['nullable', 'integer', 'exists:brands,id'], // Alias for brand_id
+            'materials.*.agent_type' => ['nullable', Rule::in(['AUTHORIZED_AGENT', 'DEALER'])],
+            'materials.*.relationship' => ['nullable', Rule::in(['authorized-agent', 'independent-dealer'])],
+            'materials.*.prefer_not_to_disclose' => ['nullable', 'boolean'],
             'materials.*.finish_ids' => ['nullable', 'array'],
             'materials.*.finish_ids.*' => ['exists:material_finishes,id'],
             'materials.*.thickness_ranges' => ['required', 'array', 'min:1'],

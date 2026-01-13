@@ -35,8 +35,11 @@ class BrandService
             ]);
 
             // Sync brand types
-            if (isset($data['brand_type_ids'])) {
+            if (isset($data['brand_type_ids']) && is_array($data['brand_type_ids']) && !empty($data['brand_type_ids'])) {
                 $brand->brandTypes()->sync($data['brand_type_ids']);
+            } else {
+                // If no brand types provided, detach all
+                $brand->brandTypes()->detach();
             }
 
             return $brand->load('brandTypes');
@@ -86,6 +89,7 @@ class BrandService
         ];
     }
 }
+
 
 
 
