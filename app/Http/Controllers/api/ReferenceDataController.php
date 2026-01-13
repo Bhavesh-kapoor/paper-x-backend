@@ -194,31 +194,20 @@ class ReferenceDataController extends Controller
         try {
             $perPage = $request->input('per_page', 50);
             
-            // Check if user_id column exists in brands table
-            $hasUserIdColumn = DB::getSchemaBuilder()->hasColumn('brands', 'user_id');
-            
-            $query = DB::table('brands');
-            
-            if ($hasUserIdColumn) {
-                // New structure: only get mill brands (user_id is NULL)
-                $query->whereNull('user_id');
-            }
-            
-            // Select name column (mill brands have 'name', user brands have 'company_name')
-            if (DB::getSchemaBuilder()->hasColumn('brands', 'name')) {
-                $query->select('id', 'name');
-            } else {
-                // Fallback if name doesn't exist
-                $query->select('id', 'company_name as name');
-            }
+            // Get only mill brands where name is NOT NULL
+            // Mill brands have 'name' field, user brand profiles have 'name' as NULL
+            $query = DB::table('brands')
+                ->whereNotNull('name')
+                ->where('name', '!=', '')
+                ->select('id', 'name')
+                ->orderBy('name');
             
             $total = $query->count();
             $currentPage = $request->input('page', 1);
             $lastPage = (int) ceil($total / $perPage);
             $offset = ($currentPage - 1) * $perPage;
             
-            $brands = $query->orderBy('name')
-                ->offset($offset)
+            $brands = $query->offset($offset)
                 ->limit($perPage)
                 ->get();
 
@@ -230,6 +219,50 @@ class ReferenceDataController extends Controller
             ];
 
             return Response::success('Brands (mills) retrieved successfully', $brands->toArray(), $pagination);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
+     * Get all brand types
+     * GET /api/v1/brand-types
+     */
+    public function getBrandTypes(Request $request)
+    {
+        try {
+            $perPage = $request->input('per_page', 50);
+            $query = \App\Models\BrandType::query();
+
+            // Filter by category if provided
+            if ($request->has('category')) {
+                $query->where('category', $request->category);
+            }
+
+            $brandTypes = $query->orderBy('sort_order')
+                ->orderBy('name')
+                ->paginate($perPage);
+
+            $brandTypesData = $brandTypes->map(function ($type) {
+                return [
+                    'id' => $type->id,
+                    'name' => $type->name,
+                    'category' => $type->category,
+                ];
+            });
+
+            $pagination = [
+                'current_page' => $brandTypes->currentPage(),
+                'total' => $brandTypes->total(),
+                'per_page' => $brandTypes->perPage(),
+                'last_page' => $brandTypes->lastPage(),
+            ];
+
+            return Response::success('Brand types retrieved successfully', $brandTypesData->toArray(), $pagination);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),

@@ -41,6 +41,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/material-mills', [\App\Http\Controllers\api\ReferenceDataController::class, 'getMaterialMills'])->name('reference.material-mills');
     Route::get('/material-thickness-types', [\App\Http\Controllers\api\ReferenceDataController::class, 'getMaterialThicknessTypes'])->name('reference.material-thickness-types');
     Route::get('/brands', [\App\Http\Controllers\api\ReferenceDataController::class, 'getBrands'])->name('reference.brands');
+    Route::get('/brand-types', [\App\Http\Controllers\api\ReferenceDataController::class, 'getBrandTypes'])->name('reference.brand-types');
     Route::get('/materials/{id}/details', [\App\Http\Controllers\api\ReferenceDataController::class, 'getMaterialDetails'])->name('reference.material-details');
     
     #dealer profile completion - manual additions

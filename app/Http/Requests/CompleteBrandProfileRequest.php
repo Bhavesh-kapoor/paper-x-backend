@@ -16,6 +16,7 @@ class CompleteBrandProfileRequest extends FormRequest
         return [
             'company_name' => ['required', 'string', 'max:255'],
             'brand_name' => ['nullable', 'string', 'max:255'],
+            'name' => ['nullable'], // Ignore if sent (this is for mill brands only)
             'contact_person_name' => ['required', 'string', 'max:255'],
             'mobile' => ['nullable', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -25,7 +26,7 @@ class CompleteBrandProfileRequest extends FormRequest
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'brand_type_ids' => ['nullable', 'array'],
-            'brand_type_ids.*' => ['exists:brand_types,id'],
+            'brand_type_ids.*' => ['required', 'integer', 'min:1', 'exists:brand_types,id'],
         ];
     }
 }

@@ -22,6 +22,7 @@ class BrandService
             $brand->update([
                 'company_name' => $data['company_name'],
                 'brand_name' => $data['brand_name'] ?? null,
+                'name' => null, // Always null for user brand profiles (name is only for mill brands)
                 'contact_person_name' => $data['contact_person_name'],
                 'mobile' => $data['mobile'] ?? null,
                 'email' => $data['email'] ?? null,
@@ -35,14 +36,29 @@ class BrandService
             ]);
 
             // Sync brand types
-            if (isset($data['brand_type_ids']) && is_array($data['brand_type_ids']) && !empty($data['brand_type_ids'])) {
-                $brand->brandTypes()->sync($data['brand_type_ids']);
+            if (isset($data['brand_type_ids']) && is_array($data['brand_type_ids'])) {
+                // Filter out null/empty values
+                $brandTypeIds = array_filter($data['brand_type_ids'], function($id) {
+                    return !is_null($id) && $id !== '';
+                });
+                
+                if (!empty($brandTypeIds)) {
+                    $brand->brandTypes()->sync($brandTypeIds);
+                } else {
+                    // If array is empty, detach all
+                    $brand->brandTypes()->detach();
+                }
             } else {
                 // If no brand types provided, detach all
                 $brand->brandTypes()->detach();
             }
 
-            return $brand->load('brandTypes');
+            // Reload brand with brandTypes relationship
+            $brand->refresh();
+            $brand->load('brandTypes');
+            
+            // Return brand with brandTypes in response
+            return $brand;
         });
     }
 
