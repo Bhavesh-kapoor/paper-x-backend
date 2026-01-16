@@ -33,6 +33,8 @@ class Inquiry extends Model
         'price_unit',
         'price_negotiable',
         'approx_price_note',
+        'thickness',
+        'thickness_unit',
         'machine_condition',
         'machine_listing_id',
         'job_type',

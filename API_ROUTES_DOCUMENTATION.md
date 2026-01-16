@@ -194,7 +194,33 @@ Authorization: Bearer YOUR_TOKEN_HERE
 - **Description:** Get dealer dashboard statistics
 - **Route Name:** `dealer.dashboard`
 
-### 4.3 Get Opportunities
+### 4.3 Post Requirement (Buy/Sell)
+- **Endpoint:** `POST /api/v1/dealer/requirement/post`
+- **Method:** POST
+- **Auth:** Required
+- **Description:** Post a requirement for buying or selling materials/machines/jobs
+- **Request Format:** See [API_REQUEST_FORMATS.md](./API_REQUEST_FORMATS.md)
+- **Route Name:** `dealer.requirement.post`
+
+### 4.4 Get Requirements (With Filters)
+- **Endpoint:** `GET /api/v1/dealer/requirements`
+- **Method:** GET
+- **Auth:** Required
+- **Description:** Get dealer's posted requirements with filters and pagination
+- **Query Parameters:**
+  - `inquiry_type` (optional): "material" | "machine" | "job"
+  - `intent` (optional): "buy" | "sell"
+  - `status` (optional): "MATCHING" | "SESSION_LOCKED" | "COMPLETED" | "CANCELLED"
+  - `urgency` (optional): "normal" | "urgent"
+  - `material_id` (optional): Filter by material ID
+  - `machine_id` (optional): Filter by machine ID
+  - `sort_by` (optional): "created_at" | "updated_at" (default: "created_at")
+  - `sort_order` (optional): "asc" | "desc" (default: "desc")
+  - `per_page` (optional): Items per page (default: 15)
+  - `page` (optional): Page number (default: 1)
+- **Route Name:** `dealer.requirements`
+
+### 4.5 Get Opportunities
 - **Endpoint:** `GET /api/v1/dealer/opportunities`
 - **Method:** GET
 - **Auth:** Required
@@ -204,7 +230,7 @@ Authorization: Bearer YOUR_TOKEN_HERE
   - `per_page` (optional): Items per page
 - **Route Name:** `dealer.opportunities`
 
-### 4.4 Get Opportunity Details
+### 4.6 Get Opportunity Details
 - **Endpoint:** `GET /api/v1/dealer/opportunity/{inquiry_id}`
 - **Method:** GET
 - **Auth:** Required
@@ -213,7 +239,7 @@ Authorization: Bearer YOUR_TOKEN_HERE
   - `inquiry_id` (required): Inquiry ID
 - **Route Name:** `dealer.opportunity.details`
 
-### 4.5 Accept Opportunity
+### 4.7 Accept Opportunity
 - **Endpoint:** `POST /api/v1/dealer/opportunity/{id}/accept`
 - **Method:** POST
 - **Auth:** Required
@@ -222,7 +248,7 @@ Authorization: Bearer YOUR_TOKEN_HERE
   - `id` (required): Inquiry ID
 - **Route Name:** `dealer.opportunity.accept`
 
-### 4.6 Decline Opportunity
+### 4.8 Decline Opportunity
 - **Endpoint:** `POST /api/v1/dealer/opportunity/{id}/decline`
 - **Method:** POST
 - **Auth:** Required
@@ -237,7 +263,7 @@ Authorization: Bearer YOUR_TOKEN_HERE
   ```
 - **Route Name:** `dealer.opportunity.decline`
 
-### 4.7 Get Session Details
+### 4.9 Get Session Details
 - **Endpoint:** `GET /api/v1/dealer/session/{session_id}`
 - **Method:** GET
 - **Auth:** Required
@@ -246,7 +272,7 @@ Authorization: Bearer YOUR_TOKEN_HERE
   - `session_id` (required): Session ID
 - **Route Name:** `dealer.session.details`
 
-### 4.8 Get Session History
+### 4.10 Get Session History
 - **Endpoint:** `GET /api/v1/dealer/history`
 - **Method:** GET
 - **Auth:** Required
@@ -256,7 +282,7 @@ Authorization: Bearer YOUR_TOKEN_HERE
   - `per_page` (optional): Items per page
 - **Route Name:** `dealer.history`
 
-### 4.9 Get Chat Messages
+### 4.11 Get Chat Messages
 - **Endpoint:** `GET /api/v1/dealer/chat/{session_id}`
 - **Method:** GET
 - **Auth:** Required
@@ -268,7 +294,7 @@ Authorization: Bearer YOUR_TOKEN_HERE
   - `per_page` (optional): Items per page
 - **Route Name:** `dealer.chat.messages`
 
-### 4.10 Send Chat Message
+### 4.12 Send Chat Message
 - **Endpoint:** `POST /api/v1/dealer/chat/{session_id}/message`
 - **Method:** POST
 - **Auth:** Required
@@ -284,7 +310,7 @@ Authorization: Bearer YOUR_TOKEN_HERE
   ```
 - **Route Name:** `dealer.chat.send`
 
-### 4.11 Submit Quotation
+### 4.13 Submit Quotation
 - **Endpoint:** `POST /api/v1/dealer/quote/submit/{inquiry_id}`
 - **Method:** POST
 - **Auth:** Required
@@ -591,4 +617,5 @@ All endpoints return consistent error responses:
 | `/converter/profile/complete` | POST | Yes | Converter |
 | `/brand/profile/complete` | POST | Yes | Brand |
 | `/dashboard` | GET | Yes | Common |
+
 

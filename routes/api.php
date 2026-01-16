@@ -58,6 +58,12 @@ Route::prefix('v1')->group(function () {
         // Dashboard
         Route::get('/dashboard', [DealerController::class, 'getDashboard'])->name('dealer.dashboard');
         
+        // Post requirement (buy/sell)
+        Route::post('/requirement/post', [DealerController::class, 'postRequirement'])->name('dealer.requirement.post');
+        
+        // Get requirements (with filters and pagination)
+        Route::get('/requirements', [DealerController::class, 'getRequirements'])->name('dealer.requirements');
+        
         // Opportunities
         Route::get('/opportunities', [OpportunityController::class, 'getOpportunities'])->name('dealer.opportunities');
         Route::get('/opportunity/{inquiry_id}', [OpportunityController::class, 'getOpportunityDetails'])->name('dealer.opportunity.details');

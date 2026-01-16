@@ -298,7 +298,267 @@ Accept: application/json
 
 ---
 
-## 4. Brand Complete Profile API
+## 4. Dealer Post Requirement API
+
+### Endpoint
+`POST /api/v1/dealer/requirement/post`
+
+### Headers
+```
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+Accept: application/json
+```
+
+### Request Body (Material - Buy)
+
+```json
+{
+  "inquiry_type": "material",
+  "intent": "buy",
+  "title": "Need Duplex Board 350 GSM",
+  "description": "Looking for high quality duplex board",
+  "material_ids": [1, 2],
+  "thickness": 350,
+  "thickness_unit": "GSM",
+  "size": "28x40",
+  "quantity": 2000,
+  "quantity_unit": "sheets",
+  "price": 50,
+  "price_unit": "per_sheet",
+  "price_negotiable": true,
+  "urgency": "urgent",
+  "location": "Mumbai",
+  "latitude": 19.1136,
+  "longitude": 72.8697,
+  "deadline": "2026-01-15"
+}
+```
+
+### Request Body (Material - Sell)
+
+```json
+{
+  "inquiry_type": "material",
+  "intent": "sell",
+  "title": "Selling Duplex Board 350 GSM",
+  "description": "Premium quality duplex board available",
+  "material_ids": [1],
+  "thickness": 350,
+  "thickness_unit": "GSM",
+  "size": "28x40",
+  "quantity": 5000,
+  "quantity_unit": "sheets",
+  "price": 45,
+  "price_unit": "per_sheet",
+  "price_negotiable": false,
+  "urgency": "normal",
+  "location": "Delhi",
+  "latitude": 28.6139,
+  "longitude": 77.2090
+}
+```
+
+### Request Body (Machine - Buy)
+
+```json
+{
+  "inquiry_type": "machine",
+  "intent": "buy",
+  "title": "Need Automatic Folder Gluer",
+  "description": "Looking for good condition machine",
+  "machine_ids": [1, 2],
+  "machine_condition": "Working Condition",
+  "urgency": "normal",
+  "location": "Mumbai",
+  "latitude": 19.1136,
+  "longitude": 72.8697
+}
+```
+
+### Request Body (Machine - Sell)
+
+```json
+{
+  "inquiry_type": "machine",
+  "intent": "sell",
+  "title": "Selling Printing Machine",
+  "description": "Excellent condition machine available",
+  "machine_ids": [1],
+  "machine_condition": "Excellent",
+  "urgency": "normal",
+  "location": "Delhi",
+  "latitude": 28.6139,
+  "longitude": 77.2090
+}
+```
+
+### Request Body (Job - Outsourcing)
+
+```json
+{
+  "inquiry_type": "job",
+  "intent": "buy",
+  "title": "Need 10,000 Rigid Boxes",
+  "description": "Looking for quality manufacturer",
+  "job_type": "Rigid Boxes",
+  "quantity": 10000,
+  "quantity_unit": "pieces",
+  "timeline_days": 5,
+  "urgency": "normal",
+  "location": "Mumbai",
+  "latitude": 19.1136,
+  "longitude": 72.8697
+}
+```
+
+### Field Descriptions
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `inquiry_type` | String | ✅ Yes | "material", "machine", or "job" |
+| `intent` | String | ✅ Yes | "buy" or "sell" |
+| `title` | String | ✅ Yes | Title of the requirement |
+| `description` | String | ❌ No | Detailed description |
+| `urgency` | String | ✅ Yes | "normal" or "urgent" |
+| `material_ids` | Array | Conditional | Required if inquiry_type = "material" |
+| `machine_ids` | Array | Conditional | Required if inquiry_type = "machine" |
+| `thickness` | Number | ❌ No | Thickness value |
+| `thickness_unit` | String | ❌ No | "GSM", "MM", "OUNCE", "BF", or "MICRON" |
+| `size` | String | ❌ No | Size (e.g., "28x40") |
+| `quantity` | Number | ✅ Yes | Quantity required/available |
+| `quantity_unit` | String | ✅ Yes | Unit (kg, tons, sheets, pieces, etc.) |
+| `price` | Number | ❌ No | Price |
+| `price_unit` | String | ❌ No | Price unit (per_sheet, per_kg, etc.) |
+| `price_negotiable` | Boolean | ❌ No | Whether price is negotiable (default: true) |
+| `approx_price_note` | String | ❌ No | Approximate price note |
+| `machine_condition` | String | ❌ No | "Brand New", "Excellent", "Working Condition", or "Needs Repair" |
+| `job_type` | String | Conditional | Required if inquiry_type = "job" |
+| `timeline_days` | Integer | ❌ No | Timeline in days |
+| `location` | String | ❌ No | Location name |
+| `latitude` | Number | ❌ No | Latitude coordinate |
+| `longitude` | Number | ❌ No | Longitude coordinate |
+| `specs` | Array | ❌ No | Additional specifications |
+| `attachment_paths` | Array | ❌ No | Array of attachment file paths |
+| `deadline` | Date | ❌ No | Deadline date |
+
+### Response (Success - 201 Created)
+
+```json
+{
+  "success": true,
+  "message": "Requirement posted successfully",
+  "data": {
+    "id": 1,
+    "poster_id": 1,
+    "poster_type": "dealer",
+    "inquiry_type": "material",
+    "intent": "buy",
+    "title": "Need Duplex Board 350 GSM",
+    "status": "MATCHING",
+    "urgency": "urgent",
+    "quantity": "2000.00",
+    "quantity_unit": "sheets",
+    "materials": [
+      {
+        "id": 1,
+        "name": "Duplex Board"
+      }
+    ],
+    "created_at": "2026-01-03T10:00:00.000000Z"
+  }
+}
+```
+
+---
+
+## 5. Dealer Get Requirements API
+
+### Endpoint
+`GET /api/v1/dealer/requirements`
+
+### Headers
+```
+Authorization: Bearer YOUR_TOKEN_HERE
+Accept: application/json
+```
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `inquiry_type` | String | ❌ No | Filter by type: "material", "machine", or "job" |
+| `intent` | String | ❌ No | Filter by intent: "buy" or "sell" |
+| `status` | String | ❌ No | Filter by status: "MATCHING", "SESSION_LOCKED", "COMPLETED", "CANCELLED" |
+| `urgency` | String | ❌ No | Filter by urgency: "normal" or "urgent" |
+| `material_id` | Integer | ❌ No | Filter by material ID |
+| `machine_id` | Integer | ❌ No | Filter by machine ID |
+| `sort_by` | String | ❌ No | Sort field: "created_at" (default) or "updated_at" |
+| `sort_order` | String | ❌ No | Sort order: "asc" or "desc" (default: "desc") |
+| `per_page` | Integer | ❌ No | Items per page (default: 15) |
+| `page` | Integer | ❌ No | Page number (default: 1) |
+
+### Example Request
+
+```
+GET /api/v1/dealer/requirements?inquiry_type=material&intent=buy&urgency=urgent&per_page=20&page=1
+```
+
+### Response (Success - 200 OK)
+
+```json
+{
+  "success": true,
+  "message": "Requirements retrieved successfully",
+  "data": [
+    {
+      "id": 1,
+      "inquiry_type": "material",
+      "intent": "buy",
+      "title": "Need Duplex Board 350 GSM",
+      "description": "Looking for high quality duplex board",
+      "status": "MATCHING",
+      "urgency": "urgent",
+      "quantity": "2000.00",
+      "quantity_unit": "sheets",
+      "size": "28x40",
+      "price": "50.00",
+      "price_unit": "per_sheet",
+      "price_negotiable": true,
+      "thickness": "350.000",
+      "thickness_unit": "GSM",
+      "machine_condition": null,
+      "job_type": null,
+      "timeline_days": null,
+      "location": "Mumbai",
+      "latitude": "19.11360000",
+      "longitude": "72.86970000",
+      "materials": [
+        {
+          "id": 1,
+          "name": "Duplex Board"
+        }
+      ],
+      "machines": [],
+      "responses_count": 3,
+      "created_at": "2026-01-03T10:00:00.000000Z",
+      "updated_at": "2026-01-03T10:00:00.000000Z"
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total": 25,
+    "per_page": 15,
+    "last_page": 2,
+    "from": 1,
+    "to": 15
+  }
+}
+```
+
+---
+
+## 6. Brand Complete Profile API
 
 ### Endpoint
 `POST /api/v1/brand/profile/complete`
@@ -448,4 +708,5 @@ POST /api/v1/dealer/profile/complete
 4. **Thickness Ranges**: Must have at least one range, and `max` must be >= `min`
 
 5. **Locations**: Required only if `has_warehouse: true`
+
 

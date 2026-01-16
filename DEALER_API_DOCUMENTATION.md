@@ -100,7 +100,8 @@ None (authenticated via Bearer token)
     "active_opportunities_count": 5,
     "locked_sessions_count": 2,
     "expired_sessions_count": 1,
-    "unread_notifications_count": 3
+    "unread_notifications_count": 3,
+    "posted_requirements_count": 12
   }
 }
 ```
@@ -111,6 +112,7 @@ None (authenticated via Bearer token)
 - Counts locked sessions where dealer is participant
 - Counts expired sessions
 - Counts unread notifications
+- Counts dealer's posted requirements (inquiries posted by dealer)
 
 ### DB Tables Involved
 - `dealers`
@@ -118,10 +120,95 @@ None (authenticated via Bearer token)
 - `inquiries`
 - `matching_sessions`
 - `notifications`
+- `inquiries` (for posted requirements count)
 
 ---
 
-## 3️⃣ DEALER OPPORTUNITY FEED (MOST IMPORTANT)
+## 3️⃣ DEALER GET REQUIREMENTS API
+
+### Endpoint
+`GET /api/v1/dealer/requirements`
+
+### Method
+GET
+
+### Request Payload
+Query Parameters (all optional):
+- `inquiry_type`: "material" | "machine" | "job"
+- `intent`: "buy" | "sell"
+- `status`: "MATCHING" | "SESSION_LOCKED" | "COMPLETED" | "CANCELLED"
+- `urgency`: "normal" | "urgent"
+- `material_id`: Integer (filter by material)
+- `machine_id`: Integer (filter by machine)
+- `sort_by`: "created_at" | "updated_at" (default: "created_at")
+- `sort_order`: "asc" | "desc" (default: "desc")
+- `per_page`: Integer (default: 15)
+- `page`: Integer (default: 1)
+
+### Response Payload
+```json
+{
+  "success": true,
+  "message": "Requirements retrieved successfully",
+  "data": [
+    {
+      "id": 1,
+      "inquiry_type": "material",
+      "intent": "buy",
+      "title": "Need Duplex Board 350 GSM",
+      "description": "Looking for high quality duplex board",
+      "status": "MATCHING",
+      "urgency": "urgent",
+      "quantity": "2000.00",
+      "quantity_unit": "sheets",
+      "size": "28x40",
+      "price": "50.00",
+      "price_unit": "per_sheet",
+      "price_negotiable": true,
+      "thickness": "350.000",
+      "thickness_unit": "GSM",
+      "materials": [
+        {
+          "id": 1,
+          "name": "Duplex Board"
+        }
+      ],
+      "machines": [],
+      "responses_count": 3,
+      "created_at": "2026-01-03T10:00:00.000000Z",
+      "updated_at": "2026-01-03T10:00:00.000000Z"
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total": 25,
+    "per_page": 15,
+    "last_page": 2,
+    "from": 1,
+    "to": 15
+  }
+}
+```
+
+### Business Logic
+- Returns all requirements (inquiries) posted by the authenticated dealer
+- Supports filtering by inquiry_type, intent, status, urgency, material_id, machine_id
+- Supports sorting by created_at or updated_at
+- Includes pagination
+- Returns materials and machines associated with each requirement
+- Includes response count for each requirement
+
+### DB Tables Involved
+- `inquiries`
+- `inquiry_materials` (pivot)
+- `inquiry_machines` (pivot)
+- `materials`
+- `machines`
+- `responses`
+
+---
+
+## 4️⃣ DEALER OPPORTUNITY FEED (MOST IMPORTANT)
 
 ### Endpoint
 `GET /api/v1/dealer/opportunities`
@@ -178,7 +265,7 @@ None (authenticated via Bearer token)
 
 ---
 
-## 4️⃣ OPPORTUNITY DETAILS
+## 5️⃣ OPPORTUNITY DETAILS
 
 ### Endpoint
 `GET /api/v1/dealer/opportunity/{inquiry_id}`
@@ -235,7 +322,7 @@ None (inquiry_id in URL)
 
 ---
 
-## 5️⃣ ACCEPT / DECLINE OPPORTUNITY
+## 6️⃣ ACCEPT / DECLINE OPPORTUNITY
 
 ### Accept API
 **Endpoint:** `POST /api/v1/dealer/opportunity/{id}/accept`
@@ -311,7 +398,7 @@ None (inquiry_id in URL)
 
 ---
 
-## 6️⃣ MATCHING SESSION LOCK
+## 7️⃣ MATCHING SESSION LOCK
 
 ### Endpoint (Internal/Service)
 `POST /session/lock` (Internal - triggered automatically)
@@ -336,7 +423,7 @@ POST (Internal Service Method)
 
 ---
 
-## 7️⃣ DEALER SESSION VIEW
+## 8️⃣ DEALER SESSION VIEW
 
 ### Endpoint
 `GET /api/v1/dealer/session/{session_id}`
@@ -388,7 +475,7 @@ None (session_id in URL)
 
 ---
 
-## 8️⃣ CHAT APIs (SESSION BASED)
+## 9️⃣ CHAT APIs (SESSION BASED)
 
 ### Get Messages
 **Endpoint:** `GET /api/v1/dealer/chat/{session_id}`
@@ -484,7 +571,7 @@ attachment: <file>
 
 ---
 
-## 9️⃣ QUOTATION & DEAL ACTIONS
+## 🔟 QUOTATION & DEAL ACTIONS
 
 ### Submit Quote
 **Endpoint:** `POST /api/v1/dealer/quote/submit/{inquiry_id}`

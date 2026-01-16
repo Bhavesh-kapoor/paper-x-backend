@@ -1,0 +1,787 @@
+{
+	"info": {
+		"_postman_id": "paper-x-dealer-api-collection",
+		"name": "Paper X - Dealer API Collection",
+		"description": "Complete API collection for Dealer role in Paper X B2B Matchmaking Platform",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "paper-x-api"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Request OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mobile\": \"9876543210\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/auth/otp/request",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"otp",
+								"request"
+							]
+						},
+						"description": "Request OTP for login"
+					},
+					"response": []
+				},
+				{
+					"name": "Verify OTP & Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.environment.set(\"auth_token\", jsonData.data.token);",
+									"        pm.collectionVariables.set(\"auth_token\", jsonData.data.token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mobile\": \"9876543210\",\n  \"otp\": \"123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/auth/otp/verify",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"otp",
+								"verify"
+							]
+						},
+						"description": "Verify OTP and get authentication token. Token is automatically saved to collection variable."
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for OTP-based login"
+		},
+		{
+			"name": "Dealer Profile",
+			"item": [
+				{
+					"name": "Complete Profile (With Warehouse)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"materials\": [\n    {\n      \"material_id\": 45,\n      \"mill_brand_id\": 1,\n      \"mill_brand_name\": \"ITC Paperboards\",\n      \"prefer_not_to_disclose\": false,\n      \"relationship\": \"authorized-agent\",\n      \"agent_type\": \"AUTHORIZED_AGENT\",\n      \"finish_ids\": [1, 5, 12],\n      \"thickness_ranges\": [\n        {\n          \"unit\": \"GSM\",\n          \"min\": 200,\n          \"max\": 400\n        },\n        {\n          \"unit\": \"MM\",\n          \"min\": 0.5,\n          \"max\": 2.0\n        }\n      ]\n    },\n    {\n      \"material_id\": 46,\n      \"mill_brand_id\": null,\n      \"relationship\": \"independent-dealer\",\n      \"agent_type\": \"DEALER\",\n      \"finish_ids\": [2, 8],\n      \"thickness_ranges\": [\n        {\n          \"unit\": \"GSM\",\n          \"min\": 250,\n          \"max\": 350\n        }\n      ]\n    }\n  ],\n  \"machines_available\": [1, 2, 3],\n  \"capacity_daily\": 1000.50,\n  \"capacity_monthly\": 30000.00,\n  \"capacity_unit\": \"kg\",\n  \"has_warehouse\": true,\n  \"bulk_orders_note\": null,\n  \"locations\": [\n    {\n      \"type\": \"factory\",\n      \"address\": \"123 Industrial Street, Sector 5\",\n      \"latitude\": 28.6139,\n      \"longitude\": 77.2090,\n      \"city\": \"Delhi\",\n      \"state\": \"Delhi\"\n    },\n    {\n      \"type\": \"warehouse\",\n      \"address\": \"456 Warehouse Road, Sector 18\",\n      \"latitude\": 28.7041,\n      \"longitude\": 77.1025,\n      \"city\": \"Noida\",\n      \"state\": \"Uttar Pradesh\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/profile/complete",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"profile",
+								"complete"
+							]
+						},
+						"description": "Complete dealer profile with materials, mills, finishes, and locations"
+					},
+					"response": []
+				},
+				{
+					"name": "Complete Profile (Bulk Orders Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"materials\": [\n    {\n      \"material_id\": 45,\n      \"mill_brand_id\": null,\n      \"finish_ids\": [],\n      \"thickness_ranges\": [\n        {\n          \"unit\": \"GSM\",\n          \"min\": 200,\n          \"max\": 400\n        }\n      ]\n    }\n  ],\n  \"machines_available\": [1, 2],\n  \"capacity_daily\": 5000.00,\n  \"capacity_monthly\": 150000.00,\n  \"capacity_unit\": \"kg\",\n  \"has_warehouse\": false,\n  \"bulk_orders_note\": \"We handle bulk orders only. Minimum order quantity: 10 tons\",\n  \"locations\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/profile/complete",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"profile",
+								"complete"
+							]
+						},
+						"description": "Complete dealer profile for bulk orders only (no warehouse)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/dashboard",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"dashboard"
+							]
+						},
+						"description": "Get dealer dashboard with statistics including posted requirements count"
+					},
+					"response": []
+				}
+			],
+			"description": "Dealer profile management endpoints"
+		},
+		{
+			"name": "Requirements",
+			"item": [
+				{
+					"name": "Post Requirement - Material Buy",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"inquiry_type\": \"material\",\n  \"intent\": \"buy\",\n  \"title\": \"Need Duplex Board 350 GSM\",\n  \"description\": \"Looking for high quality duplex board\",\n  \"material_ids\": [1, 2],\n  \"thickness\": 350,\n  \"thickness_unit\": \"GSM\",\n  \"size\": \"28x40\",\n  \"quantity\": 2000,\n  \"quantity_unit\": \"sheets\",\n  \"price\": 50,\n  \"price_unit\": \"per_sheet\",\n  \"price_negotiable\": true,\n  \"urgency\": \"urgent\",\n  \"location\": \"Mumbai\",\n  \"latitude\": 19.1136,\n  \"longitude\": 72.8697,\n  \"deadline\": \"2026-01-15\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/requirement/post",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"requirement",
+								"post"
+							]
+						},
+						"description": "Post a material requirement for buying"
+					},
+					"response": []
+				},
+				{
+					"name": "Post Requirement - Material Sell",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"inquiry_type\": \"material\",\n  \"intent\": \"sell\",\n  \"title\": \"Selling Duplex Board 350 GSM\",\n  \"description\": \"Premium quality duplex board available\",\n  \"material_ids\": [1],\n  \"thickness\": 350,\n  \"thickness_unit\": \"GSM\",\n  \"size\": \"28x40\",\n  \"quantity\": 5000,\n  \"quantity_unit\": \"sheets\",\n  \"price\": 45,\n  \"price_unit\": \"per_sheet\",\n  \"price_negotiable\": false,\n  \"urgency\": \"normal\",\n  \"location\": \"Delhi\",\n  \"latitude\": 28.6139,\n  \"longitude\": 77.2090\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/requirement/post",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"requirement",
+								"post"
+							]
+						},
+						"description": "Post a material requirement for selling"
+					},
+					"response": []
+				},
+				{
+					"name": "Post Requirement - Machine Buy",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"inquiry_type\": \"machine\",\n  \"intent\": \"buy\",\n  \"title\": \"Need Automatic Folder Gluer\",\n  \"description\": \"Looking for good condition machine\",\n  \"machine_ids\": [1, 2],\n  \"machine_condition\": \"Working Condition\",\n  \"urgency\": \"normal\",\n  \"location\": \"Mumbai\",\n  \"latitude\": 19.1136,\n  \"longitude\": 72.8697\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/requirement/post",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"requirement",
+								"post"
+							]
+						},
+						"description": "Post a machine requirement for buying"
+					},
+					"response": []
+				},
+				{
+					"name": "Post Requirement - Machine Sell",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"inquiry_type\": \"machine\",\n  \"intent\": \"sell\",\n  \"title\": \"Selling Printing Machine\",\n  \"description\": \"Excellent condition machine available\",\n  \"machine_ids\": [1],\n  \"machine_condition\": \"Excellent\",\n  \"urgency\": \"normal\",\n  \"location\": \"Delhi\",\n  \"latitude\": 28.6139,\n  \"longitude\": 77.2090\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/requirement/post",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"requirement",
+								"post"
+							]
+						},
+						"description": "Post a machine requirement for selling"
+					},
+					"response": []
+				},
+				{
+					"name": "Post Requirement - Job Outsourcing",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"inquiry_type\": \"job\",\n  \"intent\": \"buy\",\n  \"title\": \"Need 10,000 Rigid Boxes\",\n  \"description\": \"Looking for quality manufacturer\",\n  \"job_type\": \"Rigid Boxes\",\n  \"quantity\": 10000,\n  \"quantity_unit\": \"pieces\",\n  \"timeline_days\": 5,\n  \"urgency\": \"normal\",\n  \"location\": \"Mumbai\",\n  \"latitude\": 19.1136,\n  \"longitude\": 72.8697\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/requirement/post",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"requirement",
+								"post"
+							]
+						},
+						"description": "Post a job outsourcing requirement"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Requirements (All)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/requirements",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"requirements"
+							]
+						},
+						"description": "Get all requirements posted by dealer"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Requirements (With Filters)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/requirements?inquiry_type=material&intent=buy&urgency=urgent&status=MATCHING&per_page=20&page=1&sort_by=created_at&sort_order=desc",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"requirements"
+							],
+							"query": [
+								{
+									"key": "inquiry_type",
+									"value": "material",
+									"description": "material, machine, or job"
+								},
+								{
+									"key": "intent",
+									"value": "buy",
+									"description": "buy or sell"
+								},
+								{
+									"key": "urgency",
+									"value": "urgent",
+									"description": "normal or urgent"
+								},
+								{
+									"key": "status",
+									"value": "MATCHING",
+									"description": "MATCHING, SESSION_LOCKED, COMPLETED, CANCELLED"
+								},
+								{
+									"key": "material_id",
+									"value": "",
+									"description": "Filter by material ID",
+									"disabled": true
+								},
+								{
+									"key": "machine_id",
+									"value": "",
+									"description": "Filter by machine ID",
+									"disabled": true
+								},
+								{
+									"key": "sort_by",
+									"value": "created_at",
+									"description": "created_at or updated_at"
+								},
+								{
+									"key": "sort_order",
+									"value": "desc",
+									"description": "asc or desc"
+								},
+								{
+									"key": "per_page",
+									"value": "20",
+									"description": "Items per page"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number"
+								}
+							]
+						},
+						"description": "Get requirements with filters and pagination"
+					},
+					"response": []
+				}
+			],
+			"description": "Dealer requirement management endpoints"
+		},
+		{
+			"name": "Reference Data",
+			"item": [
+				{
+					"name": "Add Mill/Brand",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mill_brand_name\": \"ABC Paper Mills\",\n  \"prefer_not_to_disclose\": false,\n  \"relationship\": \"authorized-agent\",\n  \"material_id\": 45\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/mill/add",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"mill",
+								"add"
+							]
+						},
+						"description": "Manually add a mill/brand"
+					},
+					"response": []
+				},
+				{
+					"name": "Add Finish",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Custom Gloss Finish\",\n  \"material_id\": 45,\n  \"type\": \"finish\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/dealer/finish/add",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dealer",
+								"finish",
+								"add"
+							]
+						},
+						"description": "Manually add a finish/grade/coating"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Materials",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/materials",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"materials"
+							]
+						},
+						"description": "Get list of all materials"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Brands (Mill Brands)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{BASE_URL}}/api/v1/brands?per_page=50&page=1",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"brands"
+							],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "50",
+									"description": "Items per page"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number"
+								}
+							]
+						},
+						"description": "Get list of mill brands (where name is not null)"
+					},
+					"response": []
+				}
+			],
+			"description": "Reference data endpoints for profile completion"
+		}
+	],
+	"variable": [
+		{
+			"key": "BASE_URL",
+			"value": "http://127.0.0.1:8000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+
+

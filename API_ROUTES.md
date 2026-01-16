@@ -147,6 +147,23 @@ POST /api/v1/dealer/profile/complete
 **Description:** Complete dealer profile with materials, mills, finishes, and locations  
 **Request Format:** See [API_REQUEST_FORMATS.md](./API_REQUEST_FORMATS.md)
 
+### Post Requirement (Buy/Sell)
+```
+POST /api/v1/dealer/requirement/post
+```
+**Auth:** Required  
+**Description:** Post a requirement for buying or selling materials/machines/jobs  
+**Request Format:** See [API_REQUEST_FORMATS.md](./API_REQUEST_FORMATS.md)
+
+### Get Requirements (With Filters)
+```
+GET /api/v1/dealer/requirements
+```
+**Auth:** Required  
+**Description:** Get dealer's posted requirements with filters and pagination  
+**Query Parameters:** inquiry_type, intent, status, urgency, material_id, machine_id, sort_by, sort_order, per_page, page  
+**Request Format:** See [API_REQUEST_FORMATS.md](./API_REQUEST_FORMATS.md)
+
 ### Add Mill/Brand Manually
 ```
 POST /api/v1/dealer/mill/add
@@ -489,4 +506,5 @@ All endpoints return consistent error responses:
 For detailed API documentation and examples, refer to:
 - `API_REQUEST_FORMATS.md` - Request/response examples
 - `API_ROUTES_DOCUMENTATION.md` - Complete route documentation
+
 

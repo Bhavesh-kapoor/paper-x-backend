@@ -648,6 +648,8 @@ Route::prefix('docs')->group(function () {
                     ['method' => 'POST', 'endpoint' => '/api/v1/dealer/finish/add', 'auth' => true, 'desc' => 'Add finish manually'],
                     ['method' => 'POST', 'endpoint' => '/api/v1/dealer/profile/complete', 'auth' => true, 'desc' => 'Complete dealer profile'],
                     ['method' => 'GET', 'endpoint' => '/api/v1/dealer/dashboard', 'auth' => true, 'desc' => 'Get dealer dashboard'],
+                    ['method' => 'POST', 'endpoint' => '/api/v1/dealer/requirement/post', 'auth' => true, 'desc' => 'Post requirement (buy/sell)'],
+                    ['method' => 'GET', 'endpoint' => '/api/v1/dealer/requirements', 'auth' => true, 'desc' => 'Get requirements with filters'],
                     ['method' => 'GET', 'endpoint' => '/api/v1/dealer/opportunities', 'auth' => true, 'desc' => 'Get opportunities'],
                     ['method' => 'GET', 'endpoint' => '/api/v1/dealer/opportunity/{id}', 'auth' => true, 'desc' => 'Get opportunity details'],
                     ['method' => 'POST', 'endpoint' => '/api/v1/dealer/opportunity/{id}/accept', 'auth' => true, 'desc' => 'Accept opportunity'],
