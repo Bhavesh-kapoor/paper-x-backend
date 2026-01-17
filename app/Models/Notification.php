@@ -36,6 +36,33 @@ class Notification extends Model
 
     public function notifiable(): MorphTo
     {
-        return $this->morphTo();
+        return $this->morphTo('notifiable', 'notifiable_type', 'notifiable_id');
+    }
+    
+    /**
+     * Override to prevent accessing notifiable when type is User
+     */
+    public function __get($key)
+    {
+        if ($key === 'notifiable') {
+            $notifiableType = $this->getAttribute('notifiable_type');
+            if ($notifiableType && (
+                $notifiableType === 'App\\Models\\User' || 
+                $notifiableType === 'user' || 
+                $notifiableType === 'User' ||
+                str_contains($notifiableType, 'User')
+            )) {
+                return null;
+            }
+        }
+        
+        try {
+            return parent::__get($key);
+        } catch (\Exception $e) {
+            if (str_contains($e->getMessage(), 'morph map') && $key === 'notifiable') {
+                return null;
+            }
+            throw $e;
+        }
     }
 }

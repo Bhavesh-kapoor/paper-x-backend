@@ -23,7 +23,7 @@ After importing, set up environment variables:
 ### Create New Environment:
 1. Click **Environments** (left sidebar)
 2. Click **+** to create new environment
-3. Name it: `Paper X - Local` or `Paper X - Production`
+3. Name it: `Zupply - Local` or `Zupply - Production`
 
 ### Add Variables:
 1. `base_url` = `http://localhost:8000` (or your server URL)
@@ -58,7 +58,7 @@ After importing, set up environment variables:
 ## 📁 Collection Structure
 
 ```
-Paper X - B2B Matchmaking Platform API
+Zupply - B2B Matchmaking Platform API
 ├── Authentication
 │   ├── Request OTP
 │   └── Verify OTP & Login (auto-saves token)

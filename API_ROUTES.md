@@ -22,7 +22,8 @@ Authorization: Bearer YOUR_TOKEN_HERE
 5. [Machine Dealer APIs](#5-machine-dealer-apis)
 6. [Converter APIs](#6-converter-apis)
 7. [Brand APIs](#7-brand-apis)
-8. [Common APIs](#8-common-apis)
+8. [Wallet & Payment APIs](#8-wallet--payment-apis)
+9. [Common APIs](#9-common-apis)
 
 ---
 
@@ -365,7 +366,104 @@ GET /api/v1/brand/dashboard
 
 ---
 
-## 8. Common APIs
+## 8. Wallet & Payment APIs
+
+### Get Wallet Balance
+```
+GET /api/v1/wallet
+```
+**Auth:** Required  
+**Description:** Get current wallet balance and details
+
+### Get Credit Packs
+```
+GET /api/v1/wallet/credit-packs
+```
+**Auth:** Required  
+**Description:** Get all available credit packs for purchase
+
+### Calculate Custom Credits
+```
+POST /api/v1/wallet/calculate
+```
+**Auth:** Required  
+**Description:** Calculate credits and pricing for a custom amount  
+**Request Body:**
+```json
+{
+    "amount": 1000
+}
+```
+
+### Purchase Credits
+```
+POST /api/v1/wallet/purchase
+```
+**Auth:** Required  
+**Description:** Purchase credits from pack or custom amount  
+**Request Body (Pack):**
+```json
+{
+    "credit_pack_id": 2,
+    "payment_method": "UPI"
+}
+```
+**Request Body (Custom):**
+```json
+{
+    "amount": 1000,
+    "gst_percentage": 18,
+    "payment_method": "NET_BANKING"
+}
+```
+
+### Add Credits (Admin/System)
+```
+POST /api/v1/wallet/add
+```
+**Auth:** Required  
+**Description:** Add credits to wallet (for referrals, refunds, admin adjustments)  
+**Request Body:**
+```json
+{
+    "credits": 50,
+    "description": "Referral Bonus",
+    "transaction_type": "REFERRAL_BONUS"
+}
+```
+
+### Get Transaction History
+```
+GET /api/v1/wallet/transactions
+```
+**Auth:** Required  
+**Query Parameters:**
+- `type` (optional): Filter by type (ALL, ADDED, DEDUCTED)
+- `transaction_type` (optional): Filter by transaction type
+- `date_from` (optional): Start date (YYYY-MM-DD)
+- `date_to` (optional): End date (YYYY-MM-DD)
+- `per_page` (optional): Items per page (default: 20)
+
+### Deduct Credits
+```
+POST /api/v1/wallet/deduct
+```
+**Auth:** Required  
+**Description:** Deduct credits from wallet (for requirements, deals, etc.)  
+**Request Body:**
+```json
+{
+    "credits": 50,
+    "description": "Requirement Posted",
+    "transaction_type": "REQUIREMENT_POSTED",
+    "reference_id": "INQ-123",
+    "reference_type": "inquiry"
+}
+```
+
+---
+
+## 9. Common APIs
 
 ### Unified Dashboard
 ```
@@ -416,6 +514,13 @@ GET /api/v1/dashboard
 | GET | `/converter/dashboard` | Yes | Converter dashboard |
 | POST | `/brand/profile/complete` | Yes | Complete brand profile |
 | GET | `/brand/dashboard` | Yes | Brand dashboard |
+| GET | `/wallet` | Yes | Get wallet balance |
+| GET | `/wallet/credit-packs` | Yes | Get credit packs |
+| POST | `/wallet/calculate` | Yes | Calculate custom credits |
+| POST | `/wallet/purchase` | Yes | Purchase credits |
+| POST | `/wallet/add` | Yes | Add credits (admin) |
+| GET | `/wallet/transactions` | Yes | Get transaction history |
+| POST | `/wallet/deduct` | Yes | Deduct credits |
 | GET | `/dashboard` | Yes | Unified dashboard |
 
 ---

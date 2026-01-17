@@ -2,27 +2,19 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\ApiRequest;
 
-class SubmitResponseRequest extends FormRequest
+class SubmitResponseRequest extends ApiRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
-    public function authorize(): bool
-    {
-        return false;
-    }
-
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
         return [
-            //
+            'quantity_offered' => ['nullable', 'numeric', 'min:0'],
+            'quantity_unit' => ['nullable', 'string', 'max:50'],
+            'quoted_price' => ['nullable', 'numeric', 'min:0'],
+            'price_unit' => ['nullable', 'string', 'max:50'],
+            'price_status' => ['nullable', 'string', 'max:100'],
+            'additional_details' => ['nullable', 'string', 'max:2000'],
         ];
     }
 }

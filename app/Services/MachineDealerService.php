@@ -61,7 +61,7 @@ class MachineDealerService
             ->count();
 
         $responsesReceived = \App\Models\Response::whereHas('inquiry', function ($query) use ($machineDealer) {
-            $query->where('poster_id', $machineDealer->user_id)
+            $query->where('poster_id', $machineDealer->id)
                 ->where('poster_type', 'machine_dealer');
         })->count();
 
@@ -101,7 +101,7 @@ class MachineDealerService
 
             // Create inquiry for the listing
             $inquiry = Inquiry::create([
-                'poster_id' => $userId,
+                'poster_id' => $machineDealer->id, // Store machine dealer ID, not user ID
                 'poster_type' => 'machine_dealer',
                 'inquiry_type' => InquiryType::MACHINE,
                 'intent' => $data['intent'],

@@ -1,0 +1,647 @@
+{
+	"info": {
+		"_postman_id": "wallet-api-collection-2026",
+		"name": "Zupply - Wallet & Payment API",
+		"description": "Complete API collection for Wallet and Payment system including credit packs, transactions, and wallet management.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Wallet Management",
+			"item": [
+				{
+					"name": "Get Wallet Balance",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet"
+							]
+						},
+						"description": "Get the current wallet balance and details for the authenticated user."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Credit Packs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/credit-packs",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"credit-packs"
+							]
+						},
+						"description": "Get all available credit packs for purchase."
+					},
+					"response": []
+				},
+				{
+					"name": "Calculate Custom Credits",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"amount\": 1000\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/calculate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"calculate"
+							]
+						},
+						"description": "Calculate credits and pricing for a custom amount. Minimum amount is ₹100."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Purchase Credits",
+			"item": [
+				{
+					"name": "Purchase from Pack",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"credit_pack_id\": 2,\n    \"payment_method\": \"UPI\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/purchase",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"purchase"
+							]
+						},
+						"description": "Purchase credits from a predefined pack. Available packs: Starter (1), Growth (2), Business (3), Factory (4)."
+					},
+					"response": []
+				},
+				{
+					"name": "Purchase Custom Amount",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"amount\": 1000,\n    \"gst_percentage\": 18,\n    \"payment_method\": \"NET_BANKING\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/purchase",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"purchase"
+							]
+						},
+						"description": "Purchase credits with a custom amount. Minimum amount is ₹100. Credit calculation: ₹100 = 10 credits."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Add Credits",
+			"item": [
+				{
+					"name": "Add Credits (Admin/System)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"credits\": 50,\n    \"description\": \"Referral Bonus\",\n    \"transaction_type\": \"REFERRAL_BONUS\",\n    \"reference_id\": \"REF-123\",\n    \"reference_type\": \"referral\",\n    \"metadata\": {\n        \"referral_code\": \"FRIEND50\"\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/add",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"add"
+							]
+						},
+						"description": "Add credits to user's wallet (for admin adjustments, referrals, refunds, etc.)."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Transaction History",
+			"item": [
+				{
+					"name": "Get All Transactions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/transactions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"transactions"
+							]
+						},
+						"description": "Get all wallet transactions with pagination."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Added Transactions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/transactions?type=ADDED&per_page=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"transactions"
+							],
+							"query": [
+								{
+									"key": "type",
+									"value": "ADDED",
+									"description": "Filter by transaction type: ALL, ADDED, DEDUCTED"
+								},
+								{
+									"key": "per_page",
+									"value": "20",
+									"description": "Number of records per page"
+								}
+							]
+						},
+						"description": "Get only added (credit) transactions."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Deducted Transactions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/transactions?type=DEDUCTED&per_page=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"transactions"
+							],
+							"query": [
+								{
+									"key": "type",
+									"value": "DEDUCTED",
+									"description": "Filter by transaction type: ALL, ADDED, DEDUCTED"
+								},
+								{
+									"key": "per_page",
+									"value": "20",
+									"description": "Number of records per page"
+								}
+							]
+						},
+						"description": "Get only deducted (debit) transactions."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Transactions by Date Range",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/transactions?date_from=2026-01-01&date_to=2026-01-31&per_page=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"transactions"
+							],
+							"query": [
+								{
+									"key": "date_from",
+									"value": "2026-01-01",
+									"description": "Start date (YYYY-MM-DD)"
+								},
+								{
+									"key": "date_to",
+									"value": "2026-01-31",
+									"description": "End date (YYYY-MM-DD)"
+								},
+								{
+									"key": "per_page",
+									"value": "20",
+									"description": "Number of records per page"
+								}
+							]
+						},
+						"description": "Get transactions filtered by date range."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Transactions by Type",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/transactions?transaction_type=REQUIREMENT_POSTED&per_page=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"transactions"
+							],
+							"query": [
+								{
+									"key": "transaction_type",
+									"value": "REQUIREMENT_POSTED",
+									"description": "Filter by transaction type: PURCHASE, REFERRAL_BONUS, REQUIREMENT_POSTED, DEAL_CLOSED, etc."
+								},
+								{
+									"key": "per_page",
+									"value": "20",
+									"description": "Number of records per page"
+								}
+							]
+						},
+						"description": "Get transactions filtered by transaction type."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Deduct Credits",
+			"item": [
+				{
+					"name": "Deduct Credits - Requirement Posted",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"credits\": 50,\n    \"description\": \"Requirement Posted\",\n    \"transaction_type\": \"REQUIREMENT_POSTED\",\n    \"reference_id\": \"INQ-123\",\n    \"reference_type\": \"inquiry\",\n    \"metadata\": {\n        \"inquiry_title\": \"Need 1000kg Paper\"\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/deduct",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"deduct"
+							]
+						},
+						"description": "Deduct credits when posting a requirement. Returns error if insufficient balance."
+					},
+					"response": []
+				},
+				{
+					"name": "Deduct Credits - Deal Closed",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"credits\": 100,\n    \"description\": \"Deal Closed\",\n    \"transaction_type\": \"DEAL_CLOSED\",\n    \"reference_id\": \"DEAL-456\",\n    \"reference_type\": \"deal\",\n    \"metadata\": {\n        \"deal_amount\": 50000\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/deduct",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"deduct"
+							]
+						},
+						"description": "Deduct credits when a deal is closed."
+					},
+					"response": []
+				},
+				{
+					"name": "Deduct Credits - Machinery Inspection",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"credits\": 75,\n    \"description\": \"Machinery Inspection\",\n    \"transaction_type\": \"MACHINERY_INSPECTION\",\n    \"reference_id\": \"INSP-789\",\n    \"reference_type\": \"inspection\",\n    \"metadata\": {\n        \"machine_id\": \"MACH-001\"\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/wallet/deduct",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"wallet",
+								"deduct"
+							]
+						},
+						"description": "Deduct credits for machinery inspection service."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://127.0.0.1:8000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+
+

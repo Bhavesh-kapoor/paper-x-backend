@@ -25,4 +25,9 @@ class Material extends Model
     {
         return $this->belongsToMany(Inquiry::class, 'inquiry_materials');
     }
+
+    public function finishes()
+    {
+        return $this->hasMany(MaterialFinish::class);
+    }
 }

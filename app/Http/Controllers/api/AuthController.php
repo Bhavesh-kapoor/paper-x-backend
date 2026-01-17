@@ -28,11 +28,28 @@ class AuthController extends Controller
     public function loginWithOtp(OtpLoginRequest $request)
     {
         try {
-            return Response::success("auth.otp.success", $this->authService->loginWithOtp(
+            $result = $this->authService->loginWithOtp(
                 $request->mobile,
                 $request->otp
-            ));
+            );
+            
+            // Ensure result is a plain array to avoid any model serialization
+            if (is_array($result)) {
+                return Response::success("auth.otp.success", $result);
+            }
+            
+            return Response::success("auth.otp.success", $result);
         } catch (\Exception $e) {
+            // Catch morph map errors specifically
+            if (str_contains($e->getMessage(), 'morph map')) {
+                \Log::error('Morph map error during OTP verification: ' . $e->getMessage());
+                return Response::error(
+                    'Authentication error. Please try again.',
+                    null,
+                    HttpResponse::HTTP_INTERNAL_SERVER_ERROR
+                );
+            }
+            
             return Response::error(
                 $e->getMessage(),
                 null,
@@ -40,7 +57,6 @@ class AuthController extends Controller
                 ? $e->getStatusCode()
                 : HttpResponse::HTTP_BAD_REQUEST
             );
-
         }
     }
 }

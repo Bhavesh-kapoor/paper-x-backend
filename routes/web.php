@@ -256,6 +256,87 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+// Admin Routes
+Route::prefix('admin')->group(function () {
+    // Admin Authentication Routes (Public)
+    Route::get('/login', [\App\Http\Controllers\Admin\AuthController::class, 'showLoginForm'])->name('admin.login');
+    Route::post('/login', [\App\Http\Controllers\Admin\AuthController::class, 'login'])->name('admin.login.post');
+    
+    // Admin Protected Routes
+    Route::middleware('auth:admin')->group(function () {
+        Route::get('/dashboard', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('admin.dashboard');
+        Route::post('/logout', [\App\Http\Controllers\Admin\AuthController::class, 'logout'])->name('admin.logout');
+        
+        // Management Routes
+        Route::get('/users', [\App\Http\Controllers\Admin\ManagementController::class, 'users'])->name('admin.users');
+        Route::get('/users/{user}', [\App\Http\Controllers\Admin\ManagementController::class, 'userDetail'])->name('admin.users.detail');
+        Route::get('/dealers', [\App\Http\Controllers\Admin\ManagementController::class, 'dealers'])->name('admin.dealers');
+        Route::get('/dealers/{dealer}', [\App\Http\Controllers\Admin\ManagementController::class, 'dealerDetail'])->name('admin.dealers.detail');
+        Route::get('/brands', [\App\Http\Controllers\Admin\ManagementController::class, 'brands'])->name('admin.brands');
+        Route::get('/brands/{brand}', [\App\Http\Controllers\Admin\ManagementController::class, 'brandDetail'])->name('admin.brands.detail');
+        Route::get('/brands/{brand}/edit', [\App\Http\Controllers\Admin\ManagementController::class, 'brandEdit'])->name('admin.brands.edit');
+        Route::put('/brands/{brand}', [\App\Http\Controllers\Admin\ManagementController::class, 'brandUpdate'])->name('admin.brands.update');
+        Route::delete('/brands/{brand}', [\App\Http\Controllers\Admin\ManagementController::class, 'brandDelete'])->name('admin.brands.delete');
+        Route::get('/converters', [\App\Http\Controllers\Admin\ManagementController::class, 'converters'])->name('admin.converters');
+        Route::get('/machine-dealers', [\App\Http\Controllers\Admin\ManagementController::class, 'machineDealers'])->name('admin.machine-dealers');
+        
+        // Inquiry Routes
+        Route::get('/inquiries', [\App\Http\Controllers\Admin\ManagementController::class, 'inquiries'])->name('admin.inquiries');
+        Route::get('/inquiries/material', [\App\Http\Controllers\Admin\ManagementController::class, 'materialInquiries'])->name('admin.inquiries.material');
+        Route::get('/inquiries/machine', [\App\Http\Controllers\Admin\ManagementController::class, 'machineInquiries'])->name('admin.inquiries.machine');
+        Route::get('/inquiries/job', [\App\Http\Controllers\Admin\ManagementController::class, 'jobInquiries'])->name('admin.inquiries.job');
+        Route::get('/inquiries/{inquiry}', [\App\Http\Controllers\Admin\ManagementController::class, 'inquiryDetail'])->name('admin.inquiries.detail');
+        
+        // Session Routes
+        Route::get('/sessions/active', [\App\Http\Controllers\Admin\ManagementController::class, 'activeSessions'])->name('admin.sessions.active');
+        Route::get('/sessions/completed', [\App\Http\Controllers\Admin\ManagementController::class, 'completedSessions'])->name('admin.sessions.completed');
+        Route::get('/sessions/all', [\App\Http\Controllers\Admin\ManagementController::class, 'allSessions'])->name('admin.sessions.all');
+        
+        // Reference Data Routes - Materials
+        Route::get('/reference/materials', [\App\Http\Controllers\Admin\ManagementController::class, 'materials'])->name('admin.reference.materials');
+        Route::post('/reference/materials', [\App\Http\Controllers\Admin\ManagementController::class, 'storeMaterial'])->name('admin.reference.materials.store');
+        Route::put('/reference/materials/{material}', [\App\Http\Controllers\Admin\ManagementController::class, 'updateMaterial'])->name('admin.reference.materials.update');
+        Route::delete('/reference/materials/{material}', [\App\Http\Controllers\Admin\ManagementController::class, 'deleteMaterial'])->name('admin.reference.materials.delete');
+        
+        // Reference Data Routes - Machines
+        Route::get('/reference/machines', [\App\Http\Controllers\Admin\ManagementController::class, 'machines'])->name('admin.reference.machines');
+        Route::post('/reference/machines', [\App\Http\Controllers\Admin\ManagementController::class, 'storeMachine'])->name('admin.reference.machines.store');
+        Route::put('/reference/machines/{machine}', [\App\Http\Controllers\Admin\ManagementController::class, 'updateMachine'])->name('admin.reference.machines.update');
+        Route::delete('/reference/machines/{machine}', [\App\Http\Controllers\Admin\ManagementController::class, 'deleteMachine'])->name('admin.reference.machines.delete');
+        
+        // Reference Data Routes - Brands
+        Route::get('/reference/brands', [\App\Http\Controllers\Admin\ManagementController::class, 'referenceBrands'])->name('admin.reference.brands');
+        Route::post('/reference/brands', [\App\Http\Controllers\Admin\ManagementController::class, 'storeReferenceBrand'])->name('admin.reference.brands.store');
+        Route::put('/reference/brands/{brand}', [\App\Http\Controllers\Admin\ManagementController::class, 'updateReferenceBrand'])->name('admin.reference.brands.update');
+        Route::delete('/reference/brands/{brand}', [\App\Http\Controllers\Admin\ManagementController::class, 'deleteReferenceBrand'])->name('admin.reference.brands.delete');
+        
+        // Reference Data Routes - Finishes
+        Route::get('/reference/finishes', [\App\Http\Controllers\Admin\ManagementController::class, 'finishes'])->name('admin.reference.finishes');
+        Route::post('/reference/finishes', [\App\Http\Controllers\Admin\ManagementController::class, 'storeFinish'])->name('admin.reference.finishes.store');
+        Route::put('/reference/finishes/{finish}', [\App\Http\Controllers\Admin\ManagementController::class, 'updateFinish'])->name('admin.reference.finishes.update');
+        Route::delete('/reference/finishes/{finish}', [\App\Http\Controllers\Admin\ManagementController::class, 'deleteFinish'])->name('admin.reference.finishes.delete');
+
+        // CMS Management Routes
+        Route::get('/cms/terms', [\App\Http\Controllers\Admin\ManagementController::class, 'terms'])->name('admin.cms.terms');
+        Route::post('/cms/terms', [\App\Http\Controllers\Admin\ManagementController::class, 'storeTerms'])->name('admin.cms.terms.store');
+        Route::put('/cms/terms/{id}', [\App\Http\Controllers\Admin\ManagementController::class, 'updateTerms'])->name('admin.cms.terms.update');
+
+        Route::get('/cms/privacy', [\App\Http\Controllers\Admin\ManagementController::class, 'privacy'])->name('admin.cms.privacy');
+        Route::post('/cms/privacy', [\App\Http\Controllers\Admin\ManagementController::class, 'storePrivacy'])->name('admin.cms.privacy.store');
+        Route::put('/cms/privacy/{id}', [\App\Http\Controllers\Admin\ManagementController::class, 'updatePrivacy'])->name('admin.cms.privacy.update');
+
+        Route::get('/cms/faq', [\App\Http\Controllers\Admin\ManagementController::class, 'faq'])->name('admin.cms.faq');
+        Route::post('/cms/faq', [\App\Http\Controllers\Admin\ManagementController::class, 'storeFaq'])->name('admin.cms.faq.store');
+        Route::put('/cms/faq/{id}', [\App\Http\Controllers\Admin\ManagementController::class, 'updateFaq'])->name('admin.cms.faq.update');
+        Route::delete('/cms/faq/{id}', [\App\Http\Controllers\Admin\ManagementController::class, 'deleteFaq'])->name('admin.cms.faq.delete');
+
+        Route::get('/cms/corporate', [\App\Http\Controllers\Admin\ManagementController::class, 'corporate'])->name('admin.cms.corporate');
+        Route::post('/cms/corporate', [\App\Http\Controllers\Admin\ManagementController::class, 'storeCorporate'])->name('admin.cms.corporate.store');
+        Route::put('/cms/corporate/{id}', [\App\Http\Controllers\Admin\ManagementController::class, 'updateCorporate'])->name('admin.cms.corporate.update');
+        Route::delete('/cms/corporate/{id}', [\App\Http\Controllers\Admin\ManagementController::class, 'deleteCorporate'])->name('admin.cms.corporate.delete');
+    });
+});
+
 // API Documentation Routes
 Route::prefix('docs')->group(function () {
     Route::get('/routes', function () {
@@ -612,6 +693,14 @@ Route::prefix('docs')->group(function () {
         return renderMarkdown($file, 'Dealer API Documentation');
     })->name('docs.dealer');
 
+    Route::get('/wallet', function () {
+        $file = base_path('WALLET_API_DOCUMENTATION.md');
+        if (!File::exists($file)) {
+            return response('Documentation file not found', 404);
+        }
+        return renderMarkdown($file, 'Wallet & Payment API Documentation');
+    })->name('docs.wallet');
+
     // API Routes with Beautiful Design
     Route::get('/api-routes', function () {
         $routes = [
@@ -871,6 +960,7 @@ Route::prefix('docs')->group(function () {
             ['name' => 'Routes Documentation', 'url' => route('docs.routes-documentation'), 'description' => 'Detailed route documentation', 'icon' => '📖'],
             ['name' => 'Complete API Documentation', 'url' => route('docs.complete'), 'description' => 'Complete API documentation', 'icon' => '📚'],
             ['name' => 'Dealer API Documentation', 'url' => route('docs.dealer'), 'description' => 'Dealer specific APIs', 'icon' => '👤'],
+            ['name' => 'Wallet & Payment API', 'url' => route('docs.wallet'), 'description' => 'Wallet, credits, and payment APIs', 'icon' => '💳'],
         ];
 
         $html = '<!DOCTYPE html>
@@ -946,7 +1036,7 @@ Route::prefix('docs')->group(function () {
     <div class="container">
         <div class="header">
             <h1>📚 API Documentation</h1>
-            <p>Complete API documentation for Paper X B2B Platform</p>
+            <p>Complete API documentation for Zupply B2B Platform</p>
         </div>
         <div class="docs-grid">';
 

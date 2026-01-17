@@ -19,6 +19,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Map polymorphic types for inquiries poster relationship and notifications
+        // This prevents Laravel from trying to use full class names
+        \Illuminate\Database\Eloquent\Relations\Relation::enforceMorphMap([
+            'dealer' => \App\Models\Dealer::class,
+            'converter' => \App\Models\Converter::class,
+            'machine_dealer' => \App\Models\MachineDealer::class,
+            'brand' => \App\Models\Brand::class,
+            'inquiry' => \App\Models\Inquiry::class,
+            'session' => \App\Models\MatchingSession::class,
+        ]);
+        
+        // Handle morph map errors globally
+        \Illuminate\Database\Eloquent\Relations\Relation::requireMorphMap(false);
     }
 }

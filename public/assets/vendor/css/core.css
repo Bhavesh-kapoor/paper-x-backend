@@ -93,7 +93,7 @@
     --bs-tertiary-color-rgb: 109, 107, 119;
     --bs-tertiary-bg: #dfdfe3;
     --bs-tertiary-bg-rgb: 223, 223, 227;
-    --bs-heading-color: #444050;
+    --bs-heading-color: white;
     --bs-link-color: #7367f0;
     --bs-link-color-rgb: 115, 103, 240;
     --bs-link-decoration: none;
@@ -29693,7 +29693,7 @@ li:not(:first-child) .dropdown-item,
     --bs-navbar-search-shadow: 0 0.25rem 0.5rem -0.25rem rgba(47, 43, 61, 0.42);
     --bs-menu-bg: var(--bs-paper-bg);
     --bs-menu-bg-rgb: var(--bs-paper-bg-rgb);
-    --bs-menu-color: #444050;
+    --bs-menu-color: white;
     --bs-menu-color-rgb: 68, 64, 80;
     --bs-menu-hover-bg: color-mix(in sRGB, var(--bs-base-color) 6%, var(--bs-menu-bg));
     --bs-menu-hover-color: #444050;

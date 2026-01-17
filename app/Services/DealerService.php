@@ -146,9 +146,10 @@ class DealerService
             ->count();
 
         // Count dealer's posted requirements
-        $postedRequirementsCount = Inquiry::where('poster_id', $userId)
+        $dealerId = $dealer ? $dealer->id : null;
+        $postedRequirementsCount = $dealerId ? Inquiry::where('poster_id', $dealerId)
             ->where('poster_type', 'dealer')
-            ->count();
+            ->count() : 0;
 
         return [
             'profile_completion_percentage' => $profileCompletion,
@@ -181,7 +182,7 @@ class DealerService
 
             // Create inquiry
             $inquiry = Inquiry::create([
-                'poster_id' => $userId,
+                'poster_id' => $dealer->id, // Store dealer ID, not user ID
                 'poster_type' => 'dealer',
                 'inquiry_type' => $data['inquiry_type'],
                 'intent' => $data['intent'],
@@ -227,7 +228,8 @@ class DealerService
 
     public function getRequirements(array $filters = [], int $userId): array
     {
-        $query = Inquiry::where('poster_id', $userId)
+        $dealer = Dealer::where('user_id', $userId)->firstOrFail();
+        $query = Inquiry::where('poster_id', $dealer->id)
             ->where('poster_type', 'dealer')
             ->with(['materials', 'machines']);
 

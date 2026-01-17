@@ -1,0 +1,1087 @@
+{
+	"info": {
+		"_postman_id": "paper-x-brand-dealer-api",
+		"name": "Paper X - Brand & Dealer API Collection",
+		"description": "Complete API collection for Brand Requirement Posting and Dealer Operations\n\n## Features:\n- Brand registration and profile completion\n- Brand requirement posting with 7-step flow\n- Brand inquiry management\n- Dealer profile completion\n- Dealer opportunity management\n- Dealer session and chat\n- Converter requirement viewing and response\n\n## Authentication:\nAll protected endpoints require: `Authorization: Bearer {token}`\n\n## Base URL:\nUpdate `base_url` variable with your server URL (e.g., http://localhost:8000)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "paper-x-brand-dealer"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"description": "Authentication endpoints for OTP-based login",
+			"item": [
+				{
+					"name": "Request OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    console.log('OTP requested successfully');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"mobile\": \"9876543210\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/request",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "request"]
+						},
+						"description": "Request OTP for mobile number. OTP will be sent to the provided mobile number."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify OTP & Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.environment.set('auth_token', jsonData.data.token);",
+									"        pm.collectionVariables.set('auth_token', jsonData.data.token);",
+									"        console.log('Token saved:', jsonData.data.token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"mobile\": \"9876543210\",\n    \"otp\": \"123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/verify",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "verify"]
+						},
+						"description": "Verify OTP and login. Token will be automatically saved to collection variables."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Brand APIs",
+			"description": "Brand registration, profile, and requirement posting APIs",
+			"item": [
+				{
+					"name": "Complete Brand Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"company_name\": \"ABC Packaging Brand\",\n    \"brand_name\": \"ABC Brand\",\n    \"contact_person_name\": \"John Doe\",\n    \"mobile\": \"9876543210\",\n    \"email\": \"john@example.com\",\n    \"gst\": \"29ABCDE1234F1Z5\",\n    \"city\": \"Mumbai\",\n    \"location\": \"Andheri\",\n    \"latitude\": 19.1136,\n    \"longitude\": 72.8697,\n    \"brand_type_ids\": [1, 2, 3]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/profile/complete",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "profile", "complete"]
+						},
+						"description": "Complete brand profile with company details, contact info, and brand types (multiple selection)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Brand Dashboard",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "dashboard"]
+						},
+						"description": "Get brand dashboard showing: Post New Requirement, My Posted Inquiries count, Active Sessions count, Unread Messages count"
+					},
+					"response": []
+				},
+				{
+					"name": "Post Requirement",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"requirement_type\": \"Packaging\",\n    \"packaging_type\": \"Boxes\",\n    \"quantity_range\": \"1000-5000\",\n    \"timeline\": \"3–5 Days\",\n    \"special_needs\": \"Need eco-friendly packaging with custom printing\",\n    \"design_attachments\": [\"path/to/design1.jpg\", \"path/to/design2.pdf\"],\n    \"title\": \"Need custom packaging boxes\",\n    \"description\": \"Looking for custom printed boxes for product launch\",\n    \"urgency\": \"normal\",\n    \"location\": \"Mumbai\",\n    \"city\": \"Mumbai\",\n    \"latitude\": 19.0760,\n    \"longitude\": 72.8777\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/requirement/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "requirement", "post"]
+						},
+						"description": "Post a new requirement. Steps:\n1. What do you need? (Packaging, Printing, Packaging + Printing, Corporate Gifting / Stationery)\n2. Packaging Type (conditional - only if requirement_type includes Packaging)\n3. Quantity Range (in pieces, e.g., \"1000-5000\")\n4. Timeline (Emergency (Urgent), 3–5 Days, Flexible)\n5. Special Needs (optional text)\n6. Upload photos/videos/design ideas (optional)\n7. Pay charges to post (deducts 50 credits from wallet)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Inquiries",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/inquiries?status=MATCHING&urgency=normal&per_page=15&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "inquiries"],
+							"query": [
+								{
+									"key": "status",
+									"value": "MATCHING",
+									"description": "Filter by status (optional)"
+								},
+								{
+									"key": "urgency",
+									"value": "normal",
+									"description": "Filter by urgency: normal, urgent (optional)"
+								},
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page (default: 15)"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								}
+							]
+						},
+						"description": "Get all inquiries posted by the brand with pagination and filters"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Messages",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/messages/{{session_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "messages", "{{session_id}}"]
+						},
+						"description": "Get messages for an active inquiry session (only for active inquiries)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dealer APIs",
+			"description": "Dealer profile, opportunities, sessions, and chat APIs",
+			"item": [
+				{
+					"name": "Complete Dealer Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"materials_dealt_in\": [1, 2, 3],\n    \"machines_available\": [1, 2],\n    \"grades\": [\"A\", \"B\"],\n    \"capacity_daily\": 1000.50,\n    \"capacity_monthly\": 30000.00,\n    \"capacity_unit\": \"kg\",\n    \"has_warehouse\": true,\n    \"locations\": [\n        {\n            \"type\": \"factory\",\n            \"address\": \"123 Industrial Street\",\n            \"latitude\": 28.6139,\n            \"longitude\": 77.2090,\n            \"city\": \"Delhi\",\n            \"state\": \"Delhi\"\n        },\n        {\n            \"type\": \"warehouse\",\n            \"address\": \"456 Warehouse Road\",\n            \"latitude\": 28.7041,\n            \"longitude\": 77.1025,\n            \"city\": \"Noida\",\n            \"state\": \"Uttar Pradesh\"\n        }\n    ],\n    \"materials\": [\n        {\n            \"material_id\": 1,\n            \"mill_id\": 1,\n            \"agent_type\": \"direct\",\n            \"finish_ids\": [1, 2],\n            \"thickness_ranges\": [\n                {\n                    \"unit\": \"GSM\",\n                    \"min\": 100,\n                    \"max\": 300\n                }\n            ]\n        }\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/profile/complete",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "profile", "complete"]
+						},
+						"description": "Complete dealer profile with materials, machines, capacity, and locations"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Dealer Dashboard",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "dashboard"]
+						},
+						"description": "Get dealer dashboard with profile completion, opportunities count, active sessions, etc."
+					},
+					"response": []
+				},
+				{
+					"name": "Post Requirement",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"inquiry_type\": \"material\",\n    \"intent\": \"buy\",\n    \"title\": \"Need Paper Material\",\n    \"description\": \"Looking for quality paper material\",\n    \"urgency\": \"normal\",\n    \"material_ids\": [1, 2],\n    \"quantity\": 5000,\n    \"quantity_unit\": \"kg\",\n    \"size\": \"28x40\",\n    \"price\": 50000,\n    \"price_unit\": \"per_kg\",\n    \"price_negotiable\": true,\n    \"location\": \"Mumbai\",\n    \"latitude\": 19.0760,\n    \"longitude\": 72.8777\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/requirement/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "requirement", "post"]
+						},
+						"description": "Post a requirement (buy/sell material, machine, or job)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Requirements",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/requirements?inquiry_type=material&intent=buy&per_page=15&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "requirements"],
+							"query": [
+								{
+									"key": "inquiry_type",
+									"value": "material",
+									"description": "Filter by type: material, machine, job"
+								},
+								{
+									"key": "intent",
+									"value": "buy",
+									"description": "Filter by intent: buy, sell"
+								},
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number"
+								}
+							]
+						},
+						"description": "Get all available requirements with filters and pagination"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Opportunities",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunities?per_page=15&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunities"],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number"
+								}
+							]
+						},
+						"description": "Get matched opportunities based on dealer profile (materials, machines, capacity)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Opportunity Details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunity/{{inquiry_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunity", "{{inquiry_id}}"]
+						},
+						"description": "Get detailed information about a specific opportunity"
+					},
+					"response": []
+				},
+				{
+					"name": "Accept Opportunity",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunity/{{inquiry_id}}/accept",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunity", "{{inquiry_id}}", "accept"]
+						},
+						"description": "Accept an opportunity. When 10 dealers accept, session locks automatically."
+					},
+					"response": []
+				},
+				{
+					"name": "Decline Opportunity",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"reason\": \"Not available in required quantity\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/opportunity/{{inquiry_id}}/decline",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "opportunity", "{{inquiry_id}}", "decline"]
+						},
+						"description": "Decline an opportunity with optional reason"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Session Details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/session/{{session_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "session", "{{session_id}}"]
+						},
+						"description": "Get session details including brand information (visible after session lock)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Session History",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/history?per_page=15&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "history"],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number"
+								}
+							]
+						},
+						"description": "Get dealer's session history with results (DEAL_WON, DEAL_LOST, etc.)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Chat Messages",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/chat/{{session_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "chat", "{{session_id}}"]
+						},
+						"description": "Get chat messages for a session"
+					},
+					"response": []
+				},
+				{
+					"name": "Send Chat Message",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"message\": \"Hello, I can provide this material at competitive rates.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/chat/{{session_id}}/message",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "chat", "{{session_id}}", "message"]
+						},
+						"description": "Send a message in a session chat"
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Quotation",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quantity_offered\": 5000,\n    \"quantity_unit\": \"kg\",\n    \"quoted_price\": 50000,\n    \"price_unit\": \"per_kg\",\n    \"delivery_timeline_days\": 7,\n    \"additional_notes\": \"Can deliver within 7 days\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/quote/submit/{{inquiry_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "quote", "submit", "{{inquiry_id}}"]
+						},
+						"description": "Submit a quotation for an inquiry"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Notifications",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/notifications?per_page=15&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "notifications"],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number"
+								}
+							]
+						},
+						"description": "Get dealer notifications"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Converter APIs",
+			"description": "Converter APIs for viewing and responding to brand requirements",
+			"item": [
+				{
+					"name": "Get Brand Requirements",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/converter/requirements?city=Mumbai&requirement_type=Packaging&urgency=normal&per_page=15&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "converter", "requirements"],
+							"query": [
+								{
+									"key": "city",
+									"value": "Mumbai",
+									"description": "Filter by city (optional)"
+								},
+								{
+									"key": "requirement_type",
+									"value": "Packaging",
+									"description": "Filter by requirement type (optional)"
+								},
+								{
+									"key": "urgency",
+									"value": "normal",
+									"description": "Filter by urgency: normal, urgent (optional)"
+								},
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page (default: 15)"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								}
+							]
+						},
+						"description": "Get brand requirements filtered by city/matching engine. Brand details are hidden until session lock."
+					},
+					"response": []
+				},
+				{
+					"name": "Respond to Requirement",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"quantity_offered\": 5000,\n    \"quantity_unit\": \"pieces\",\n    \"quoted_price\": 50000,\n    \"price_unit\": \"per_piece\",\n    \"price_status\": \"Fixed\",\n    \"additional_details\": \"Can deliver within 3 days with eco-friendly packaging\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/converter/requirement/{{inquiry_id}}/respond",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "converter", "requirement", "{{inquiry_id}}", "respond"]
+						},
+						"description": "Respond to a brand requirement with quotation details"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Reference Data",
+			"description": "Reference data endpoints for dropdowns and selections",
+			"item": [
+				{
+					"name": "Get Brand Types",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand-types",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand-types"]
+						},
+						"description": "Get all brand types for brand registration (FMCG, Pharma, Beauty, etc.)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Materials",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/materials",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "materials"]
+						},
+						"description": "Get all materials for dealer profile"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Machines",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machines",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machines"]
+						},
+						"description": "Get all machines for dealer/converter profile"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "session_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "inquiry_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+

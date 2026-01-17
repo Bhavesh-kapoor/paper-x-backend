@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Inquiry extends Model
 {
@@ -26,8 +27,11 @@ class Inquiry extends Model
         'urgency',
         'inquiry_type',
         'intent',
+        'requirement_type', // Packaging, Printing, Packaging + Printing, Corporate Gifting / Stationery
+        'packaging_type', // Conditional, shown only when posting requirement
         'quantity',
         'quantity_unit',
+        'quantity_range', // Range in pieces (e.g., "1000-5000", "5000-10000")
         'size',
         'price',
         'price_unit',
@@ -39,12 +43,15 @@ class Inquiry extends Model
         'machine_listing_id',
         'job_type',
         'timeline_days',
+        'timeline', // Emergency (Urgent), 3-5 Days, Flexible
+        'special_needs', // Any special needs text
         'latitude',
         'longitude',
         'location',
         'specs',
         'attachments',
         'attachment_paths',
+        'design_attachments', // Photos/videos/design ideas (array of file paths)
         'deadline',
         'posting_fee_paid',
         'posting_fee_amount',
@@ -65,6 +72,7 @@ class Inquiry extends Model
         'specs' => 'array',
         'attachments' => 'array',
         'attachment_paths' => 'array',
+        'design_attachments' => 'array',
         'deadline' => 'datetime',
         'timeline_days' => 'integer',
     ];
@@ -107,5 +115,10 @@ class Inquiry extends Model
     public function responses(): HasMany
     {
         return $this->hasMany(Response::class);
+    }
+
+    public function poster(): MorphTo
+    {
+        return $this->morphTo('poster', 'poster_type', 'poster_id');
     }
 }

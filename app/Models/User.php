@@ -67,4 +67,44 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    /**
+     * Get the dealer profile for this user.
+     */
+    public function dealer()
+    {
+        return $this->hasOne(Dealer::class);
+    }
+
+    /**
+     * Get the brand profile for this user.
+     */
+    public function brand()
+    {
+        return $this->hasOne(Brand::class);
+    }
+
+    /**
+     * Get the converter profile for this user.
+     */
+    public function converter()
+    {
+        return $this->hasOne(Converter::class);
+    }
+
+    /**
+     * Get the machine dealer profile for this user.
+     */
+    public function machineDealer()
+    {
+        return $this->hasOne(MachineDealer::class);
+    }
+
+    /**
+     * Get the wallet for this user.
+     */
+    public function wallet()
+    {
+        return $this->hasOne(Wallet::class);
+    }
 }

@@ -100,12 +100,27 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('converter')->group(function () {
         Route::post('/profile/complete', [\App\Http\Controllers\api\ConverterController::class, 'completeProfile'])->name('converter.profile.complete');
         Route::get('/dashboard', [\App\Http\Controllers\api\ConverterController::class, 'getDashboard'])->name('converter.dashboard');
+        
+        // Get brand requirements
+        Route::get('/requirements', [\App\Http\Controllers\api\ConverterController::class, 'getRequirements'])->name('converter.requirements');
+        
+        // Respond to requirement
+        Route::post('/requirement/{inquiry_id}/respond', [\App\Http\Controllers\api\ConverterController::class, 'respondToRequirement'])->name('converter.requirement.respond');
     });
 
     #brand routes
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('brand')->group(function () {
         Route::post('/profile/complete', [\App\Http\Controllers\api\BrandController::class, 'completeProfile'])->name('brand.profile.complete');
         Route::get('/dashboard', [\App\Http\Controllers\api\BrandController::class, 'getDashboard'])->name('brand.dashboard');
+        
+        // Post requirement
+        Route::post('/requirement/post', [\App\Http\Controllers\api\BrandController::class, 'postRequirement'])->name('brand.requirement.post');
+        
+        // My inquiries
+        Route::get('/inquiries', [\App\Http\Controllers\api\BrandController::class, 'getMyInquiries'])->name('brand.inquiries');
+        
+        // Messages (for active inquiries)
+        Route::get('/messages/{session_id}', [\App\Http\Controllers\api\BrandController::class, 'getMessages'])->name('brand.messages');
     });
 
     #role switching (common for all roles)
@@ -115,5 +130,29 @@ Route::prefix('v1')->group(function () {
 
     #unified dashboard API for all roles
     Route::middleware(['token.exists', 'auth:sanctum'])->get('/dashboard', [DashboardController::class, 'getDashboard'])->name('dashboard');
+
+    #wallet routes
+    Route::middleware(['token.exists', 'auth:sanctum'])->prefix('wallet')->group(function () {
+        // Get wallet balance
+        Route::get('/', [\App\Http\Controllers\api\WalletController::class, 'getWallet'])->name('wallet.get');
+        
+        // Get credit packs
+        Route::get('/credit-packs', [\App\Http\Controllers\api\WalletController::class, 'getCreditPacks'])->name('wallet.credit-packs');
+        
+        // Calculate custom credits
+        Route::post('/calculate', [\App\Http\Controllers\api\WalletController::class, 'calculateCustomCredits'])->name('wallet.calculate');
+        
+        // Purchase credits
+        Route::post('/purchase', [\App\Http\Controllers\api\WalletController::class, 'purchaseCredits'])->name('wallet.purchase');
+        
+        // Add credits (admin/system)
+        Route::post('/add', [\App\Http\Controllers\api\WalletController::class, 'addCredits'])->name('wallet.add');
+        
+        // Get transaction history
+        Route::get('/transactions', [\App\Http\Controllers\api\WalletController::class, 'getTransactions'])->name('wallet.transactions');
+        
+        // Deduct credits
+        Route::post('/deduct', [\App\Http\Controllers\api\WalletController::class, 'deductCredits'])->name('wallet.deduct');
+    });
 
 });

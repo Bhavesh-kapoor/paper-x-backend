@@ -14,12 +14,27 @@ class NotificationService
         string $message,
         $notifiable = null
     ): Notification {
+        // Map class names to morph map keys
+        $notifiableType = null;
+        if ($notifiable) {
+            $class = get_class($notifiable);
+            $morphMap = [
+                \App\Models\Inquiry::class => 'inquiry',
+                \App\Models\MatchingSession::class => 'session',
+                \App\Models\Brand::class => 'brand',
+                \App\Models\Dealer::class => 'dealer',
+                \App\Models\Converter::class => 'converter',
+                \App\Models\MachineDealer::class => 'machine_dealer',
+            ];
+            $notifiableType = $morphMap[$class] ?? null;
+        }
+        
         return Notification::create([
             'user_id' => $userId,
             'type' => NotificationType::from($type),
             'title' => $title,
             'message' => $message,
-            'notifiable_type' => $notifiable ? get_class($notifiable) : null,
+            'notifiable_type' => $notifiableType,
             'notifiable_id' => $notifiable?->id,
             'read' => false,
         ]);

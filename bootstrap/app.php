@@ -29,5 +29,10 @@ return Application::configure(basePath: dirname(__DIR__))
                     ]
                 ], 401);
             }
+            
+            // Redirect admin routes to admin login
+            if ($request->is('admin/*')) {
+                return redirect()->route('admin.login');
+            }
         });
     })->create();

@@ -66,4 +66,9 @@ class MatchingSession extends Model
     {
         return $this->hasMany(Response::class, 'session_id');
     }
+
+    public function acceptances(): HasMany
+    {
+        return $this->hasMany(DealerAcceptance::class, 'inquiry_id', 'inquiry_id');
+    }
 }

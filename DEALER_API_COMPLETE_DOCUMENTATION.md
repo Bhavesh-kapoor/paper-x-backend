@@ -1301,13 +1301,50 @@ All endpoints are prefixed with `/api/v1/`
 
 ---
 
+## POSTMAN COLLECTION
+
+A complete Postman collection is available for testing all Brand and Dealer APIs:
+
+**File:** `Paper_X_Brand_Dealer_API_Collection.postman_collection.json`
+
+### Import Instructions
+
+1. Open Postman
+2. Click **Import** button (top left)
+3. Select **File** tab
+4. Choose `Paper_X_Brand_Dealer_API_Collection.postman_collection.json`
+5. Click **Import**
+
+### Collection Includes
+
+- **Authentication**: OTP request and verification
+- **Brand APIs**: Profile, dashboard, requirement posting, inquiries, messages
+- **Dealer APIs**: Profile, dashboard, opportunities, sessions, chat, quotations, notifications
+- **Converter APIs**: View requirements, respond to requirements
+- **Reference Data**: Brand types, materials, machines
+
+### Collection Variables
+
+- `base_url`: API base URL (default: `http://localhost:8000`)
+- `auth_token`: Authentication token (auto-saved after login)
+- `session_id`: Session ID for testing
+- `inquiry_id`: Inquiry ID for testing
+
+### Quick Start
+
+1. Set `base_url` variable with your server URL
+2. Use "Verify OTP & Login" - token auto-saves
+3. All subsequent requests use saved token automatically
+
+---
+
 ## SUPPORT
 
 For API support, contact: support@example.com
 
 ---
 
-**Last Updated:** January 3, 2026
+**Last Updated:** January 17, 2026
 **API Version:** v1
 
 
