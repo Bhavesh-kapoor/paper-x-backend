@@ -55,6 +55,22 @@ class Inquiry extends Model
         'deadline',
         'posting_fee_paid',
         'posting_fee_amount',
+        // Visibility fields
+        'posted_at',
+        'matching_started_at',
+        'responses_received_at',
+        'locked_at',
+        'expires_at',
+        'cooldown_until',
+        'is_visible_to_dealers',
+        'is_visible_to_brand',
+        'hide_brand_identity',
+        'hide_exact_location',
+        'republish_count',
+        'last_republished_at',
+        'matched_dealers_count',
+        'responses_count',
+        'selected_dealers_count',
     ];
 
     protected $casts = [
@@ -75,6 +91,22 @@ class Inquiry extends Model
         'design_attachments' => 'array',
         'deadline' => 'datetime',
         'timeline_days' => 'integer',
+        // Visibility casts
+        'posted_at' => 'datetime',
+        'matching_started_at' => 'datetime',
+        'responses_received_at' => 'datetime',
+        'locked_at' => 'datetime',
+        'expires_at' => 'datetime',
+        'cooldown_until' => 'datetime',
+        'is_visible_to_dealers' => 'boolean',
+        'is_visible_to_brand' => 'boolean',
+        'hide_brand_identity' => 'boolean',
+        'hide_exact_location' => 'boolean',
+        'republish_count' => 'integer',
+        'last_republished_at' => 'datetime',
+        'matched_dealers_count' => 'integer',
+        'responses_count' => 'integer',
+        'selected_dealers_count' => 'integer',
     ];
 
     public function brand(): BelongsTo
@@ -120,5 +152,89 @@ class Inquiry extends Model
     public function poster(): MorphTo
     {
         return $this->morphTo('poster', 'poster_type', 'poster_id');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(InquiryItem::class);
+    }
+
+    public function matchmakingLogs(): HasMany
+    {
+        return $this->hasMany(MatchmakingLog::class);
+    }
+
+    // Visibility Scopes
+    public function scopeVisibleToDealers($query)
+    {
+        return $query->where('is_visible_to_dealers', true)
+            ->where('status', '!=', InquiryStatus::DRAFT)
+            ->where(function ($q) {
+                $q->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            });
+    }
+
+    public function scopeVisibleToDealer($query, $dealerId)
+    {
+        return $query->visibleToDealers()
+            ->whereHas('matchmakingLogs', function ($q) use ($dealerId) {
+                $q->where('dealer_id', $dealerId)
+                    ->where('is_visible', true);
+            });
+    }
+
+    public function scopeVisibleToBrand($query, $brandId)
+    {
+        return $query->where('poster_id', $brandId)
+            ->where('poster_type', 'brand')
+            ->where('is_visible_to_brand', true);
+    }
+
+    public function scopeNotLocked($query)
+    {
+        return $query->whereNull('locked_at')
+            ->where('status', '!=', InquiryStatus::LOCKED)
+            ->where('status', '!=', InquiryStatus::CHAT_ACTIVE);
+    }
+
+    public function scopeCanRepublish($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('cooldown_until')
+                ->orWhere('cooldown_until', '<=', now());
+        })
+        ->whereIn('status', [
+            InquiryStatus::DEAL_FAILED,
+            InquiryStatus::EXPIRED,
+            InquiryStatus::DEAL_SUCCESS,
+        ]);
+    }
+
+    /**
+     * Get sanitized data for dealer view (without brand identity)
+     */
+    public function getDealerViewData(): array
+    {
+        $data = $this->toArray();
+        
+        if ($this->hide_brand_identity) {
+            unset($data['brand_id']);
+            unset($data['poster_id']);
+            $data['brand_name'] = null;
+        }
+        
+        if ($this->hide_exact_location) {
+            // Show only city, not exact coordinates
+            $data['latitude'] = null;
+            $data['longitude'] = null;
+            if ($this->location) {
+                // Extract city from location if it contains more details
+                $locationParts = explode(',', $this->location);
+                $data['location'] = trim(end($locationParts)); // Last part is usually city
+            }
+        }
+        
+        return $data;
     }
 }

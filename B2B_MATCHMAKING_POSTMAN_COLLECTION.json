@@ -1,0 +1,1219 @@
+{
+	"info": {
+		"_postman_id": "b2b-matchmaking-platform-2026",
+		"name": "B2B Matchmaking Platform API",
+		"description": "Complete API collection for B2B matchmaking platform with strict visibility controls.\n\n**Base URL**: `http://127.0.0.1:8000/api/v1`\n\n**Features**:\n- Inquiry creation and posting\n- Dealer matching and responses\n- Session management\n- Chat functionality\n- Strict visibility controls",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "paper-x-backend"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Request OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    pm.test(\"OTP request successful\", function () {",
+									"        pm.response.to.have.status(200);",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData.success).to.eql(true);",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mobile\": \"9876543210\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/request",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "request"]
+						},
+						"description": "Request OTP for authentication. OTP will be sent to the provided mobile number."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    pm.test(\"OTP verification successful\", function () {",
+									"        pm.response.to.have.status(200);",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData.success).to.eql(true);",
+									"        ",
+									"        if (jsonData.data && jsonData.data.token) {",
+									"            pm.environment.set(\"auth_token\", jsonData.data.token);",
+									"            pm.collectionVariables.set(\"auth_token\", jsonData.data.token);",
+									"        }",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mobile\": \"9876543210\",\n  \"otp\": \"123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/verify",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "verify"]
+						},
+						"description": "Verify OTP and get authentication token. Token will be automatically saved to environment variable."
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for OTP-based login"
+		},
+		{
+			"name": "Inquiries",
+			"item": [
+				{
+					"name": "Create Inquiry (DRAFT)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Auto-set token from environment",
+									"if (pm.environment.get(\"auth_token\")) {",
+									"    pm.request.headers.add({",
+									"        key: \"Authorization\",",
+									"        value: \"Bearer \" + pm.environment.get(\"auth_token\")",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    pm.test(\"Inquiry created successfully\", function () {",
+									"        pm.response.to.have.status(201);",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData.success).to.eql(true);",
+									"        ",
+									"        if (jsonData.data && jsonData.data.id) {",
+									"            pm.environment.set(\"inquiry_id\", jsonData.data.id);",
+									"            pm.collectionVariables.set(\"inquiry_id\", jsonData.data.id);",
+									"        }",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Corrugated Boxes Required\",\n  \"description\": \"Need 50k units of corrugated boxes for packaging. High quality required.\",\n  \"items\": [\n    {\n      \"material_id\": 1,\n      \"material_category\": \"Corrugated\",\n      \"finish_coating\": \"None\",\n      \"thickness_gsm\": 150,\n      \"thickness_unit\": \"gsm\",\n      \"quantity\": 50000,\n      \"quantity_unit\": \"units\",\n      \"additional_specs\": {\n        \"color\": \"Brown\",\n        \"printing\": \"No printing required\"\n      }\n    }\n  ],\n  \"urgency\": \"normal\",\n  \"location\": \"Mumbai, Maharashtra\",\n  \"latitude\": 19.0760,\n  \"longitude\": 72.8777,\n  \"timeline\": \"3-5 Days\",\n  \"deadline\": \"2026-01-25T10:00:00Z\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries"]
+						},
+						"description": "Create a new inquiry in DRAFT status. Only Brand/Converter can create inquiries.\n\n**Required Fields:**\n- title: Inquiry title\n- items: Array of inquiry items (at least 1)\n- items[].material_category: Material category\n- items[].thickness_unit: 'gsm' or 'mm'\n- items[].quantity: Quantity\n- items[].quantity_unit: Unit of quantity"
+					},
+					"response": []
+				},
+				{
+					"name": "Post Inquiry (Trigger Matchmaking)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Use inquiry_id from environment or collection variable",
+									"const inquiryId = pm.environment.get(\"inquiry_id\") || pm.collectionVariables.get(\"inquiry_id\") || \"1\";",
+									"pm.variables.set(\"inquiry_id\", inquiryId);"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    pm.test(\"Inquiry posted successfully\", function () {",
+									"        pm.response.to.have.status(200);",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData.success).to.eql(true);",
+									"        ",
+									"        if (jsonData.data && jsonData.data.session_id) {",
+									"            pm.environment.set(\"session_id\", jsonData.data.session_id);",
+									"        }",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "post"]
+						},
+						"description": "Post an inquiry to trigger matchmaking. This will:\n- Deduct posting fee from wallet (50 credits normal, 70 urgent)\n- Change status from DRAFT to POSTED\n- Trigger matchmaking (finds top 10 dealers)\n- Create MatchmakingLog entries\n- Notify matched dealers"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Inquiry Details",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const inquiryId = pm.environment.get(\"inquiry_id\") || pm.collectionVariables.get(\"inquiry_id\") || \"1\";",
+									"pm.variables.set(\"inquiry_id\", inquiryId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}"]
+						},
+						"description": "Get inquiry details. Visibility depends on user role:\n- **Brand/Converter**: Sees full details\n- **Dealer**: Sees sanitized view (no brand identity, approximate location only)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Responses (Brand/Converter Only)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const inquiryId = pm.environment.get(\"inquiry_id\") || pm.collectionVariables.get(\"inquiry_id\") || \"1\";",
+									"pm.variables.set(\"inquiry_id\", inquiryId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/responses",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "responses"]
+						},
+						"description": "Get all responses for an inquiry. Only Brand/Converter (poster) can view responses.\n\n**Note**: Dealer identity is anonymized until session is locked."
+					},
+					"response": []
+				},
+				{
+					"name": "Save Inquiry Step (Multi-step)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Auto-set token from environment",
+									"if (pm.environment.get(\"auth_token\")) {",
+									"    pm.request.headers.add({",
+									"        key: \"Authorization\",",
+									"        value: \"Bearer \" + pm.environment.get(\"auth_token\")",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    pm.test(\"Step saved successfully\", function () {",
+									"        pm.response.to.have.status(200);",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData.success).to.eql(true);",
+									"        ",
+									"        if (jsonData.data && jsonData.data.inquiry_id) {",
+									"            pm.environment.set(\"inquiry_id\", jsonData.data.inquiry_id);",
+									"        }",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": 2,\n  \"inquiry_id\": null,\n  \"material_category\": \"Corrugated\",\n  \"packaging_type\": \"Boxes\",\n  \"thickness_gsm\": 150,\n  \"thickness_unit\": \"gsm\",\n  \"size\": \"10x12 inches\",\n  \"quantity\": 5000,\n  \"quantity_unit\": \"units\",\n  \"urgency\": \"normal\",\n  \"location\": \"Mumbai, Maharashtra\",\n  \"latitude\": 19.0760,\n  \"longitude\": 72.8777\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/save-step",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "save-step"]
+						},
+						"description": "Save inquiry step data (Step 2 of 9 - Technical Specifications). Supports multi-step inquiry creation."
+					},
+					"response": []
+				},
+				{
+					"name": "Calculate Posting Fee",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const inquiryId = pm.environment.get(\"inquiry_id\") || pm.collectionVariables.get(\"inquiry_id\") || \"1\";",
+									"pm.variables.set(\"inquiry_id\", inquiryId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"inquiry_id\": {{inquiry_id}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/calculate-fee",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "calculate-fee"]
+						},
+						"description": "Calculate posting fee before posting. Shows standard fee, urgency addon, total fee, and wallet balance."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Posting Status",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const inquiryId = pm.environment.get(\"inquiry_id\") || pm.collectionVariables.get(\"inquiry_id\") || \"1\";",
+									"pm.variables.set(\"inquiry_id\", inquiryId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/posting-status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "posting-status"]
+						},
+						"description": "Get posting status and matchmaking progress. Shows matched dealers count, progress percentage, and finding matches status."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Matchmaking Responses",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const inquiryId = pm.environment.get(\"inquiry_id\") || pm.collectionVariables.get(\"inquiry_id\") || \"1\";",
+									"pm.variables.set(\"inquiry_id\", inquiryId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/matchmaking-responses?filter=all",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "matchmaking-responses"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "all",
+									"description": "Filter: all, exact_match, slight_variation, nearest",
+									"disabled": false
+								}
+							]
+						},
+						"description": "Get matchmaking responses with filters. Supports filtering by match type (exact_match, slight_variation, nearest)."
+					},
+					"response": []
+				},
+				{
+					"name": "Shortlist/Reject Response",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const responseId = pm.environment.get(\"response_id\") || pm.collectionVariables.get(\"response_id\") || \"1\";",
+									"pm.variables.set(\"response_id\", responseId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"action\": \"shortlist\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/responses/{{response_id}}/shortlist",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "responses", "{{response_id}}", "shortlist"]
+						},
+						"description": "Shortlist or reject a response. Action can be 'shortlist' or 'reject'."
+					},
+					"response": []
+				},
+				{
+					"name": "Republish Inquiry",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const inquiryId = pm.environment.get(\"inquiry_id\") || pm.collectionVariables.get(\"inquiry_id\") || \"1\";",
+									"pm.variables.set(\"inquiry_id\", inquiryId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/republish",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "republish"]
+						},
+						"description": "Republish an expired/failed inquiry. Requirements:\n- Cooldown period expired (default: 7 days)\n- Status must be DEAL_FAILED, EXPIRED, or DEAL_SUCCESS"
+					},
+					"response": []
+				}
+			],
+			"description": "Inquiry management endpoints for Brands/Converters"
+		},
+		{
+			"name": "Dealer Inquiries",
+			"item": [
+				{
+					"name": "Get Matched Inquiries",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Auto-set token from environment",
+									"if (pm.environment.get(\"auth_token\")) {",
+									"    pm.request.headers.add({",
+									"        key: \"Authorization\",",
+									"        value: \"Bearer \" + pm.environment.get(\"auth_token\")",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/inquiries?status=MATCHING&material_category=Corrugated&per_page=15&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "inquiries"],
+							"query": [
+								{
+									"key": "status",
+									"value": "MATCHING",
+									"description": "Filter by status (MATCHING, RESPONSES_RECEIVED, etc.)",
+									"disabled": true
+								},
+								{
+									"key": "material_category",
+									"value": "Corrugated",
+									"description": "Filter by material category",
+									"disabled": true
+								},
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page",
+									"disabled": true
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get inquiries visible to dealer (matched only). Only dealers that were matched through matchmaking will see these inquiries.\n\n**Query Parameters:**\n- `status`: Filter by inquiry status\n- `material_category`: Filter by material category\n- `location`: Filter by location\n- `per_page`: Items per page (default: 15)\n- `page`: Page number"
+					},
+					"response": []
+				},
+				{
+					"name": "Respond to Inquiry",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const inquiryId = pm.environment.get(\"inquiry_id\") || pm.collectionVariables.get(\"inquiry_id\") || \"1\";",
+									"pm.variables.set(\"inquiry_id\", inquiryId);"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    pm.test(\"Response submitted successfully\", function () {",
+									"        pm.response.to.have.status(201);",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData.success).to.eql(true);",
+									"        ",
+									"        if (jsonData.data && jsonData.data.id) {",
+									"            pm.environment.set(\"response_id\", jsonData.data.id);",
+									"        }",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"quantity_offered\": 50000,\n  \"quantity_unit\": \"units\",\n  \"quoted_price\": 250000,\n  \"price_unit\": \"INR\",\n  \"price_status\": \"firm\",\n  \"additional_details\": \"Ready for immediate dispatch. All certificates included. Can deliver within 3 days.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/inquiries/{{inquiry_id}}/respond",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "inquiries", "{{inquiry_id}}", "respond"]
+						},
+						"description": "Dealer responds to an inquiry. Requirements:\n- Dealer must be matched (visible in MatchmakingLog)\n- Inquiry must be visible to dealers\n- Dealer must not have already responded\n\n**Required Fields:**\n- quantity_offered: Quantity dealer can provide\n- quantity_unit: Unit of quantity\n- quoted_price: Price quoted\n- price_unit: Currency unit\n- price_status: 'firm', 'negotiable', or 'estimate'"
+					},
+					"response": []
+				}
+			],
+			"description": "Dealer-specific inquiry endpoints. Dealers can only see inquiries they were matched with."
+		},
+		{
+			"name": "Sessions",
+			"item": [
+				{
+					"name": "Get Active Sessions (Sourcing Hub)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Auto-set token from environment",
+									"if (pm.environment.get(\"auth_token\")) {",
+									"    pm.request.headers.add({",
+									"        key: \"Authorization\",",
+									"        value: \"Bearer \" + pm.environment.get(\"auth_token\")",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/active?filter=all&per_page=15&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "active"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "all",
+									"description": "Filter: all, finding_matches, active, locked",
+									"disabled": false
+								},
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page",
+									"disabled": true
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get active sessions (Sourcing Hub) with filters. Returns sessions with countdown timers, response counts, and matching progress."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Session Details",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const sessionId = pm.environment.get(\"session_id\") || pm.collectionVariables.get(\"session_id\") || \"1\";",
+									"pm.variables.set(\"session_id\", sessionId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/{{session_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "{{session_id}}"]
+						},
+						"description": "Get detailed session information. Only session participants can view this."
+					},
+					"response": []
+				},
+				{
+					"name": "Lock Session (Select Dealers)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const sessionId = pm.environment.get(\"session_id\") || pm.collectionVariables.get(\"session_id\") || \"1\";",
+									"pm.variables.set(\"session_id\", sessionId);"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    pm.test(\"Session locked successfully\", function () {",
+									"        pm.response.to.have.status(200);",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData.success).to.eql(true);",
+									"        ",
+									"        if (jsonData.data && jsonData.data.chat_thread_id) {",
+									"            pm.environment.set(\"chat_thread_id\", jsonData.data.chat_thread_id);",
+									"        }",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"selected_dealer_ids\": [1, 2, 3]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/{{session_id}}/lock",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "{{session_id}}", "lock"]
+						},
+						"description": "Lock session and select dealers. Only Brand/Converter (poster) can lock sessions.\n\n**Requirements:**\n- Status must be RESPONSES_RECEIVED\n- Must have at least one response\n\n**Actions:**\n- Updates session status to LOCKED\n- Hides inquiry from non-selected dealers\n- Enables chat for selected participants\n- Reveals brand identity to selected dealers\n- Creates ChatThread"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Session History",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Auto-set token from environment",
+									"if (pm.environment.get(\"auth_token\")) {",
+									"    pm.request.headers.add({",
+									"        key: \"Authorization\",",
+									"        value: \"Bearer \" + pm.environment.get(\"auth_token\")",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/history?filter=all&search=&per_page=15&page=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "history"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "all",
+									"description": "Filter: all, completed, expired",
+									"disabled": false
+								},
+								{
+									"key": "search",
+									"value": "",
+									"description": "Search materials or sessions",
+									"disabled": true
+								},
+								{
+									"key": "per_page",
+									"value": "15",
+									"description": "Items per page",
+									"disabled": true
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get session history grouped by month. Supports filters (all, completed, expired) and search."
+					},
+					"response": []
+				},
+				{
+					"name": "Republish Session",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const sessionId = pm.environment.get(\"session_id\") || pm.collectionVariables.get(\"session_id\") || \"1\";",
+									"pm.variables.set(\"session_id\", sessionId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/{{session_id}}/republish",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "{{session_id}}", "republish"]
+						},
+						"description": "Republish an expired/failed session. Requirements:\n- Cooldown period expired (default: 7 days)\n- Status must be DEAL_FAILED, EXPIRED, or DEAL_SUCCESS"
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Deal as Failed",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const sessionId = pm.environment.get(\"session_id\") || pm.collectionVariables.get(\"session_id\") || \"1\";",
+									"pm.variables.set(\"session_id\", sessionId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/{{session_id}}/deal-failed",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "{{session_id}}", "deal-failed"]
+						},
+						"description": "Mark a deal as failed. Only session participants can mark deals as failed.\n\n**Actions:**\n- Updates status to DEAL_FAILED\n- Sets cooldown period (7 days)\n- Makes chat read-only\n- Archives session"
+					},
+					"response": []
+				}
+			],
+			"description": "Session management endpoints for controlling matchmaking sessions"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://127.0.0.1:8000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "inquiry_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "session_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

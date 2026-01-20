@@ -3,6 +3,15 @@
 ## Overview
 This document describes the API endpoints for brand requirement posting and converter response system.
 
+> **📚 [View All Documentation](./DOCS.md)** - Complete documentation index with all links
+
+> **📘 For complete flow documentation with use cases, see:** **[BRAND_DEALER_COMPLETE_FLOW_DOCUMENTATION.md](./BRAND_DEALER_COMPLETE_FLOW_DOCUMENTATION.md)**
+
+> **📚 Related Documentation:**
+> - **[DEALER_API_COMPLETE_DOCUMENTATION.md](./DEALER_API_COMPLETE_DOCUMENTATION.md)** - Complete Dealer API documentation
+> - **[COMPLETE_API_DOCUMENTATION.md](./COMPLETE_API_DOCUMENTATION.md)** - Complete API reference
+> - **[POSTMAN_BRAND_DEALER_IMPORT_INSTRUCTIONS.md](./POSTMAN_BRAND_DEALER_IMPORT_INSTRUCTIONS.md)** - Postman collection setup
+
 ## Brand Registration Fields
 - Company / Brand Name
 - Brand type(s) - dropdown select multiple
@@ -55,6 +64,8 @@ Deducts credits from wallet (default: 50 credits)
 #### 1. Post Requirement
 **POST** `/api/v1/brand/requirement/post`
 
+**Full URL:** `POST http://localhost:8000/api/v1/brand/requirement/post`
+
 **Headers:**
 ```
 Authorization: Bearer {token}
@@ -95,6 +106,8 @@ Authorization: Bearer {token}
 
 #### 2. Get My Inquiries
 **GET** `/api/v1/brand/inquiries`
+
+**Full URL:** `GET http://localhost:8000/api/v1/brand/inquiries`
 
 **Query Parameters:**
 - `status` (optional): Filter by status
@@ -141,6 +154,8 @@ Authorization: Bearer {token}
 #### 3. Get Messages (for active inquiries)
 **GET** `/api/v1/brand/messages/{session_id}`
 
+**Full URL:** `GET http://localhost:8000/api/v1/brand/messages/{session_id}`
+
 **Response:**
 Returns messages for the active session (uses ChatService)
 
@@ -148,6 +163,8 @@ Returns messages for the active session (uses ChatService)
 
 #### 1. Get Brand Requirements
 **GET** `/api/v1/converter/requirements`
+
+**Full URL:** `GET http://localhost:8000/api/v1/converter/requirements`
 
 **Query Parameters:**
 - `city` (optional): Filter by city
@@ -194,6 +211,8 @@ Returns messages for the active session (uses ChatService)
 
 #### 2. Respond to Requirement
 **POST** `/api/v1/converter/requirement/{inquiry_id}/respond`
+
+**Full URL:** `POST http://localhost:8000/api/v1/converter/requirement/{inquiry_id}/respond`
 
 **Request Body:**
 ```json
@@ -258,6 +277,9 @@ A complete Postman collection is available for testing all Brand and Dealer APIs
 
 ### Import Instructions
 
+For detailed Postman import and setup instructions, see: **[POSTMAN_BRAND_DEALER_IMPORT_INSTRUCTIONS.md](./POSTMAN_BRAND_DEALER_IMPORT_INSTRUCTIONS.md)**
+
+Quick steps:
 1. Open Postman
 2. Click **Import** button (top left)
 3. Select **File** tab

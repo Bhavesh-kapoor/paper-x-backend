@@ -701,6 +701,78 @@ Route::prefix('docs')->group(function () {
         return renderMarkdown($file, 'Wallet & Payment API Documentation');
     })->name('docs.wallet');
 
+    Route::get('/brand-requirement', function () {
+        $file = base_path('BRAND_REQUIREMENT_API_DOCUMENTATION.md');
+        if (!File::exists($file)) {
+            return response('Documentation file not found', 404);
+        }
+        return renderMarkdown($file, 'Brand Requirement API Documentation');
+    })->name('docs.brand-requirement');
+
+    Route::get('/brand-dealer-flow', function () {
+        $file = base_path('BRAND_DEALER_COMPLETE_FLOW_DOCUMENTATION.md');
+        if (!File::exists($file)) {
+            return response('Documentation file not found', 404);
+        }
+        return renderMarkdown($file, 'Brand & Dealer Complete Flow Documentation');
+    })->name('docs.brand-dealer-flow');
+
+    Route::get('/dealer-complete', function () {
+        $file = base_path('DEALER_API_COMPLETE_DOCUMENTATION.md');
+        if (!File::exists($file)) {
+            return response('Documentation file not found', 404);
+        }
+        return renderMarkdown($file, 'Dealer API Complete Documentation');
+    })->name('docs.dealer-complete');
+
+    Route::get('/complete-flow', function () {
+        $file = base_path('COMPLETE_FLOW_DOCUMENTATION.md');
+        if (!File::exists($file)) {
+            return response('Documentation file not found', 404);
+        }
+        return renderMarkdown($file, 'Complete Flow Documentation');
+    })->name('docs.complete-flow');
+
+    Route::get('/all-docs', function () {
+        $file = base_path('DOCS.md');
+        if (!File::exists($file)) {
+            return response('Documentation file not found', 404);
+        }
+        return renderMarkdown($file, 'Documentation Index');
+    })->name('docs.all-docs');
+
+    Route::get('/b2b-matchmaking-blueprint', function () {
+        $file = base_path('B2B_MATCHMAKING_BACKEND_BLUEPRINT.md');
+        if (!File::exists($file)) {
+            return response('Documentation file not found', 404);
+        }
+        return renderMarkdown($file, 'B2B Matchmaking Backend Blueprint');
+    })->name('docs.b2b-blueprint');
+
+    Route::get('/b2b-matchmaking-api', function () {
+        $file = base_path('B2B_MATCHMAKING_API_DOCUMENTATION.md');
+        if (!File::exists($file)) {
+            return response('Documentation file not found', 404);
+        }
+        return renderMarkdown($file, 'B2B Matchmaking API Documentation');
+    })->name('docs.b2b-api');
+
+    Route::get('/screen-based-api', function () {
+        $file = base_path('SCREEN_BASED_API_DOCUMENTATION.md');
+        if (!File::exists($file)) {
+            return response('Documentation file not found', 404);
+        }
+        return renderMarkdown($file, 'Screen-Based API Documentation');
+    })->name('docs.screen-based-api');
+
+    Route::get('/matchmaking-ai', function () {
+        $file = base_path('MATCHMAKING_AI_DOCUMENTATION.md');
+        if (!File::exists($file)) {
+            return response('Documentation file not found', 404);
+        }
+        return renderMarkdown($file, 'Matchmaking System Documentation');
+    })->name('docs.matchmaking-ai');
+
     // API Routes with Beautiful Design
     Route::get('/api-routes', function () {
         $routes = [
@@ -955,12 +1027,21 @@ Route::prefix('docs')->group(function () {
     // Documentation index page
     Route::get('/', function () {
         $docs = [
-            ['name' => 'API Routes', 'url' => route('docs.api-routes'), 'description' => 'Beautifully designed API routes list', 'icon' => '🚀'],
-            ['name' => 'Request Formats', 'url' => route('docs.request-formats'), 'description' => 'Request and response examples', 'icon' => '📝'],
-            ['name' => 'Routes Documentation', 'url' => route('docs.routes-documentation'), 'description' => 'Detailed route documentation', 'icon' => '📖'],
-            ['name' => 'Complete API Documentation', 'url' => route('docs.complete'), 'description' => 'Complete API documentation', 'icon' => '📚'],
-            ['name' => 'Dealer API Documentation', 'url' => route('docs.dealer'), 'description' => 'Dealer specific APIs', 'icon' => '👤'],
-            ['name' => 'Wallet & Payment API', 'url' => route('docs.wallet'), 'description' => 'Wallet, credits, and payment APIs', 'icon' => '💳'],
+            ['name' => '📚 All Documentation', 'url' => route('docs.all-docs'), 'description' => 'Complete documentation index with all links', 'icon' => '📚', 'highlight' => true],
+            ['name' => '🚀 API Routes', 'url' => route('docs.api-routes'), 'description' => 'Beautifully designed API routes list', 'icon' => '🚀'],
+            ['name' => '📝 Request Formats', 'url' => route('docs.request-formats'), 'description' => 'Request and response examples', 'icon' => '📝'],
+            ['name' => '📖 Routes Documentation', 'url' => route('docs.routes-documentation'), 'description' => 'Detailed route documentation', 'icon' => '📖'],
+            ['name' => '📚 Complete API Documentation', 'url' => route('docs.complete'), 'description' => 'Complete API documentation', 'icon' => '📚'],
+            ['name' => '🔄 Brand & Dealer Complete Flow', 'url' => route('docs.brand-dealer-flow'), 'description' => 'Complete end-to-end flows for Brand and Dealer with use cases', 'icon' => '🔄', 'highlight' => true],
+            ['name' => '🏗️ B2B Matchmaking Blueprint', 'url' => route('docs.b2b-blueprint'), 'description' => 'Complete backend architecture with visibility controls', 'icon' => '🏗️', 'highlight' => true],
+            ['name' => '📡 B2B Matchmaking API', 'url' => route('docs.b2b-api'), 'description' => 'Complete API documentation for matchmaking platform', 'icon' => '📡', 'highlight' => true],
+            ['name' => '🤖 Matchmaking Algorithms', 'url' => route('docs.matchmaking-ai'), 'description' => 'Matchmaking algorithms, flow from posting to session, UI implementation guide', 'icon' => '🤖', 'highlight' => true],
+            ['name' => '📱 Screen-Based API', 'url' => route('docs.screen-based-api'), 'description' => 'APIs mapped to mobile app screens with examples', 'icon' => '📱', 'highlight' => true],
+            ['name' => '📋 Brand Requirement API', 'url' => route('docs.brand-requirement'), 'description' => 'Brand requirement posting and converter response APIs', 'icon' => '📋'],
+            ['name' => '👤 Dealer API Complete', 'url' => route('docs.dealer-complete'), 'description' => 'Complete Dealer API documentation', 'icon' => '👤'],
+            ['name' => '👤 Dealer API Documentation', 'url' => route('docs.dealer'), 'description' => 'Dealer specific APIs', 'icon' => '👤'],
+            ['name' => '🔄 Complete Flow Documentation', 'url' => route('docs.complete-flow'), 'description' => 'Complete flow documentation for all user types', 'icon' => '🔄'],
+            ['name' => '💳 Wallet & Payment API', 'url' => route('docs.wallet'), 'description' => 'Wallet, credits, and payment APIs', 'icon' => '💳'],
         ];
 
         $html = '<!DOCTYPE html>
@@ -1030,6 +1111,13 @@ Route::prefix('docs')->group(function () {
             color: #666;
             line-height: 1.6;
         }
+        .doc-card.highlight {
+            border: 3px solid #667eea;
+            background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
+        }
+        .doc-card.highlight:hover {
+            border-color: #764ba2;
+        }
     </style>
 </head>
 <body>
@@ -1041,7 +1129,8 @@ Route::prefix('docs')->group(function () {
         <div class="docs-grid">';
 
         foreach ($docs as $doc) {
-            $html .= '<a href="' . $doc['url'] . '" class="doc-card">
+            $highlightClass = isset($doc['highlight']) && $doc['highlight'] ? 'highlight' : '';
+            $html .= '<a href="' . $doc['url'] . '" class="doc-card ' . $highlightClass . '">
                 <div class="doc-icon">' . $doc['icon'] . '</div>
                 <h2>' . $doc['name'] . '</h2>
                 <p>' . $doc['description'] . '</p>

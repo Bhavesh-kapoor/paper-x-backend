@@ -1,0 +1,1061 @@
+{
+	"info": {
+		"_postman_id": "b2b-screen-flow-2026",
+		"name": "B2B Matchmaking - Screen Flow API Collection",
+		"description": "Complete Postman collection for B2B matchmaking platform APIs mapped to mobile app screens.\n\n**Base URL**: `http://127.0.0.1:8000/api/v1`\n\n**Screen Flow**:\n1. Post Requirement Screen → Save Step\n2. Payment Confirmation → Calculate Fee → Post\n3. Posting Success → Get Status\n4. Sourcing Hub → Get Active Sessions\n5. Matchmaking Responses → Get Responses → Shortlist\n6. Session Locked → Lock Session → Get Details\n7. Partner Chat → Chat Messages\n8. Session History → Get History → Republish",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "paper-x-backend"
+	},
+	"item": [
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Request OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    pm.test(\"OTP request successful\", function () {",
+									"        pm.response.to.have.status(200);",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData.success).to.eql(true);",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mobile\": \"9876543210\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/request",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "request"]
+						}
+					}
+				},
+				{
+					"name": "Verify OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.environment.set(\"auth_token\", jsonData.data.token);",
+									"        pm.collectionVariables.set(\"auth_token\", jsonData.data.token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mobile\": \"9876543210\",\n  \"otp\": \"123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/verify",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "verify"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Post Requirement Screen (Step 2 of 9)",
+			"item": [
+				{
+					"name": "Save Inquiry Step",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.inquiry_id) {",
+									"        pm.environment.set(\"inquiry_id\", jsonData.data.inquiry_id);",
+									"        pm.collectionVariables.set(\"inquiry_id\", jsonData.data.inquiry_id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"step\": 2,\n  \"inquiry_id\": null,\n  \"material_category\": \"Corrugated\",\n  \"packaging_type\": \"Boxes\",\n  \"thickness_gsm\": 150,\n  \"thickness_unit\": \"gsm\",\n  \"size\": \"10x12 inches\",\n  \"quantity\": 5000,\n  \"quantity_unit\": \"units\",\n  \"urgency\": \"normal\",\n  \"location\": \"Mumbai, Maharashtra\",\n  \"latitude\": 19.0760,\n  \"longitude\": 72.8777\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/save-step",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "save-step"]
+						},
+						"description": "Save inquiry step data (Step 2 of 9 - Technical Specifications). Supports multi-step inquiry creation."
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Payment Confirmation Screen",
+			"item": [
+				{
+					"name": "Calculate Posting Fee",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"inquiry_id\": {{inquiry_id}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/calculate-fee",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "calculate-fee"]
+						},
+						"description": "Calculate posting fee before posting. Shows:\n- Standard Post Fee: 50 Credits\n- Urgency Add-on: +20 Credits (if urgent)\n- Total Cost\n- Wallet Balance\n- Sufficient Credits Check"
+					}
+				},
+				{
+					"name": "Pay & Post Inquiry",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.inquiry && jsonData.data.inquiry.session) {",
+									"        pm.environment.set(\"session_id\", jsonData.data.inquiry.session.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "post"]
+						},
+						"description": "Post inquiry and trigger matchmaking. Deducts credits and starts finding matches."
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Posting Success Screen",
+			"item": [
+				{
+					"name": "Get Posting Status (Matchmaking Progress)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/posting-status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "posting-status"]
+						},
+						"description": "Get posting status and matchmaking progress:\n- Status: FINDING MATCHES\n- Matched Dealers Count\n- Total Dealers Scanned\n- Progress Percentage\n- Scanning Status"
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Active Sessions (Sourcing Hub)",
+			"item": [
+				{
+					"name": "Get Active Sessions - All",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/active?filter=all&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "active"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "all",
+									"description": "all, finding_matches, active, locked"
+								},
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
+						},
+						"description": "Get all active sessions with countdown timers and response counts"
+					}
+				},
+				{
+					"name": "Get Active Sessions - Finding Matches",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/active?filter=finding_matches",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "active"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "finding_matches"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Active Sessions - Active",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/active?filter=active",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "active"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "active"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Active Sessions - Locked",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/active?filter=locked",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "active"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "locked"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Matchmaking Responses Screen",
+			"item": [
+				{
+					"name": "Get Matchmaking Responses - All",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/matchmaking-responses?filter=all",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "matchmaking-responses"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "all",
+									"description": "all, exact_match, slight_variation, nearest"
+								}
+							]
+						},
+						"description": "Get all matchmaking responses with dealer details, distance, and match type"
+					}
+				},
+				{
+					"name": "Get Matchmaking Responses - Exact Match",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/matchmaking-responses?filter=exact_match",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "matchmaking-responses"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "exact_match"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Matchmaking Responses - Slight Variation",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/matchmaking-responses?filter=slight_variation",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "matchmaking-responses"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "slight_variation"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Matchmaking Responses - Nearest",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/matchmaking-responses?filter=nearest",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "matchmaking-responses"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "nearest"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Shortlist Response",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"action\": \"shortlist\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/responses/{{response_id}}/shortlist",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "responses", "{{response_id}}", "shortlist"]
+						},
+						"description": "Shortlist a response. Action can be 'shortlist' or 'reject'"
+					}
+				},
+				{
+					"name": "Reject Response",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"action\": \"reject\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/responses/{{response_id}}/shortlist",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "responses", "{{response_id}}", "shortlist"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "7. Session Locked Screen",
+			"item": [
+				{
+					"name": "Lock Session (Select Dealers)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.chat_thread_id) {",
+									"        pm.environment.set(\"chat_thread_id\", jsonData.data.chat_thread_id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"selected_dealer_ids\": [1, 2]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/{{session_id}}/lock",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "{{session_id}}", "lock"]
+						},
+						"description": "Lock session and select dealers. Hides inquiry from non-selected dealers and enables chat."
+					}
+				},
+				{
+					"name": "Get Session Details (Locked)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/{{session_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "{{session_id}}"]
+						},
+						"description": "Get session details with selected partners. Shows PROJECT ID and selected dealers."
+					}
+				}
+			]
+		},
+		{
+			"name": "8. Partner Chat Screen",
+			"item": [
+				{
+					"name": "Get Chat Messages",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/{{session_id}}/chat",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "{{session_id}}", "chat"]
+						},
+						"description": "Get chat messages for the session. Only available after session is locked."
+					}
+				},
+				{
+					"name": "Send Chat Message",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"message\": \"Received, thank you. Checking the tensile strength requirements now.\",\n  \"attachments\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/{{session_id}}/chat/message",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "{{session_id}}", "chat", "message"]
+						},
+						"description": "Send a message in the chat thread. Supports attachments."
+					}
+				}
+			]
+		},
+		{
+			"name": "9. Session History Screen",
+			"item": [
+				{
+					"name": "Get Session History - All",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/history?filter=all&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "history"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "all",
+									"description": "all, completed, expired"
+								},
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
+						},
+						"description": "Get session history grouped by month. Shows completed and expired sessions."
+					}
+				},
+				{
+					"name": "Get Session History - Completed",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/history?filter=completed",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "history"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "completed"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Session History - Expired",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/history?filter=expired",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "history"],
+							"query": [
+								{
+									"key": "filter",
+									"value": "expired"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Search Session History",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/history?search=corrugated",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "history"],
+							"query": [
+								{
+									"key": "search",
+									"value": "corrugated",
+									"description": "Search materials or sessions"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Republish Session",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/{{session_id}}/republish",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "{{session_id}}", "republish"]
+						},
+						"description": "Republish an expired/failed session. Creates a new inquiry based on the old one."
+					}
+				}
+			]
+		},
+		{
+			"name": "Additional Endpoints",
+			"item": [
+				{
+					"name": "Get Inquiry Details",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Responses (Brand/Converter)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{inquiry_id}}/responses",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{inquiry_id}}", "responses"]
+						}
+					}
+				},
+				{
+					"name": "Get Dealer Inquiries (Matched)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/inquiries?status=MATCHING&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "inquiries"],
+							"query": [
+								{
+									"key": "status",
+									"value": "MATCHING"
+								},
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Dealer Respond to Inquiry",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"quantity_offered\": 50000,\n  \"quantity_unit\": \"units\",\n  \"quoted_price\": 250000,\n  \"price_unit\": \"INR\",\n  \"price_status\": \"firm\",\n  \"additional_details\": \"Ready for immediate dispatch. All certificates included.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/inquiries/{{inquiry_id}}/respond",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "inquiries", "{{inquiry_id}}", "respond"]
+						}
+					}
+				},
+				{
+					"name": "Mark Deal as Failed",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sessions/{{session_id}}/deal-failed",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sessions", "{{session_id}}", "deal-failed"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://127.0.0.1:8000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "inquiry_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "session_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "response_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "chat_thread_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+
