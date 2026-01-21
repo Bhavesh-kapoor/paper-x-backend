@@ -169,7 +169,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/inquiries', [InquiryController::class, 'dealerInquiries'])->name('dealer.inquiries');
         
         // Respond to inquiry
-        Route::post('/inquiries/{inquiry}/respond', [\App\Http\Controllers\api\ConverterController::class, 'respondToRequirement'])->name('dealer.inquiries.respond');
+        Route::post('/inquiries/{inquiry}/respond', [DealerController::class, 'respondToInquiry'])->name('dealer.inquiries.respond');
     });
 
     #brand routes

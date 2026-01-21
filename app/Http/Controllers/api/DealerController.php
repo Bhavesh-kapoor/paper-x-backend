@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dealer\ProfileCompleteRequest;
 use App\Http\Requests\Dealer\PostRequirementRequest;
+use App\Http\Requests\SubmitResponseRequest;
 use App\Services\DealerService;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Response;
@@ -84,6 +85,22 @@ class DealerController extends Controller
             $requirements = $this->dealerService->getRequirements($filters, $user->id);
 
             return Response::success('Requirements retrieved successfully', $requirements['requirements'], $requirements['pagination']);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    public function respondToInquiry(SubmitResponseRequest $request, int $inquiryId)
+    {
+        try {
+            $user = $request->user();
+            $result = $this->dealerService->respondToInquiry($inquiryId, $user->id, $request->validated());
+
+            return Response::success('Response submitted successfully', $result, null, HttpResponse::HTTP_CREATED);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),

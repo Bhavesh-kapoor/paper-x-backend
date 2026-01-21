@@ -28,17 +28,34 @@ class InquiryController extends Controller
     public function store(StoreInquiryRequest $request)
     {
         try {
-            Gate::authorize('create', Inquiry::class);
-            
             $user = $request->user();
             $data = $request->validated();
             
-            DB::beginTransaction();
-            
-            // Determine poster
+            // Check if user has brand or converter profile
             $poster = $user->brand ?? $user->converter;
             if (!$poster) {
-                return Response::error('Only brands or converters can create inquiries', null, HttpResponse::HTTP_FORBIDDEN);
+                return Response::error('Only brands or converters can create inquiries. Please complete your brand or converter profile first.', null, HttpResponse::HTTP_FORBIDDEN);
+            }
+            
+            DB::beginTransaction();
+            
+            // Calculate total quantity from items (sum of all item quantities)
+            $totalQuantity = 0;
+            $quantityUnit = null;
+            if (isset($data['items']) && is_array($data['items']) && count($data['items']) > 0) {
+                foreach ($data['items'] as $itemData) {
+                    $totalQuantity += (float) ($itemData['quantity'] ?? 0);
+                    // Use the first item's unit, or default to 'pieces'
+                    if (!$quantityUnit && isset($itemData['quantity_unit'])) {
+                        $quantityUnit = $itemData['quantity_unit'];
+                    }
+                }
+            }
+            
+            // Default values if no items provided
+            if ($totalQuantity === 0) {
+                $totalQuantity = 0;
+                $quantityUnit = $quantityUnit ?? 'pieces';
             }
             
             // Create inquiry
@@ -50,6 +67,8 @@ class InquiryController extends Controller
                 'description' => $data['description'] ?? null,
                 'status' => InquiryStatus::DRAFT,
                 'urgency' => $data['urgency'] ?? 'normal',
+                'quantity' => $totalQuantity,
+                'quantity_unit' => $quantityUnit,
                 'location' => $data['location'] ?? null,
                 'latitude' => $data['latitude'] ?? null,
                 'longitude' => $data['longitude'] ?? null,
@@ -87,9 +106,32 @@ class InquiryController extends Controller
             
             return Response::success('Inquiry created successfully', $inquiry, null, HttpResponse::HTTP_CREATED);
             
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            return Response::error('Validation failed while creating inquiry', $e->errors(), HttpResponse::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\Illuminate\Database\QueryException $e) {
+            DB::rollBack();
+            \Log::error('Database error creating inquiry', [
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'sql' => $e->getSql() ?? null,
+            ]);
+            return Response::error('Database error: Failed to create inquiry. Please check your data and try again.', [
+                'error_code' => 'DB_ERROR',
+                'message' => $e->getMessage(),
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         } catch (\Exception $e) {
             DB::rollBack();
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+            \Log::error('Error creating inquiry', [
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return Response::error('Failed to create inquiry: ' . $e->getMessage(), [
+                'error_code' => 'INQUIRY_CREATE_ERROR',
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -107,42 +149,60 @@ class InquiryController extends Controller
             $postingFee = $inquiry->urgency === 'urgent' ? 70 : 50; // Credits
             $wallet = $user->wallet;
             
-            if (!$wallet || $wallet->balance < $postingFee) {
-                return Response::error('Insufficient wallet balance', null, HttpResponse::HTTP_PAYMENT_REQUIRED);
+            if (!$wallet) {
+                return Response::error('Wallet not found. Please contact support to create a wallet.', [
+                    'error_code' => 'WALLET_NOT_FOUND',
+                    'user_id' => $user->id,
+                ], HttpResponse::HTTP_PAYMENT_REQUIRED);
+            }
+            
+            if ($wallet->balance < $postingFee) {
+                return Response::error('Insufficient wallet balance', [
+                    'error_code' => 'INSUFFICIENT_BALANCE',
+                    'required_credits' => $postingFee,
+                    'current_balance' => $wallet->balance,
+                    'shortfall' => $postingFee - $wallet->balance,
+                    'message' => "You need {$postingFee} credits to post this inquiry, but you only have {$wallet->balance} credits. Please purchase credits first.",
+                ], HttpResponse::HTTP_PAYMENT_REQUIRED);
             }
             
             DB::beginTransaction();
             
             // Deduct posting fee
-            $wallet->deductCredits($postingFee, 'Post requirement fee', 'inquiry', $inquiry->id);
+            // Parameters: amount, description, transaction_type, reference_id, reference_type, metadata
+            $wallet->deductCredits(
+                $postingFee, 
+                'Post requirement fee', 
+                'REQUIREMENT_POSTED', // transaction_type (must be from enum: PURCHASE, REQUIREMENT_POSTED, etc.)
+                $inquiry->id, // reference_id
+                'inquiry' // reference_type
+            );
             
-            // Update inquiry status
+            // Update inquiry status to MATCHING (matchmaking starts immediately)
             $inquiry->update([
-                'status' => InquiryStatus::POSTED,
+                'status' => InquiryStatus::MATCHING,
                 'posted_at' => now(),
+                'matching_started_at' => now(),
                 'posting_fee_paid' => true,
                 'posting_fee_amount' => $postingFee,
+                'is_visible_to_dealers' => true,
             ]);
             
-            // Create or update session
+            // Create or update session (only use fields that exist in database)
             $session = $inquiry->session()->firstOrCreate([
                 'inquiry_id' => $inquiry->id,
             ], [
-                'status' => \App\Enums\SessionStatus::POSTED,
-                'posted_at' => now(),
-                'is_visible_to_brand' => true,
-                'is_visible_to_dealers' => false,
+                'status' => 'ACTIVE', // Use string value matching database enum
+                'locked_at' => now(),
+                'expires_at' => now()->addHours(24),
+                'discovery_start' => now(),
+                'active_session_start' => now(),
             ]);
             
             // Trigger matchmaking
             $matchedDealerIds = $this->matchmakingService->findMatchingDealers($inquiry, 10);
             
-            // Update session status
-            $session->update([
-                'status' => \App\Enums\SessionStatus::MATCHING,
-                'matching_started_at' => now(),
-                'is_visible_to_dealers' => true,
-            ]);
+            // Session is already in ACTIVE status, no need to update
             
             // Notify matched dealers
             $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedDealerIds);
@@ -157,9 +217,45 @@ class InquiryController extends Controller
                 'matched_dealers_count' => count($matchedDealerIds),
             ]);
             
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            DB::rollBack();
+            return Response::error('Authorization failed: You do not have permission to post this inquiry', [
+                'error_code' => 'AUTHORIZATION_FAILED',
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $user->id ?? null,
+                'message' => $e->getMessage(),
+            ], HttpResponse::HTTP_FORBIDDEN);
+        } catch (\Illuminate\Database\QueryException $e) {
+            DB::rollBack();
+            \Log::error('Database error posting inquiry', [
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'sql' => $e->getSql() ?? null,
+                'bindings' => $e->getBindings() ?? null,
+                'code' => $e->getCode(),
+            ]);
+            return Response::error('Database error: Failed to post inquiry', [
+                'error_code' => 'DB_ERROR',
+                'inquiry_id' => $inquiry->id,
+                'message' => $e->getMessage(),
+                'sql_state' => $e->getCode(),
+                'hint' => 'Check the SQL error message above for details about which field or constraint is causing the issue.',
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         } catch (\Exception $e) {
             DB::rollBack();
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+            \Log::error('Error posting inquiry', [
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return Response::error('Failed to post inquiry: ' . $e->getMessage(), [
+                'error_code' => 'INQUIRY_POST_ERROR',
+                'inquiry_id' => $inquiry->id,
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -185,8 +281,23 @@ class InquiryController extends Controller
             
             return Response::success('Inquiry retrieved successfully', $data);
             
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            return Response::error('Authorization failed: You do not have permission to view this inquiry', [
+                'error_code' => 'AUTHORIZATION_FAILED',
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $request->user()->id ?? null,
+                'message' => $e->getMessage(),
+            ], HttpResponse::HTTP_FORBIDDEN);
         } catch (\Exception $e) {
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+            \Log::error('Error retrieving inquiry', [
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $request->user()->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return Response::error('Failed to retrieve inquiry: ' . $e->getMessage(), [
+                'error_code' => 'INQUIRY_RETRIEVE_ERROR',
+                'inquiry_id' => $inquiry->id,
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -199,7 +310,17 @@ class InquiryController extends Controller
             $user = $request->user();
             
             if (!$user->dealer) {
-                return Response::error('Only dealers can access this endpoint', null, HttpResponse::HTTP_FORBIDDEN);
+                return Response::error('Only dealers can access this endpoint', [
+                    'error_code' => 'INVALID_USER_ROLE',
+                    'user_id' => $user->id,
+                    'user_roles' => [
+                        'has_brand' => $user->brand ? true : false,
+                        'has_converter' => $user->converter ? true : false,
+                        'has_dealer' => false,
+                        'has_machine_dealer' => $user->machineDealer ? true : false,
+                    ],
+                    'message' => 'Please complete your dealer profile to access dealer inquiries.',
+                ], HttpResponse::HTTP_FORBIDDEN);
             }
             
             $dealerId = $user->dealer->id;
@@ -260,8 +381,23 @@ class InquiryController extends Controller
             
             return Response::success('Responses retrieved successfully', $responses);
             
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            return Response::error('Authorization failed: You do not have permission to view responses for this inquiry', [
+                'error_code' => 'AUTHORIZATION_FAILED',
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $request->user()->id ?? null,
+                'message' => $e->getMessage(),
+            ], HttpResponse::HTTP_FORBIDDEN);
         } catch (\Exception $e) {
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+            \Log::error('Error retrieving inquiry responses', [
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $request->user()->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return Response::error('Failed to retrieve responses: ' . $e->getMessage(), [
+                'error_code' => 'RESPONSES_RETRIEVE_ERROR',
+                'inquiry_id' => $inquiry->id,
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -277,13 +413,24 @@ class InquiryController extends Controller
             
             // Create new inquiry based on old one
             $newInquiry = $inquiry->replicate();
-            $newInquiry->status = InquiryStatus::REPUBLISHED;
+            
+            // For DRAFT inquiries, create a new DRAFT copy
+            // For posted inquiries, create a new inquiry with MATCHING status
+            if ($inquiry->status === InquiryStatus::DRAFT) {
+                $newInquiry->status = InquiryStatus::DRAFT;
+            } else {
+                // For posted inquiries, republish as MATCHING (will trigger matchmaking again)
+                $newInquiry->status = InquiryStatus::MATCHING;
+            }
+            
             $newInquiry->posted_at = null;
+            $newInquiry->matching_started_at = null;
             $newInquiry->locked_at = null;
             $newInquiry->expires_at = null;
             $newInquiry->is_visible_to_dealers = false;
-            $newInquiry->republish_count = $inquiry->republish_count + 1;
+            $newInquiry->republish_count = ($inquiry->republish_count ?? 0) + 1;
             $newInquiry->last_republished_at = now();
+            $newInquiry->cooldown_until = null; // Reset cooldown for new inquiry
             $newInquiry->save();
             
             // Copy items
@@ -302,9 +449,56 @@ class InquiryController extends Controller
             
             return Response::success('Inquiry republished successfully', $newInquiry);
             
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            DB::rollBack();
+            $user = $request->user();
+            $isOwner = false;
+            $reason = 'Unknown reason';
+            
+            // Check ownership
+            if ($user->brand && $inquiry->poster_type === 'brand' && $inquiry->poster_id === $user->brand->id) {
+                $isOwner = true;
+            } elseif ($user->converter && $inquiry->poster_type === 'converter' && $inquiry->poster_id === $user->converter->id) {
+                $isOwner = true;
+            }
+            
+            if (!$isOwner) {
+                $reason = 'You do not own this inquiry. Only the poster can republish it.';
+            } else {
+                // Check cooldown
+                if ($inquiry->cooldown_until && $inquiry->cooldown_until > now()) {
+                    $reason = 'Cooldown period has not expired. You can republish after ' . $inquiry->cooldown_until->format('Y-m-d H:i:s');
+                } elseif (($inquiry->republish_count ?? 0) >= 1) {
+                    $reason = 'Maximum republish limit reached. You can only republish an inquiry once.';
+                } elseif ($inquiry->status === InquiryStatus::DRAFT) {
+                    $reason = 'This inquiry is in DRAFT status. Republishing will create a copy. To post it, use POST /api/v1/inquiries/{id}/post instead.';
+                } else {
+                    $reason = 'Inquiry cannot be republished at this time. Current status: ' . $inquiry->status->value;
+                }
+            }
+            
+            return Response::error('Authorization failed: You do not have permission to republish this inquiry', [
+                'error_code' => 'AUTHORIZATION_FAILED',
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $user->id ?? null,
+                'inquiry_status' => $inquiry->status->value,
+                'is_owner' => $isOwner,
+                'cooldown_until' => $inquiry->cooldown_until?->toIso8601String(),
+                'republish_count' => $inquiry->republish_count ?? 0,
+                'reason' => $reason,
+                'message' => $e->getMessage(),
+            ], HttpResponse::HTTP_FORBIDDEN);
         } catch (\Exception $e) {
             DB::rollBack();
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+            \Log::error('Error republishing inquiry', [
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $request->user()->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return Response::error('Failed to republish inquiry: ' . $e->getMessage(), [
+                'error_code' => 'INQUIRY_REPUBLISH_ERROR',
+                'inquiry_id' => $inquiry->id,
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -315,9 +509,23 @@ class InquiryController extends Controller
     public function saveStep(\App\Http\Requests\SaveInquiryStepRequest $request)
     {
         try {
-            Gate::authorize('create', Inquiry::class);
-            
             $user = $request->user();
+            
+            // Check if user has brand or converter profile
+            $poster = $user->brand ?? $user->converter;
+            if (!$poster) {
+                return Response::error('Only brands or converters can create inquiries. Please complete your brand or converter profile first.', [
+                    'error_code' => 'PROFILE_INCOMPLETE',
+                    'user_id' => $user->id,
+                    'user_roles' => [
+                        'has_brand' => $user->brand ? true : false,
+                        'has_converter' => $user->converter ? true : false,
+                        'has_dealer' => $user->dealer ? true : false,
+                        'has_machine_dealer' => $user->machineDealer ? true : false,
+                    ],
+                    'message' => 'You need to complete either a brand profile or converter profile to create inquiries.',
+                ], HttpResponse::HTTP_FORBIDDEN);
+            }
             $data = $request->validated();
             $step = $data['step'];
             
@@ -336,12 +544,19 @@ class InquiryController extends Controller
                     ->where('status', InquiryStatus::DRAFT)
                     ->firstOrFail();
             } else {
-                // Create new inquiry
+                // Create new inquiry with default values
+                // Title will be updated in later steps, but we need a default for database constraint
+                $defaultTitle = 'Draft Inquiry - ' . now()->format('Y-m-d H:i');
                 $inquiry = Inquiry::create([
                     'poster_id' => $poster->id,
                     'poster_type' => $user->brand ? 'brand' : 'converter',
                     'brand_id' => $user->brand?->id,
+                    'title' => $data['title'] ?? $defaultTitle, // Use provided title or default
+                    'description' => $data['description'] ?? null,
                     'status' => InquiryStatus::DRAFT,
+                    'urgency' => $data['urgency'] ?? 'normal',
+                    'quantity' => 0, // Will be updated from items
+                    'quantity_unit' => 'pieces', // Default, will be updated from items
                     'is_visible_to_brand' => true,
                     'is_visible_to_dealers' => false,
                     'hide_brand_identity' => true,
@@ -352,18 +567,30 @@ class InquiryController extends Controller
             // Step 2: Technical Specifications
             if ($step == 2) {
                 // Update inquiry
-                $inquiry->update([
+                $updateData = [
                     'packaging_type' => $data['packaging_type'] ?? null,
                     'thickness' => $data['thickness_gsm'] ?? $data['thickness_mm'] ?? null,
                     'thickness_unit' => $data['thickness_unit'] ?? 'gsm',
                     'size' => $data['size'] ?? null,
-                    'quantity' => $data['quantity'] ?? null,
-                    'quantity_unit' => $data['quantity_unit'] ?? null,
-                    'urgency' => $data['urgency'] ?? 'normal',
-                    'location' => $data['location'] ?? null,
-                    'latitude' => $data['latitude'] ?? null,
-                    'longitude' => $data['longitude'] ?? null,
-                ]);
+                    'quantity' => $data['quantity'] ?? $inquiry->quantity ?? 0,
+                    'quantity_unit' => $data['quantity_unit'] ?? $inquiry->quantity_unit ?? 'pieces',
+                    'urgency' => $data['urgency'] ?? $inquiry->urgency ?? 'normal',
+                    'location' => $data['location'] ?? $inquiry->location ?? null,
+                    'latitude' => $data['latitude'] ?? $inquiry->latitude ?? null,
+                    'longitude' => $data['longitude'] ?? $inquiry->longitude ?? null,
+                ];
+                
+                // Update title if provided
+                if (isset($data['title'])) {
+                    $updateData['title'] = $data['title'];
+                }
+                
+                // Update description if provided
+                if (isset($data['description'])) {
+                    $updateData['description'] = $data['description'];
+                }
+                
+                $inquiry->update($updateData);
                 
                 // Create or update inquiry item
                 $item = $inquiry->items()->firstOrCreate(
@@ -402,9 +629,27 @@ class InquiryController extends Controller
                 'inquiry' => $inquiry,
             ]);
             
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            return Response::error('Validation failed while saving inquiry step', $e->errors(), HttpResponse::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            DB::rollBack();
+            return Response::error('Inquiry not found', [
+                'error_code' => 'INQUIRY_NOT_FOUND',
+                'inquiry_id' => $request->validated()['inquiry_id'] ?? null,
+                'message' => 'The inquiry you are trying to update does not exist or you do not have access to it.',
+            ], HttpResponse::HTTP_NOT_FOUND);
         } catch (\Exception $e) {
             DB::rollBack();
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+            \Log::error('Error saving inquiry step', [
+                'user_id' => $user->id ?? null,
+                'step' => $request->validated()['step'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return Response::error('Failed to save inquiry step: ' . $e->getMessage(), [
+                'error_code' => 'INQUIRY_STEP_SAVE_ERROR',
+                'step' => $request->validated()['step'] ?? null,
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -443,8 +688,29 @@ class InquiryController extends Controller
                 ],
             ]);
             
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            return Response::error('Authorization failed: You do not have permission to calculate posting fee for this inquiry', [
+                'error_code' => 'AUTHORIZATION_FAILED',
+                'inquiry_id' => $request->inquiry_id,
+                'user_id' => $user->id ?? null,
+                'message' => $e->getMessage(),
+            ], HttpResponse::HTTP_FORBIDDEN);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return Response::error('Inquiry not found', [
+                'error_code' => 'INQUIRY_NOT_FOUND',
+                'inquiry_id' => $request->inquiry_id,
+                'message' => 'The inquiry you are looking for does not exist.',
+            ], HttpResponse::HTTP_NOT_FOUND);
         } catch (\Exception $e) {
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+            \Log::error('Error calculating posting fee', [
+                'inquiry_id' => $request->inquiry_id,
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return Response::error('Failed to calculate posting fee: ' . $e->getMessage(), [
+                'error_code' => 'FEE_CALCULATION_ERROR',
+                'inquiry_id' => $request->inquiry_id,
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -489,8 +755,23 @@ class InquiryController extends Controller
                 'session_id' => $session ? $session->id : null,
             ]);
             
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            return Response::error('Authorization failed: You do not have permission to view posting status for this inquiry', [
+                'error_code' => 'AUTHORIZATION_FAILED',
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $request->user()->id ?? null,
+                'message' => $e->getMessage(),
+            ], HttpResponse::HTTP_FORBIDDEN);
         } catch (\Exception $e) {
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+            \Log::error('Error retrieving posting status', [
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $request->user()->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return Response::error('Failed to retrieve posting status: ' . $e->getMessage(), [
+                'error_code' => 'POSTING_STATUS_ERROR',
+                'inquiry_id' => $inquiry->id,
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -609,8 +890,23 @@ class InquiryController extends Controller
                 'filter' => $filter,
             ]);
             
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            return Response::error('Authorization failed: You do not have permission to view matchmaking responses for this inquiry', [
+                'error_code' => 'AUTHORIZATION_FAILED',
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $request->user()->id ?? null,
+                'message' => $e->getMessage(),
+            ], HttpResponse::HTTP_FORBIDDEN);
         } catch (\Exception $e) {
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+            \Log::error('Error retrieving matchmaking responses', [
+                'inquiry_id' => $inquiry->id,
+                'user_id' => $request->user()->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return Response::error('Failed to retrieve matchmaking responses: ' . $e->getMessage(), [
+                'error_code' => 'MATCHMAKING_RESPONSES_ERROR',
+                'inquiry_id' => $inquiry->id,
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -626,7 +922,12 @@ class InquiryController extends Controller
             
             // Can only shortlist if session is not locked yet
             if ($inquiry->status === InquiryStatus::LOCKED) {
-                return Response::error('Session already locked', null, HttpResponse::HTTP_BAD_REQUEST);
+                return Response::error('Session already locked', [
+                    'error_code' => 'SESSION_LOCKED',
+                    'inquiry_id' => $inquiry->id,
+                    'session_id' => $inquiry->session?->id,
+                    'message' => 'This session has already been locked. You cannot modify responses anymore.',
+                ], HttpResponse::HTTP_BAD_REQUEST);
             }
             
             $action = $request->validated()['action'];
@@ -655,8 +956,31 @@ class InquiryController extends Controller
                 'is_shortlisted' => $action === 'shortlist',
             ]);
             
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            return Response::error('Authorization failed: You do not have permission to shortlist this response', [
+                'error_code' => 'AUTHORIZATION_FAILED',
+                'response_id' => $response->id,
+                'inquiry_id' => $inquiry->id ?? null,
+                'user_id' => $request->user()->id ?? null,
+                'message' => $e->getMessage(),
+            ], HttpResponse::HTTP_FORBIDDEN);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return Response::error('Response or dealer not found', [
+                'error_code' => 'RESOURCE_NOT_FOUND',
+                'response_id' => $response->id,
+                'message' => 'The response or associated dealer could not be found.',
+            ], HttpResponse::HTTP_NOT_FOUND);
         } catch (\Exception $e) {
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+            \Log::error('Error shortlisting response', [
+                'response_id' => $response->id,
+                'inquiry_id' => $inquiry->id ?? null,
+                'user_id' => $request->user()->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return Response::error('Failed to shortlist response: ' . $e->getMessage(), [
+                'error_code' => 'SHORTLIST_ERROR',
+                'response_id' => $response->id,
+            ], HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 

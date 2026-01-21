@@ -3,9 +3,21 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Gate;
+use App\Models\Inquiry;
+use App\Policies\InquiryPolicy;
 
 class AppServiceProvider extends ServiceProvider
 {
+    /**
+     * The policy mappings for the application.
+     *
+     * @var array<class-string, class-string>
+     */
+    protected $policies = [
+        Inquiry::class => InquiryPolicy::class,
+    ];
+
     /**
      * Register any application services.
      */

@@ -89,13 +89,22 @@ class MatchmakingService
             
             return array_column($matchedDealers, 'dealer_id');
             
+        } catch (\Illuminate\Database\QueryException $e) {
+            DB::rollBack();
+            Log::error('Database error during matchmaking', [
+                'inquiry_id' => $inquiry->id,
+                'error' => $e->getMessage(),
+                'sql' => $e->getSql() ?? null,
+            ]);
+            throw new \Exception('Database error during matchmaking: ' . $e->getMessage(), 500, $e);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Matchmaking failed', [
                 'inquiry_id' => $inquiry->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
-            throw $e;
+            throw new \Exception('Matchmaking failed for inquiry #' . $inquiry->id . ': ' . $e->getMessage(), 500, $e);
         }
     }
     
@@ -318,4 +327,5 @@ class MatchmakingService
         }
     }
 }
+
 

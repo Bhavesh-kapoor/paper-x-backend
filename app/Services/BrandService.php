@@ -123,8 +123,12 @@ class BrandService
         return DB::transaction(function () use ($data, $userId) {
             $brand = Brand::where('user_id', $userId)->firstOrFail();
 
-            if (!$brand->profile_complete || $brand->status !== BrandStatus::ACTIVE) {
-                throw new \Exception('Brand profile must be complete and active to post requirements', 400);
+            if (!$brand->profile_complete) {
+                throw new \Exception('Brand profile is incomplete. Please complete your brand profile before posting requirements.', 400);
+            }
+            
+            if ($brand->status !== BrandStatus::ACTIVE) {
+                throw new \Exception('Brand profile is not active. Current status: ' . $brand->status->value . '. Please contact support if you believe this is an error.', 400);
             }
 
             // Calculate posting fee (example: 50 credits per requirement)
@@ -137,7 +141,7 @@ class BrandService
             );
 
             if ($wallet->balance < $postingFeeAmount) {
-                throw new \Exception('Insufficient wallet balance. Please purchase credits first.', 400);
+                throw new \Exception('Insufficient wallet balance. You need ' . $postingFeeAmount . ' credits but only have ' . $wallet->balance . ' credits. Please purchase credits first.', 400);
             }
 
             // Deduct credits using Wallet model method (handles transaction_id generation)
@@ -151,7 +155,13 @@ class BrandService
             );
             
             if (!$transaction) {
-                throw new \Exception('Failed to process payment. Please try again.', 500);
+                \Log::error('Failed to create wallet transaction', [
+                    'user_id' => $userId,
+                    'brand_id' => $brand->id,
+                    'amount' => $postingFeeAmount,
+                    'wallet_balance' => $wallet->balance,
+                ]);
+                throw new \Exception('Failed to process payment transaction. Please try again or contact support if the issue persists.', 500);
             }
 
             // Determine urgency based on timeline

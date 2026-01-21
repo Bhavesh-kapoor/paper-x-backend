@@ -6,11 +6,13 @@ use App\Enums\DealerStatus;
 use App\Enums\InquiryStatus;
 use App\Enums\InquiryType;
 use App\Enums\InquiryIntent;
+use App\Enums\ResponseStatus;
 use App\Models\Dealer;
 use App\Models\DealerLocation;
 use App\Models\DealerMaterialDetail;
 use App\Models\Inquiry;
 use App\Models\MatchingSession;
+use App\Models\Response;
 use Illuminate\Support\Facades\DB;
 
 class DealerService
@@ -327,6 +329,52 @@ class DealerService
                 'to' => $inquiries->lastItem(),
             ],
         ];
+    }
+
+    public function respondToInquiry(int $inquiryId, int $userId, array $data): array
+    {
+        return DB::transaction(function () use ($inquiryId, $userId, $data) {
+            $dealer = Dealer::where('user_id', $userId)->firstOrFail();
+            $inquiry = Inquiry::findOrFail($inquiryId);
+
+            // Check if inquiry is available for response
+            if ($inquiry->status !== InquiryStatus::MATCHING) {
+                throw new \Exception('Inquiry is not available for response', 400);
+            }
+
+            // Check if dealer already responded
+            $existingResponse = Response::where('inquiry_id', $inquiryId)
+                ->where('responder_id', $userId)
+                ->where('responder_type', 'dealer')
+                ->first();
+
+            if ($existingResponse) {
+                throw new \Exception('You have already responded to this inquiry', 400);
+            }
+
+            // Get session if exists
+            $session = MatchingSession::where('inquiry_id', $inquiryId)->first();
+
+            // Create response
+            $response = Response::create([
+                'inquiry_id' => $inquiryId,
+                'responder_id' => $userId,
+                'responder_type' => 'dealer',
+                'quantity_offered' => $data['quantity_offered'] ?? null,
+                'quantity_unit' => $data['quantity_unit'] ?? null,
+                'quoted_price' => $data['quoted_price'] ?? null,
+                'price_unit' => $data['price_unit'] ?? null,
+                'price_status' => $data['price_status'] ?? null,
+                'additional_details' => $data['additional_details'] ?? null,
+                'status' => ResponseStatus::PENDING,
+                'session_id' => $session?->id,
+            ]);
+
+            return [
+                'response_id' => $response->id,
+                'message' => 'Response submitted successfully',
+            ];
+        });
     }
 }
 

@@ -773,6 +773,14 @@ Route::prefix('docs')->group(function () {
         return renderMarkdown($file, 'Matchmaking System Documentation');
     })->name('docs.matchmaking-ai');
 
+    Route::get('/session-creation-flow', function () {
+        $file = base_path('SESSION_CREATION_FLOW.md');
+        if (!File::exists($file)) {
+            return response('Documentation file not found', 404);
+        }
+        return renderMarkdown($file, 'Session Creation Flow');
+    })->name('docs.session-creation-flow');
+
     // API Routes with Beautiful Design
     Route::get('/api-routes', function () {
         $routes = [
@@ -1036,6 +1044,7 @@ Route::prefix('docs')->group(function () {
             ['name' => '🏗️ B2B Matchmaking Blueprint', 'url' => route('docs.b2b-blueprint'), 'description' => 'Complete backend architecture with visibility controls', 'icon' => '🏗️', 'highlight' => true],
             ['name' => '📡 B2B Matchmaking API', 'url' => route('docs.b2b-api'), 'description' => 'Complete API documentation for matchmaking platform', 'icon' => '📡', 'highlight' => true],
             ['name' => '🤖 Matchmaking Algorithms', 'url' => route('docs.matchmaking-ai'), 'description' => 'Matchmaking algorithms, flow from posting to session, UI implementation guide', 'icon' => '🤖', 'highlight' => true],
+            ['name' => '🔒 Session Creation Flow', 'url' => route('docs.session-creation-flow'), 'description' => 'When and how sessions are created automatically', 'icon' => '🔒', 'highlight' => true],
             ['name' => '📱 Screen-Based API', 'url' => route('docs.screen-based-api'), 'description' => 'APIs mapped to mobile app screens with examples', 'icon' => '📱', 'highlight' => true],
             ['name' => '📋 Brand Requirement API', 'url' => route('docs.brand-requirement'), 'description' => 'Brand requirement posting and converter response APIs', 'icon' => '📋'],
             ['name' => '👤 Dealer API Complete', 'url' => route('docs.dealer-complete'), 'description' => 'Complete Dealer API documentation', 'icon' => '👤'],

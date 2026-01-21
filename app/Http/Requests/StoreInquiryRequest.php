@@ -9,7 +9,33 @@ class StoreInquiryRequest extends FormRequest
     public function authorize(): bool
     {
         $user = $this->user();
-        return ($user->brand || $user->converter) && !$user->dealer;
+        // Allow if user has brand or converter relationship (even if they also have dealer)
+        return $user->brand || $user->converter;
+    }
+    
+    /**
+     * Get the validation error messages for authorization failures.
+     */
+    protected function failedAuthorization()
+    {
+        $user = $this->user();
+        throw new \Illuminate\Http\Exceptions\HttpResponseException(
+            response()->json([
+                'success' => false,
+                'message' => 'Only brands or converters can create inquiries. Please complete your brand or converter profile first.',
+                'errors' => [
+                    'error_code' => 'PROFILE_INCOMPLETE',
+                    'user_id' => $user->id ?? null,
+                    'user_roles' => [
+                        'has_brand' => $user->brand ? true : false,
+                        'has_converter' => $user->converter ? true : false,
+                        'has_dealer' => $user->dealer ? true : false,
+                        'has_machine_dealer' => $user->machineDealer ? true : false,
+                    ],
+                    'message' => 'You need to complete either a brand profile or converter profile to create inquiries.',
+                ]
+            ], 403)
+        );
     }
 
     public function rules(): array

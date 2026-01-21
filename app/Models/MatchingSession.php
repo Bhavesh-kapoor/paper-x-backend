@@ -100,7 +100,7 @@ class MatchingSession extends Model
 
     public function participants(): HasMany
     {
-        return $this->hasMany(SessionParticipant::class);
+        return $this->hasMany(SessionParticipant::class, 'session_id');
     }
 
     public function chatThread(): HasOne

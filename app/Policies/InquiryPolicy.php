@@ -49,7 +49,8 @@ class InquiryPolicy
     public function create(User $user): bool
     {
         // Only brand/converter can create inquiries
-        return ($user->brand || $user->converter) && !$user->dealer;
+        // Allow if user has brand or converter relationship (even if they also have dealer)
+        return $user->brand || $user->converter;
     }
 
     /**
@@ -137,19 +138,44 @@ class InquiryPolicy
      */
     public function republish(User $user, Inquiry $inquiry): bool
     {
-        // Only poster can republish, and only if cooldown expired
-        if (!$inquiry->canRepublish()->where('id', $inquiry->id)->exists()) {
+        // First check if user owns the inquiry
+        $isOwner = false;
+        if ($user->brand && $inquiry->poster_type === 'brand' && $inquiry->poster_id === $user->brand->id) {
+            $isOwner = true;
+        } elseif ($user->converter && $inquiry->poster_type === 'converter' && $inquiry->poster_id === $user->converter->id) {
+            $isOwner = true;
+        }
+        
+        if (!$isOwner) {
             return false;
         }
         
-        if ($user->brand && $inquiry->poster_type === 'brand' && $inquiry->poster_id === $user->brand->id) {
+        // Check if inquiry can be republished
+        // 1. DRAFT inquiries should be posted first, not republished
+        // But allow republishing DRAFT if user wants to create a copy
+        // (This allows creating a duplicate of a DRAFT inquiry)
+        if ($inquiry->status === InquiryStatus::DRAFT) {
+            // Allow republishing DRAFT inquiries (creates a copy/duplicate)
+            // This is useful if user wants to start fresh with same data
             return true;
         }
         
-        if ($user->converter && $inquiry->poster_type === 'converter' && $inquiry->poster_id === $user->converter->id) {
-            return true;
+        // 2. Check cooldown period (if set, must be expired)
+        if ($inquiry->cooldown_until && $inquiry->cooldown_until > now()) {
+            return false;
         }
         
-        return false;
+        // 3. Check republish count (allow up to 1 republish)
+        if (($inquiry->republish_count ?? 0) >= 1) {
+            return false;
+        }
+        
+        // Allow republishing for inquiries that are:
+        // - MATCHING (no responses yet)
+        // - EXPIRED
+        // - DEAL_FAILED
+        // - DEAL_SUCCESS (if they want to post similar)
+        // - Other completed states
+        return true;
     }
 }

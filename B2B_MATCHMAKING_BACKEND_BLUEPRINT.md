@@ -403,3 +403,4 @@ DRAFT → POSTED → MATCHING → RESPONSES_RECEIVED → LOCKED → CHAT_ACTIVE 
 - [ ] Visibility scopes work correctly
 - [ ] Policies enforce access control
 
+

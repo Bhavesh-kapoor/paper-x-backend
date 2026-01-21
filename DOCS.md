@@ -14,6 +14,10 @@ Welcome to the Paper-X B2B Platform documentation. This index provides quick acc
 - **[B2B Matchmaking Backend Blueprint](./B2B_MATCHMAKING_BACKEND_BLUEPRINT.md)** - Complete backend architecture with strict visibility controls
 - **[B2B Matchmaking API Documentation](./B2B_MATCHMAKING_API_DOCUMENTATION.md)** - Complete API reference for matchmaking endpoints
 - **[Matchmaking System Documentation](./MATCHMAKING_AI_DOCUMENTATION.md)** - Matchmaking algorithms, flow from posting to session, UI implementation guide
+- **[Session Creation Flow](./SESSION_CREATION_FLOW.md)** - When and how sessions are created automatically
+- **[Why Two Post APIs Exist](./WHY_TWO_POST_APIS.md)** - Explanation of brand/requirement/post vs inquiries/{id}/post
+- **[Inquiry ID Flow](./INQUIRY_ID_FLOW.md)** - Where the inquiry ID comes from for posting
+- **[Role-Based Inquiry APIs](./ROLE_BASED_INQUIRY_APIS.md)** - Which API each role should use for posting inquiries
 - **[Screen-Based API Documentation](./SCREEN_BASED_API_DOCUMENTATION.md)** - APIs mapped to mobile app screens
 - **[Postman Collection](./B2B_MATCHMAKING_POSTMAN_COLLECTION.json)** - Import this collection to test all APIs
 
@@ -136,6 +140,10 @@ Run migrations to set up the database:
 ```bash
 php artisan migrate
 ```
+
+## 🚨 Error Codes Reference
+
+- **[Error Codes & Troubleshooting Guide](./ERROR_CODES_REFERENCE.md)** - Complete reference for all error codes, messages, and solutions
 
 ## 📞 Support
 
