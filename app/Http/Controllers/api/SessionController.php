@@ -270,33 +270,51 @@ class SessionController extends Controller
             $filter = request()->input('filter', 'all'); // all, finding_matches, active, locked
             
             $query = \App\Models\MatchingSession::query()
-                ->when($user->brand || $user->converter, function ($q) use ($user) {
-                    $q->visibleToBrand($user->brand?->id ?? $user->converter?->id);
+                ->when($user->brand, function ($q) use ($user) {
+                    // Brands only see their own posted requirements (brand-posted inquiries)
+                    // NEVER see dealer-posted requirements
+                    $q->visibleToBrand($user->brand->id);
+                })
+                ->when($user->converter, function ($q) use ($user) {
+                    // Converters see:
+                    // 1. Their own posted requirements (converter-posted inquiries)
+                    // 2. Dealer-posted requirements where visibility = 'converters' or 'all'
+                    $q->visibleToConverter($user->converter->id);
                 })
                 ->when($user->dealer, function ($q) use ($user) {
+                    // Dealers see:
+                    // 1. Their own posted requirements (dealer-posted inquiries where they are poster)
+                    // 2. Other dealer-posted requirements where they are matched participants
                     $q->visibleToDealer($user->dealer->id);
+                })
+                ->when($user->machineDealer, function ($q) {
+                    // Machine dealers see dealer-posted requirements where visibility = 'all'
+                    $q->visibleToMachineDealer();
                 })
                 ->with(['inquiry.items', 'participants']);
             
             // Apply filters
+            // Note: Database enum currently only has: ACTIVE, DEAL_WON, DEAL_LOST, EXPIRED, CANCELLED
+            // Using ACTIVE for newly created sessions until enum is updated
             if ($filter === 'finding_matches') {
-                $query->where('status', \App\Enums\SessionStatus::MATCHING);
+                // Sessions that are actively matching (status = ACTIVE and inquiry status = MATCHING)
+                $query->where('status', \App\Enums\SessionStatus::ACTIVE)
+                    ->whereHas('inquiry', function ($inqQuery) {
+                        $inqQuery->where('status', \App\Enums\InquiryStatus::MATCHING);
+                    });
             } elseif ($filter === 'active') {
-                $query->whereIn('status', [
-                    \App\Enums\SessionStatus::RESPONSES_RECEIVED,
-                    \App\Enums\SessionStatus::LOCKED,
-                    \App\Enums\SessionStatus::CHAT_ACTIVE,
-                ]);
+                // Active sessions (ACTIVE status, not expired)
+                $query->where('status', \App\Enums\SessionStatus::ACTIVE)
+                    ->where('expires_at', '>', now());
             } elseif ($filter === 'locked') {
-                $query->where('status', \App\Enums\SessionStatus::LOCKED);
+                // Locked sessions (when enum is updated, use LOCKED status)
+                // For now, check if locked_at is set and not null
+                $query->whereNotNull('locked_at')
+                    ->where('status', \App\Enums\SessionStatus::ACTIVE);
             } else {
-                // All active sessions
-                $query->whereIn('status', [
-                    \App\Enums\SessionStatus::MATCHING,
-                    \App\Enums\SessionStatus::RESPONSES_RECEIVED,
-                    \App\Enums\SessionStatus::LOCKED,
-                    \App\Enums\SessionStatus::CHAT_ACTIVE,
-                ]);
+                // All active sessions (ACTIVE status, not expired)
+                $query->where('status', \App\Enums\SessionStatus::ACTIVE)
+                    ->where('expires_at', '>', now());
             }
             
             $sessions = $query->orderBy('created_at', 'desc')
@@ -330,13 +348,16 @@ class SessionController extends Controller
                 $responsesCount = $inquiry->responses_count ?? $inquiry->responses()->count();
                 $matchedDealersCount = $inquiry->matched_dealers_count ?? 0;
                 
-                // Determine status label
+                // Determine status label based on session and inquiry status
                 $statusLabel = 'ACTIVE';
-                if ($session->status === \App\Enums\SessionStatus::MATCHING) {
+                $inquiryStatus = $inquiry->status;
+                
+                // Check inquiry status to determine session state
+                if ($inquiryStatus === \App\Enums\InquiryStatus::MATCHING) {
                     $statusLabel = 'FINDING';
-                } elseif ($session->status === \App\Enums\SessionStatus::LOCKED) {
+                } elseif ($session->locked_at && $session->locked_at <= now()) {
                     $statusLabel = 'LOCKED';
-                } elseif ($session->status === \App\Enums\SessionStatus::RESPONSES_RECEIVED) {
+                } elseif ($inquiryStatus === \App\Enums\InquiryStatus::RESPONSES_RECEIVED) {
                     $statusLabel = 'ACTIVE';
                 }
                 

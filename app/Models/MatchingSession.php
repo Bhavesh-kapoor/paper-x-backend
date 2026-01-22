@@ -111,21 +111,69 @@ class MatchingSession extends Model
     // Visibility Scopes
     public function scopeVisibleToDealer($query, $dealerId)
     {
-        return $query->where('is_visible_to_dealers', true)
-            ->whereHas('participants', function ($q) use ($dealerId) {
-                $q->where('participant_type', 'dealer')
-                    ->where('participant_id', $dealerId)
-                    ->where('status', 'active');
+        return $query->where(function ($q) use ($dealerId) {
+            // Dealer's own posted requirements (no participants needed yet)
+            $q->whereHas('inquiry', function ($inqQuery) use ($dealerId) {
+                $inqQuery->where('poster_type', 'dealer')
+                    ->where('poster_id', $dealerId);
+            })
+            // OR matched dealer inquiries (through participants or matchmaking)
+            ->orWhere(function ($matchedQuery) use ($dealerId) {
+                $matchedQuery->where('is_visible_to_dealers', true)
+                    ->where(function ($participantOrMatchQuery) use ($dealerId) {
+                        // Has participant record
+                        $participantOrMatchQuery->whereHas('participants', function ($pQuery) use ($dealerId) {
+                            $pQuery->where('participant_type', 'dealer')
+                                ->where('participant_id', $dealerId)
+                                ->where('status', 'active');
+                        })
+                        // OR has matchmaking log (for newly matched dealers)
+                        ->orWhereHas('inquiry.matchmakingLogs', function ($logQuery) use ($dealerId) {
+                            $logQuery->where('dealer_id', $dealerId)
+                                ->where('is_visible', true);
+                        });
+                    });
             });
+        });
     }
 
     public function scopeVisibleToBrand($query, $brandId)
     {
+        // Brands only see their own posted requirements (brand-posted inquiries)
+        // NEVER see dealer-posted requirements
         return $query->where('is_visible_to_brand', true)
             ->whereHas('inquiry', function ($q) use ($brandId) {
                 $q->where('poster_id', $brandId)
                     ->where('poster_type', 'brand');
             });
+    }
+
+    public function scopeVisibleToConverter($query, $converterId)
+    {
+        return $query->where(function ($q) use ($converterId) {
+            // Converter's own posted requirements
+            $q->whereHas('inquiry', function ($inqQuery) use ($converterId) {
+                $inqQuery->where('poster_type', 'converter')
+                    ->where('poster_id', $converterId);
+            })
+            // OR dealer-posted requirements visible to converters
+            ->orWhereHas('inquiry', function ($inqQuery) {
+                $inqQuery->where('poster_type', 'dealer')
+                    ->where(function ($visQuery) {
+                        $visQuery->where('visibility', 'converters')
+                            ->orWhere('visibility', 'all');
+                    });
+            });
+        });
+    }
+
+    public function scopeVisibleToMachineDealer($query)
+    {
+        // Machine dealers see dealer-posted requirements where visibility = 'all'
+        return $query->whereHas('inquiry', function ($inqQuery) {
+            $inqQuery->where('poster_type', 'dealer')
+                ->where('visibility', 'all');
+        });
     }
 
     public function scopeChatEnabled($query)

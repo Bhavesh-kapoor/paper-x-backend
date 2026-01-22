@@ -7,16 +7,23 @@ use App\Enums\InquiryStatus;
 use App\Enums\InquiryType;
 use App\Enums\InquiryIntent;
 use App\Enums\ResponseStatus;
+use App\Enums\SessionStatus;
 use App\Models\Dealer;
 use App\Models\DealerLocation;
 use App\Models\DealerMaterialDetail;
 use App\Models\Inquiry;
+use App\Models\InquiryItem;
 use App\Models\MatchingSession;
 use App\Models\Response;
+use App\Services\MatchmakingService;
 use Illuminate\Support\Facades\DB;
 
 class DealerService
 {
+    public function __construct(
+        protected MatchmakingService $matchmakingService
+    ) {
+    }
     public function completeProfile(array $data, int $userId): Dealer
     {
         return DB::transaction(function () use ($data, $userId) {
@@ -213,7 +220,8 @@ class DealerService
                 'status' => InquiryStatus::MATCHING,
                 'posted_at' => now(),
                 'matching_started_at' => now(),
-                'is_visible_to_dealers' => true,
+                'is_visible_to_dealers' => true, // Visible to matched dealers
+                'is_visible_to_brand' => false, // NEVER visible to brands (dealer-posted)
             ]);
 
             // Attach single material
@@ -226,7 +234,58 @@ class DealerService
                 $inquiry->finishes()->sync($data['finish_ids']);
             }
 
-            return $inquiry->load(['materials', 'finishes', 'dealerLocation']);
+            // Create inquiry item for matchmaking (required for new system)
+            $material = \App\Models\Material::find($data['material_id'] ?? null);
+            $materialCategory = $material ? $material->name : null;
+            
+            // Convert thickness to GSM/MM based on unit
+            $thicknessUnit = strtolower($data['thickness_unit'] ?? 'gsm');
+            $thicknessGsm = null;
+            $thicknessMm = null;
+            if (isset($data['thickness']) && isset($data['thickness_unit'])) {
+                if (strtoupper($data['thickness_unit']) === 'GSM') {
+                    $thicknessGsm = $data['thickness'];
+                } elseif (strtoupper($data['thickness_unit']) === 'MM') {
+                    $thicknessMm = $data['thickness'];
+                }
+            }
+
+            InquiryItem::create([
+                'inquiry_id' => $inquiry->id,
+                'material_id' => $data['material_id'] ?? null,
+                'material_category' => $materialCategory,
+                'finish_coating' => null, // Can be enhanced later
+                'thickness_gsm' => $thicknessGsm,
+                'thickness_mm' => $thicknessMm,
+                'thickness_unit' => $thicknessUnit,
+                'thickness_tolerance_percent' => $data['urgency'] === 'urgent' ? 10.0 : 5.0,
+                'thickness_tolerance_absolute' => $data['urgency'] === 'urgent' ? 0.3 : 0.2,
+                'quantity' => $data['quantity'],
+                'quantity_unit' => $data['quantity_unit'],
+                'additional_specs' => null,
+            ]);
+
+            // Create matching session (required for sessions to appear)
+            // Note: Using 'ACTIVE' as database enum doesn't have 'MATCHING' yet
+            // TODO: Update database enum to include all SessionStatus values
+            $session = MatchingSession::create([
+                'inquiry_id' => $inquiry->id,
+                'status' => SessionStatus::ACTIVE, // Using ACTIVE (legacy) until enum is updated
+                'locked_at' => now(), // Required field, set to now
+                'expires_at' => now()->addHours(24), // 24 hours expiry
+                'discovery_start' => now(),
+                'active_session_start' => now(),
+                'is_visible_to_dealers' => true, // Visible to matched dealers
+                'is_visible_to_brand' => false, // Never visible to brands (dealer-posted)
+            ]);
+
+            // Trigger matchmaking to find matching dealers
+            $matchedDealerIds = $this->matchmakingService->findMatchingDealers($inquiry, 10);
+
+            // Notify matched dealers
+            $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedDealerIds);
+
+            return $inquiry->load(['materials', 'finishes', 'dealerLocation', 'items', 'session']);
         });
     }
 
