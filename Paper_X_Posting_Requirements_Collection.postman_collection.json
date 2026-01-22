@@ -1,0 +1,936 @@
+{
+	"info": {
+		"_postman_id": "paper-x-posting-requirements",
+		"name": "Paper X - Post Requirements (All Roles)",
+		"description": "Complete Postman collection for posting requirements from all roles\n\n## Features:\n- Authentication (OTP-based)\n- Brand: Post Packaging/Printing Requirements (Legacy)\n- Brand/Converter: Post Material Requirements (New Unified System)\n- Dealer: Post Buy/Sell Requirements\n- Machine Dealer: Post Machines\n- Reference Data APIs\n\n## Setup:\n1. Set `base_url` variable (e.g., http://localhost:8000)\n2. Run Authentication requests first to get token\n3. Token is automatically saved to `auth_token` variable\n\n## Roles:\n- **Brand**: Post packaging/printing requirements\n- **Converter**: Post material/machine/job requirements\n- **Dealer**: Post material buy/sell requirements\n- **Machine Dealer**: Post machine buy/sell listings",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "paper-x-posting"
+	},
+	"item": [
+		{
+			"name": "1. Authentication",
+			"description": "OTP-based authentication for all roles",
+			"item": [
+				{
+					"name": "Request OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    console.log('OTP requested successfully');",
+									"    pm.collectionVariables.set('mobile', pm.request.body.raw ? JSON.parse(pm.request.body.raw).mobile : '9876543210');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"mobile\": \"9876543210\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/request",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "request"]
+						},
+						"description": "Request OTP for mobile number. OTP will be sent to the provided mobile number."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify OTP & Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.collectionVariables.set('auth_token', jsonData.data.token);",
+									"        pm.environment.set('auth_token', jsonData.data.token);",
+									"        console.log('✅ Token saved:', jsonData.data.token.substring(0, 20) + '...');",
+									"        ",
+									"        // Save user info",
+									"        if (jsonData.data.user) {",
+									"            pm.collectionVariables.set('user_id', jsonData.data.user.id);",
+									"            pm.collectionVariables.set('primary_role', jsonData.data.user.primary_role || '');",
+									"        }",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"mobile\": \"{{mobile}}\",\n    \"otp\": \"123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/otp/verify",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "otp", "verify"]
+						},
+						"description": "Verify OTP and get authentication token. Token is automatically saved to `auth_token` variable."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Reference Data",
+			"description": "Get reference data needed for posting requirements",
+			"item": [
+				{
+					"name": "Get Materials",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/materials",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "materials"]
+						},
+						"description": "Get list of all materials for reference when posting requirements"
+					}
+				},
+				{
+					"name": "Get Machines",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machines",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machines"]
+						},
+						"description": "Get list of all machines for reference"
+					}
+				},
+				{
+					"name": "Get Material Finishes",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/material-finishes?material_id=1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "material-finishes"],
+							"query": [
+								{
+									"key": "material_id",
+									"value": "1",
+									"description": "Material ID (optional)"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Brands",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/brands",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brands"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Brand - Post Requirement (Legacy)",
+			"description": "Brand posting API for packaging/printing requirements (Legacy endpoint)",
+			"item": [
+				{
+					"name": "Post Packaging Requirement",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.inquiry_id) {",
+									"        pm.collectionVariables.set('last_inquiry_id', jsonData.data.inquiry_id);",
+									"        console.log('✅ Inquiry created:', jsonData.data.inquiry_id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"requirement_type\": \"Packaging\",\n    \"packaging_type\": \"Rigid Boxes\",\n    \"quantity_range\": \"1000-5000\",\n    \"timeline\": \"3–5 Days\",\n    \"special_needs\": \"Need eco-friendly packaging with premium finish\",\n    \"design_attachments\": [],\n    \"title\": \"Need 1500 Custom Cake Boxes\",\n    \"description\": \"Looking for premium quality rigid boxes for cake packaging\",\n    \"urgency\": \"normal\",\n    \"location\": \"Mumbai, Maharashtra\",\n    \"city\": \"Mumbai\",\n    \"latitude\": 19.0760,\n    \"longitude\": 72.8777\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/requirement/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "requirement", "post"]
+						},
+						"description": "Post a packaging requirement as a Brand. This is the legacy API endpoint."
+					}
+				},
+				{
+					"name": "Post Printing Requirement",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"requirement_type\": \"Printing\",\n    \"quantity_range\": \"5000-10000\",\n    \"timeline\": \"Emergency (Urgent)\",\n    \"special_needs\": \"High quality offset printing required\",\n    \"title\": \"Need Business Cards Printing\",\n    \"description\": \"Looking for premium business card printing services\",\n    \"urgency\": \"urgent\",\n    \"location\": \"Delhi\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/requirement/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "requirement", "post"]
+						}
+					}
+				},
+				{
+					"name": "Post Packaging + Printing",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"requirement_type\": \"Packaging + Printing\",\n    \"packaging_type\": \"Corrugated Boxes\",\n    \"quantity_range\": \"10000-20000\",\n    \"timeline\": \"Flexible\",\n    \"special_needs\": \"Custom printing on corrugated boxes\",\n    \"title\": \"Need Printed Corrugated Boxes\",\n    \"description\": \"Looking for custom printed corrugated packaging\",\n    \"urgency\": \"normal\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/brand/requirement/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "brand", "requirement", "post"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Brand/Converter - Post Inquiry (New Unified System)",
+			"description": "New unified inquiry system for Brand and Converter roles. Create inquiry in DRAFT, then post it.",
+			"item": [
+				{
+					"name": "Create Inquiry (DRAFT) - Material Buy",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.collectionVariables.set('draft_inquiry_id', jsonData.data.id);",
+									"        console.log('✅ Draft inquiry created:', jsonData.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Need Duplex Board 350 GSM\",\n    \"description\": \"Looking for premium quality duplex board for packaging\",\n    \"items\": [\n        {\n            \"material_id\": 1,\n            \"material_category\": \"Duplex Board\",\n            \"finish_coating\": \"None\",\n            \"thickness_gsm\": 350,\n            \"thickness_unit\": \"gsm\",\n            \"quantity\": 2000,\n            \"quantity_unit\": \"sheets\",\n            \"additional_specs\": {\n                \"size\": \"28x40\",\n                \"grade\": \"A\"\n            }\n        }\n    ],\n    \"urgency\": \"urgent\",\n    \"location\": \"Mumbai, Maharashtra\",\n    \"latitude\": 19.0760,\n    \"longitude\": 72.8777,\n    \"timeline\": \"3-5 Days\",\n    \"deadline\": \"2024-12-31\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries"]
+						},
+						"description": "Create a new inquiry in DRAFT status. This is the first step in the new unified system."
+					}
+				},
+				{
+					"name": "Create Inquiry (DRAFT) - Multiple Items",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Need Multiple Materials\",\n    \"description\": \"Requirement for multiple materials\",\n    \"items\": [\n        {\n            \"material_category\": \"Kraft Paper\",\n            \"finish_coating\": \"Laminated\",\n            \"thickness_gsm\": 150,\n            \"thickness_unit\": \"gsm\",\n            \"quantity\": 5000,\n            \"quantity_unit\": \"kg\"\n        },\n        {\n            \"material_category\": \"Corrugated Board\",\n            \"thickness_mm\": 5,\n            \"thickness_unit\": \"mm\",\n            \"quantity\": 1000,\n            \"quantity_unit\": \"sheets\"\n        }\n    ],\n    \"urgency\": \"normal\",\n    \"location\": \"Delhi\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries"]
+						}
+					}
+				},
+				{
+					"name": "Calculate Posting Fee",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"inquiry_id\": {{draft_inquiry_id}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/calculate-fee",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "calculate-fee"]
+						},
+						"description": "Calculate the posting fee before posting the inquiry"
+					}
+				},
+				{
+					"name": "Post Inquiry (Trigger Matchmaking)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.collectionVariables.set('posted_inquiry_id', jsonData.data.id);",
+									"        console.log('✅ Inquiry posted and matchmaking started:', jsonData.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{draft_inquiry_id}}/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{draft_inquiry_id}}", "post"]
+						},
+						"description": "Post the inquiry (change from DRAFT to POSTED) and trigger matchmaking. This will deduct credits from wallet."
+					}
+				},
+				{
+					"name": "Get Posting Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{posted_inquiry_id}}/posting-status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{posted_inquiry_id}}", "posting-status"]
+						},
+						"description": "Get the matchmaking progress status for a posted inquiry"
+					}
+				},
+				{
+					"name": "Get Inquiry Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/inquiries/{{posted_inquiry_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "inquiries", "{{posted_inquiry_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Dealer - Post Requirement",
+			"description": "Dealer posting API for material buy/sell requirements",
+			"item": [
+				{
+					"name": "Post Material Buy Requirement",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.collectionVariables.set('dealer_inquiry_id', jsonData.data.id);",
+									"        console.log('✅ Dealer requirement posted:', jsonData.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"inquiry_type\": \"material\",\n    \"intent\": \"buy\",\n    \"material_id\": 75,\n    \"thickness\": 350,\n    \"thickness_unit\": \"GSM\",\n    \"size\": \"28x40\",\n    \"size_unit\": \"inches\",\n    \"finish_ids\": [12, 45, 67],\n    \"quantity\": 5000,\n    \"quantity_unit\": \"sheets\",\n    \"urgency\": \"normal\",\n    \"visibility\": \"all\",\n    \"location_source\": \"manual\",\n    \"location_id\": null,\n    \"location\": \"Mumbai, Maharashtra\",\n    \"latitude\": 19.0760,\n    \"longitude\": 72.8777\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/requirement/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "requirement", "post"]
+						},
+						"description": "Post a material buy requirement as a Dealer. Uses new API structure with material_id (single), size_unit, visibility, location_source, and optional finish_ids.\n\n⚠️ IMPORTANT:\n- urgency must be \"normal\" or \"urgent\" (not \"Normal 3-5 Days\")\n- If location_source is \"manual\", location_id must be null\n- If location_source is \"saved\", location_id must belong to your dealer account"
+					}
+				},
+				{
+					"name": "Post Material Buy (With Saved Location)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"inquiry_type\": \"material\",\n    \"intent\": \"buy\",\n    \"material_id\": 75,\n    \"thickness\": 200,\n    \"thickness_unit\": \"GSM\",\n    \"size\": \"20x30\",\n    \"size_unit\": \"cm\",\n    \"finish_ids\": null,\n    \"quantity\": 2,\n    \"quantity_unit\": \"tonnes\",\n    \"urgency\": \"urgent\",\n    \"visibility\": \"converters\",\n    \"location_id\": 31,\n    \"location_source\": \"saved\",\n    \"location\": \"Muzaffarnagar\",\n    \"latitude\": 29.49149580,\n    \"longitude\": 77.69830820\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/requirement/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "requirement", "post"]
+						},
+						"description": "Post material buy requirement using saved location. Note: location_id must belong to the authenticated dealer."
+					}
+				},
+				{
+					"name": "Get My Requirements",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dealer/requirements?inquiry_type=material&intent=buy&page=1&per_page=15",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "dealer", "requirements"],
+							"query": [
+								{
+									"key": "inquiry_type",
+									"value": "material",
+									"description": "material, machine, job"
+								},
+								{
+									"key": "intent",
+									"value": "buy",
+									"description": "buy, sell"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "per_page",
+									"value": "15"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Machine Dealer - Post Machine",
+			"description": "Machine Dealer posting API for machine buy/sell listings",
+			"item": [
+				{
+					"name": "Post Machine for Sale",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.collectionVariables.set('machine_listing_id', jsonData.data.id);",
+									"        console.log('✅ Machine listing posted:', jsonData.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"machine_id\": 1,\n    \"machine_brand_id\": 1,\n    \"machine_type\": \"Automatic Folder Gluer\",\n    \"condition\": \"Working Condition\",\n    \"intent\": \"sell\",\n    \"urgency\": \"normal\",\n    \"description\": \"Well maintained automatic folder gluer machine in excellent working condition\",\n    \"price\": 500000,\n    \"currency\": \"INR\",\n    \"location\": \"Mumbai, Maharashtra\",\n    \"latitude\": 19.0760,\n    \"longitude\": 72.8777,\n    \"title\": \"Automatic Folder Gluer for Sale\",\n    \"attachments\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/machine/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "machine", "post"]
+						},
+						"description": "Post a machine for sale as a Machine Dealer"
+					}
+				},
+				{
+					"name": "Post Machine Buy Requirement",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"machine_id\": 1,\n    \"machine_type\": \"Die Cutting Machine\",\n    \"condition\": \"Excellent\",\n    \"intent\": \"buy\",\n    \"urgency\": \"urgent\",\n    \"description\": \"Looking for excellent condition die cutting machine\",\n    \"location\": \"Delhi\",\n    \"title\": \"Looking to Buy Die Cutting Machine\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/machine/post",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "machine", "post"]
+						}
+					}
+				},
+				{
+					"name": "Get My Active Listings",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/listings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "listings"]
+						}
+					}
+				},
+				{
+					"name": "Get Active Requirements",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/machine-dealer/requirements?intent=buy&urgency=urgent",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "machine-dealer", "requirements"],
+							"query": [
+								{
+									"key": "intent",
+									"value": "buy",
+									"description": "buy, sell"
+								},
+								{
+									"key": "urgency",
+									"value": "urgent",
+									"description": "normal, urgent"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "7. Common - User Profile",
+			"description": "Common user profile endpoints",
+			"item": [
+				{
+					"name": "Get User Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "user", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Update User Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Updated Name\",\n    \"email\": \"updated@example.com\",\n    \"company_name\": \"Updated Company\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "user", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Switch Role",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"role\": \"converter\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/user/switch-role",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "user", "switch-role"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "mobile",
+			"value": "9876543210",
+			"type": "string"
+		},
+		{
+			"key": "draft_inquiry_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "posted_inquiry_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "dealer_inquiry_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "machine_listing_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

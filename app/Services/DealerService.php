@@ -182,49 +182,51 @@ class DealerService
         return DB::transaction(function () use ($data, $userId) {
             $dealer = Dealer::where('user_id', $userId)->firstOrFail();
 
+            // Generate title from material and quantity if not provided
+            $title = $data['title'] ?? null;
+            if (!$title && isset($data['material_id'])) {
+                $material = \App\Models\Material::find($data['material_id']);
+                $title = ($material ? $material->name : 'Material') . ' - ' . $data['quantity'] . ' ' . ($data['quantity_unit'] ?? '');
+            }
+
             // Create inquiry
             $inquiry = Inquiry::create([
                 'poster_id' => $dealer->id, // Store dealer ID, not user ID
                 'poster_type' => 'dealer',
-                'inquiry_type' => $data['inquiry_type'],
-                'intent' => $data['intent'],
-                'title' => $data['title'],
-                'description' => $data['description'] ?? null,
+                'inquiry_type' => $data['inquiry_type'], // Always 'material'
+                'intent' => $data['intent'], // Always 'buy'
+                'title' => $title,
+                'description' => null, // Not in new requirements
                 'urgency' => $data['urgency'],
                 'quantity' => $data['quantity'],
                 'quantity_unit' => $data['quantity_unit'],
-                'size' => $data['size'] ?? null,
-                'price' => $data['price'] ?? null,
-                'price_unit' => $data['price_unit'] ?? null,
-                'price_negotiable' => $data['price_negotiable'] ?? true,
-                'approx_price_note' => $data['approx_price_note'] ?? null,
-                'thickness' => $data['thickness'] ?? null,
-                'thickness_unit' => $data['thickness_unit'] ?? null,
-                'machine_condition' => $data['machine_condition'] ?? null,
-                'job_type' => $data['job_type'] ?? null,
-                'timeline_days' => $data['timeline_days'] ?? null,
-                'location' => $data['location'] ?? null,
-                'latitude' => $data['latitude'] ?? null,
-                'longitude' => $data['longitude'] ?? null,
-                'specs' => $data['specs'] ?? null,
-                'attachment_paths' => $data['attachment_paths'] ?? null,
-                'deadline' => isset($data['deadline']) ? $data['deadline'] : null,
+                'size' => $data['size'],
+                'size_unit' => $data['size_unit'],
+                'thickness' => $data['thickness'],
+                'thickness_unit' => $data['thickness_unit'],
+                'visibility' => $data['visibility'],
+                'location' => $data['location'],
+                'location_source' => $data['location_source'],
+                'location_id' => $data['location_id'] ?? null,
+                'latitude' => $data['latitude'],
+                'longitude' => $data['longitude'],
                 'status' => InquiryStatus::MATCHING,
-                'posting_fee_paid' => $data['posting_fee_paid'] ?? false,
-                'posting_fee_amount' => $data['posting_fee_amount'] ?? null,
+                'posted_at' => now(),
+                'matching_started_at' => now(),
+                'is_visible_to_dealers' => true,
             ]);
 
-            // Attach materials if provided
-            if (isset($data['material_ids']) && is_array($data['material_ids']) && !empty($data['material_ids'])) {
-                $inquiry->materials()->sync($data['material_ids']);
+            // Attach single material
+            if (isset($data['material_id'])) {
+                $inquiry->materials()->sync([$data['material_id']]);
             }
 
-            // Attach machines if provided
-            if (isset($data['machine_ids']) && is_array($data['machine_ids']) && !empty($data['machine_ids'])) {
-                $inquiry->machines()->sync($data['machine_ids']);
+            // Attach finishes if provided
+            if (isset($data['finish_ids']) && is_array($data['finish_ids']) && !empty($data['finish_ids'])) {
+                $inquiry->finishes()->sync($data['finish_ids']);
             }
 
-            return $inquiry->load(['materials', 'machines']);
+            return $inquiry->load(['materials', 'finishes', 'dealerLocation']);
         });
     }
 

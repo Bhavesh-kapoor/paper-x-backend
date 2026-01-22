@@ -33,6 +33,7 @@ class Inquiry extends Model
         'quantity_unit',
         'quantity_range', // Range in pieces (e.g., "1000-5000", "5000-10000")
         'size',
+        'size_unit', // inches, cm, mm
         'price',
         'price_unit',
         'price_negotiable',
@@ -48,6 +49,9 @@ class Inquiry extends Model
         'latitude',
         'longitude',
         'location',
+        'location_source', // saved, manual
+        'location_id', // Foreign key to dealer_locations
+        'visibility', // dealers, converters, all
         'specs',
         'attachments',
         'attachment_paths',
@@ -127,6 +131,16 @@ class Inquiry extends Model
     public function machines(): BelongsToMany
     {
         return $this->belongsToMany(Machine::class, 'inquiry_machines');
+    }
+
+    public function finishes(): BelongsToMany
+    {
+        return $this->belongsToMany(MaterialFinish::class, 'inquiry_finishes', 'inquiry_id', 'finish_id');
+    }
+
+    public function dealerLocation(): BelongsTo
+    {
+        return $this->belongsTo(DealerLocation::class, 'location_id');
     }
 
     public function acceptances(): HasMany
