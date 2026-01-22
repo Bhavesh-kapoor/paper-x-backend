@@ -10,9 +10,9 @@ class PostRequirementRequest extends ApiRequest
     public function rules(): array
     {
         return [
-            // Required: Inquiry Type & Intent (always material and buy for dealer requirements)
+            // Required: Inquiry Type & Intent (material with buy or sell intent for dealer requirements)
             'inquiry_type' => ['required', 'string', Rule::in(['material'])],
-            'intent' => ['required', 'string', Rule::in(['buy'])],
+            'intent' => ['required', 'string', Rule::in(['buy', 'sell'])],
             
             // Required: Material Selection
             'material_id' => [
