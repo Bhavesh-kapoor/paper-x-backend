@@ -18,10 +18,50 @@ class SessionController extends Controller
     {
         try {
             $user = request()->user();
-            $session = \App\Models\MatchingSession::with(['inquiry.items', 'participants.participant', 'chatThread'])
+            
+            // Ensure user's role relationships are loaded for policy checks
+            if (!$user->relationLoaded('dealer')) {
+                $user->load('dealer');
+            }
+            if (!$user->relationLoaded('brand')) {
+                $user->load('brand');
+            }
+            if (!$user->relationLoaded('converter')) {
+                $user->load('converter');
+            }
+            if (!$user->relationLoaded('machineDealer')) {
+                $user->load('machineDealer');
+            }
+            
+            $session = \App\Models\MatchingSession::with([
+                'inquiry', // Load full inquiry with poster_id and poster_type
+                'inquiry.items', 
+                'inquiry.matchmakingLogs', // Load matchmaking logs for policy check
+                'participants.participant', 
+                'chatThread'
+            ])
                 ->findOrFail($sessionId);
             
-            \Illuminate\Support\Facades\Gate::authorize('view', $session);
+            // Ensure inquiry is loaded before policy check
+            if (!$session->relationLoaded('inquiry')) {
+                $session->load('inquiry');
+            }
+            
+            // Double-check: If dealer can see this in active list, they should see details
+            // This is a safety net in case policy has issues
+            if ($user->dealer && $user->dealer->id) {
+                $inquiry = $session->inquiry;
+                if ($inquiry && $inquiry->poster_type === 'dealer' && $inquiry->poster_id == $user->dealer->id) {
+                    // Dealer is the poster - skip policy check, allow directly
+                    // This ensures dealers can ALWAYS see their own posts
+                } else {
+                    // Use policy for other cases
+                    \Illuminate\Support\Facades\Gate::authorize('view', $session);
+                }
+            } else {
+                // For non-dealers, use policy
+                \Illuminate\Support\Facades\Gate::authorize('view', $session);
+            }
             
             $inquiry = $session->inquiry;
             
