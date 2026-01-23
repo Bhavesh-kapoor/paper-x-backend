@@ -39,7 +39,9 @@ class BrandService
                 'mobile' => $data['mobile'] ?? null,
                 'email' => $data['email'] ?? null,
                 'gst' => $data['gst'] ?? null,
+                'state' => $data['state'] ?? null,
                 'city' => $data['city'] ?? null,
+                'address' => $data['address'] ?? null,
                 'location' => $data['location'] ?? null,
                 'latitude' => $data['latitude'] ?? null,
                 'longitude' => $data['longitude'] ?? null,
@@ -166,7 +168,7 @@ class BrandService
 
             // Determine urgency based on timeline
             $urgency = 'normal';
-            if ($data['timeline'] === 'Emergency (Urgent)') {
+            if ($data['timeline'] === 'Urgent 1-2 Days') {
                 $urgency = 'urgent';
             }
 
@@ -174,14 +176,28 @@ class BrandService
             $quantityRange = $data['quantity_range'];
             $quantityParts = explode('-', $quantityRange);
             $minQuantity = isset($quantityParts[0]) ? (float) trim($quantityParts[0]) : 0;
-            $maxQuantity = isset($quantityParts[1]) ? (float) trim($quantityParts[1]) : $minQuantity;
+            // Handle "50000+" format
+            if (strpos($quantityRange, '+') !== false) {
+                $maxQuantity = (float) trim(str_replace('+', '', $quantityParts[0]));
+            } else {
+                $maxQuantity = isset($quantityParts[1]) ? (float) trim($quantityParts[1]) : $minQuantity;
+            }
+
+            // Generate title from requirement data
+            $titleParts = [];
+            $titleParts[] = $data['requirement_type'];
+            if ($data['requirement_type'] === 'Packaging' && isset($data['packaging_type'])) {
+                $titleParts[] = $data['packaging_type'];
+            }
+            $titleParts[] = 'Requirement';
+            $title = implode(' ', $titleParts);
 
             // Create inquiry
             $inquiry = Inquiry::create([
                 'brand_id' => $brand->id,
                 'poster_id' => $brand->id, // Store brand ID, not user ID
                 'poster_type' => 'brand',
-                'title' => $data['title'],
+                'title' => $title,
                 'description' => $data['description'] ?? null,
                 'status' => InquiryStatus::MATCHING,
                 'urgency' => $urgency,
@@ -193,11 +209,11 @@ class BrandService
                 'quantity_unit' => 'pieces',
                 'quantity_range' => $data['quantity_range'],
                 'timeline' => $data['timeline'],
-                'special_needs' => $data['special_needs'] ?? null,
-                'design_attachments' => $data['design_attachments'] ?? null,
-                'location' => $data['location'] ?? $brand->location ?? $brand->city,
-                'latitude' => $data['latitude'] ?? $brand->latitude,
-                'longitude' => $data['longitude'] ?? $brand->longitude,
+                'special_needs' => null, // Not sent from frontend
+                'design_attachments' => null, // Not sent from frontend
+                'location' => $data['location'],
+                'latitude' => $data['latitude'],
+                'longitude' => $data['longitude'],
                 'posting_fee_paid' => true,
                 'posting_fee_amount' => $postingFeeAmount,
             ]);
