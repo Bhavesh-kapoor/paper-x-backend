@@ -119,26 +119,19 @@ class DealerService
 
         $profileCompletion = $this->calculateProfileCompletion($dealer);
 
-        $activeOpportunities = $dealer->acceptances()
-            ->whereHas('inquiry', function ($query) {
-                $query->where('status', 'SESSION_LOCKED');
-            })
+        // Own sessions only – sessions are private per user (what dealer posted)
+        $activeOpportunities = MatchingSession::ownSessionsByDealer($dealer->id)
+            ->where('status', SessionStatus::ACTIVE)
+            ->where('expires_at', '>', now())
             ->count();
 
-        $lockedSessions = MatchingSession::whereHas('inquiry', function ($query) use ($dealer) {
-            $query->whereHas('acceptances', function ($q) use ($dealer) {
-                $q->where('dealer_id', $dealer->id);
-            });
-        })
-            ->where('status', 'ACTIVE')
+        $lockedSessions = MatchingSession::ownSessionsByDealer($dealer->id)
+            ->whereNotNull('locked_at')
+            ->where('status', SessionStatus::ACTIVE)
             ->count();
 
-        $expiredSessions = MatchingSession::whereHas('inquiry', function ($query) use ($dealer) {
-            $query->whereHas('acceptances', function ($q) use ($dealer) {
-                $q->where('dealer_id', $dealer->id);
-            });
-        })
-            ->where('status', 'EXPIRED')
+        $expiredSessions = MatchingSession::ownSessionsByDealer($dealer->id)
+            ->where('status', SessionStatus::EXPIRED)
             ->count();
 
         $unreadNotifications = \App\Models\Notification::where('user_id', $userId)
@@ -222,7 +215,58 @@ class DealerService
                 $inquiry->machines()->sync($data['machine_ids']);
             }
 
-            return $inquiry->load(['materials', 'machines']);
+            // Create inquiry item for matchmaking (required for new system)
+            $material = \App\Models\Material::find($data['material_id'] ?? null);
+            $materialCategory = $material ? $material->name : null;
+            
+            // Convert thickness to GSM/MM based on unit
+            $thicknessUnit = strtolower($data['thickness_unit'] ?? 'gsm');
+            $thicknessGsm = null;
+            $thicknessMm = null;
+            if (isset($data['thickness']) && isset($data['thickness_unit'])) {
+                if (strtoupper($data['thickness_unit']) === 'GSM') {
+                    $thicknessGsm = $data['thickness'];
+                } elseif (strtoupper($data['thickness_unit']) === 'MM') {
+                    $thicknessMm = $data['thickness'];
+                }
+            }
+
+            InquiryItem::create([
+                'inquiry_id' => $inquiry->id,
+                'material_id' => $data['material_id'] ?? null,
+                'material_category' => $materialCategory,
+                'finish_coating' => null, // Can be enhanced later
+                'thickness_gsm' => $thicknessGsm,
+                'thickness_mm' => $thicknessMm,
+                'thickness_unit' => $thicknessUnit,
+                'thickness_tolerance_percent' => $data['urgency'] === 'urgent' ? 10.0 : 5.0,
+                'thickness_tolerance_absolute' => $data['urgency'] === 'urgent' ? 0.3 : 0.2,
+                'quantity' => $data['quantity'],
+                'quantity_unit' => $data['quantity_unit'],
+                'additional_specs' => null,
+            ]);
+
+            // Create matching session (required for sessions to appear)
+            // Note: Using 'ACTIVE' as database enum doesn't have 'MATCHING' yet
+            // TODO: Update database enum to include all SessionStatus values
+            $session = MatchingSession::create([
+                'inquiry_id' => $inquiry->id,
+                'status' => SessionStatus::ACTIVE, // Using ACTIVE (legacy) until enum is updated
+                'locked_at' => now(), // Required field, set to now
+                'expires_at' => now()->addHours(24), // 24 hours expiry
+                'discovery_start' => now(),
+                'active_session_start' => now(),
+                'is_visible_to_dealers' => true, // Visible to matched dealers
+                'is_visible_to_brand' => false, // Never visible to brands (dealer-posted)
+            ]);
+
+            // Trigger matchmaking to find matching dealers
+            $matchedRecipients = $this->matchmakingService->findMatchingDealers($inquiry);
+
+            // Notify matched dealers
+            $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedRecipients);
+
+            return $inquiry->load(['materials', 'finishes', 'dealerLocation', 'items', 'session']);
         });
     }
 
@@ -231,7 +275,7 @@ class DealerService
         $dealer = Dealer::where('user_id', $userId)->firstOrFail();
         $query = Inquiry::where('poster_id', $dealer->id)
             ->where('poster_type', 'dealer')
-            ->with(['materials', 'machines']);
+            ->with(['materials', 'machines', 'session']);
 
         // Filter by inquiry_type
         if (isset($filters['inquiry_type']) && !empty($filters['inquiry_type'])) {
@@ -311,6 +355,7 @@ class DealerService
                     ];
                 }),
                 'responses_count' => $inquiry->responses()->count(),
+                'session_id' => $inquiry->session?->id,
                 'created_at' => $inquiry->created_at->toIso8601String(),
                 'updated_at' => $inquiry->updated_at->toIso8601String(),
             ];

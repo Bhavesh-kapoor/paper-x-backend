@@ -22,11 +22,15 @@ class PostRequirementRequest extends ApiRequest
                 'nullable',
                 'required_if:requirement_type,Packaging',
                 function ($attribute, $value, $fail) {
-                    if ($value !== null && !in_array($value, ['Boxes', 'Bags', 'Pouches', 'Cartons', 'Containers', 'Other'])) {
-                        $fail('The ' . $attribute . ' must be one of: Boxes, Bags, Pouches, Cartons, Containers, Other.');
+                    if ($value !== null) {
+                        if (!in_array($value, ['Boxes', 'Bags', 'Pouches', 'Cartons', 'Containers', 'Other'])) {
+                            $fail('The ' . $attribute . ' must be one of: Boxes, Bags, Pouches, Cartons, Containers, Other.');
+                        }
+                        if (strlen($value) > 255) {
+                            $fail('The ' . $attribute . ' may not be greater than 255 characters.');
+                        }
                     }
                 },
-                'max:255'
             ],
             
             // Quantity Range (in pieces)

@@ -49,22 +49,65 @@ class SessionController extends Controller
             
             // Double-check: If dealer can see this in active list, they should see details
             // This is a safety net in case policy has issues
-            if ($user->dealer && $user->dealer->id) {
-                $inquiry = $session->inquiry;
-                if ($inquiry && $inquiry->poster_type === 'dealer' && $inquiry->poster_id == $user->dealer->id) {
-                    // Dealer is the poster - skip policy check, allow directly
-                    // This ensures dealers can ALWAYS see their own posts
-                } else {
-                    // Use policy for other cases
+            $inquiry = $session->inquiry;
+            $isPoster = false;
+            if ($inquiry) {
+                $pt = $inquiry->poster_type;
+                $pid = $inquiry->poster_id;
+                if ($user->dealer && (int) $pid === (int) $user->dealer->id && $pt === 'dealer') {
+                    $isPoster = true;
+                } elseif ($user->converter && (int) $pid === (int) $user->converter->id && $pt === 'converter') {
+                    $isPoster = true;
+                } elseif ($user->brand && (int) $pid === (int) $user->brand->id && $pt === 'brand') {
+                    $isPoster = true;
+                } elseif ($user->machineDealer && (int) $pid === (int) $user->machineDealer->id && $pt === 'machine_dealer') {
+                    $isPoster = true;
+                }
+            }
+            if (!$isPoster) {
+                $hasLog = $inquiry && \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
+                    ->where(function ($q) use ($user) {
+                        if ($user->dealer) {
+                            $q->where('dealer_id', $user->dealer->id);
+                        } elseif ($user->converter) {
+                            $q->where('converter_id', $user->converter->id);
+                        } elseif ($user->machineDealer) {
+                            $q->where('machine_dealer_id', $user->machineDealer->id);
+                        } else {
+                            $q->whereRaw('0=1');
+                        }
+                    })->exists();
+                if (!$hasLog) {
                     \Illuminate\Support\Facades\Gate::authorize('view', $session);
                 }
-            } else {
-                // For non-dealers, use policy
-                \Illuminate\Support\Facades\Gate::authorize('view', $session);
             }
-            
+
             $inquiry = $session->inquiry;
-            
+            $posterType = $inquiry->poster_type;
+            $posterId = $inquiry->poster_id;
+
+            $isOwner = false;
+            if ($posterType === 'dealer' && $user->dealer && (int) $posterId === (int) $user->dealer->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'converter' && $user->converter && (int) $posterId === (int) $user->converter->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'brand' && $user->brand && (int) $posterId === (int) $user->brand->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'machine_dealer' && $user->machineDealer && (int) $posterId === (int) $user->machineDealer->id) {
+                $isOwner = true;
+            }
+
+            $posterLabel = 'A dealer';
+            if (!$isOwner && $posterType) {
+                $posterLabel = match ($posterType) {
+                    'dealer' => 'A dealer',
+                    'converter' => 'A converter',
+                    'brand' => 'A brand',
+                    'machine_dealer' => 'A machine dealer',
+                    default => 'A dealer',
+                };
+            }
+
             // Get selected partners (for locked session)
             $selectedPartners = [];
             if ($session->status === \App\Enums\SessionStatus::LOCKED || $session->status === \App\Enums\SessionStatus::CHAT_ACTIVE) {
@@ -88,9 +131,140 @@ class SessionController extends Controller
                     ->filter();
             }
             
+            $intent = $inquiry->intent?->value ?? $inquiry->intent ?? 'buy';
+
+            $myResponderStatus = null;
+            if (!$isOwner) {
+                $myLog = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
+                    ->where(function ($q) use ($user) {
+                        if ($user->dealer) {
+                            $q->where('dealer_id', $user->dealer->id);
+                        } elseif ($user->converter) {
+                            $q->where('converter_id', $user->converter->id);
+                        } elseif ($user->machineDealer) {
+                            $q->where('machine_dealer_id', $user->machineDealer->id);
+                        } else {
+                            $q->whereRaw('0=1');
+                        }
+                    })->first();
+                if ($myLog) {
+                    $myResponderStatus = [
+                        'expressed_interest' => (bool) $myLog->responded_at,
+                        'shortlisted' => (bool) $myLog->is_selected,
+                        'declined' => (bool) $myLog->declined_at,
+                    ];
+                }
+            }
+
             // Format session data
             $sessionData = [
                 'id' => $session->id,
+                'project_id' => 'PRJ-' . str_pad($session->id, 4, '0', STR_PAD_LEFT),
+                'status' => $session->status->value,
+                'inquiry' => [
+                    'id' => $inquiry->id,
+                    'title' => $inquiry->title,
+                    'items' => $inquiry->items,
+                    'intent' => $intent,
+                ],
+                'selected_partners_count' => count($selectedPartners),
+                'selected_partners' => $selectedPartners,
+                'chat_enabled' => $session->chat_enabled,
+                'chat_thread_id' => $session->chatThread?->id,
+                'expires_at' => $session->expires_at,
+                'locked_at' => $session->locked_at,
+                'is_owner' => $isOwner,
+                'poster_label' => $posterLabel,
+                'intent' => $intent,
+                'my_responder_status' => $myResponderStatus,
+            ];
+
+            return Response::success('Session details retrieved', $sessionData);
+            
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
+     * Get session by inquiry id.
+     * Use this when you have inquiry id (e.g. from requirements list) but need session detail.
+     * GET /sessions/by-inquiry/{inquiry_id}
+     */
+    public function getSessionByInquiry(int $inquiry_id)
+    {
+        try {
+            $user = request()->user();
+            foreach (['dealer', 'brand', 'converter', 'machineDealer'] as $rel) {
+                if (!$user->relationLoaded($rel)) {
+                    $user->load($rel);
+                }
+            }
+
+            $session = \App\Models\MatchingSession::with([
+                'inquiry', 'inquiry.items', 'inquiry.matchmakingLogs',
+                'participants.participant', 'chatThread',
+            ])->where('inquiry_id', $inquiry_id)->firstOrFail();
+
+            \Illuminate\Support\Facades\Gate::authorize('view', $session);
+
+            $inquiry = $session->inquiry;
+            $posterType = $inquiry->poster_type;
+            $posterId = $inquiry->poster_id;
+
+            $isOwner = false;
+            if ($posterType === 'dealer' && $user->dealer && (int) $posterId === (int) $user->dealer->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'converter' && $user->converter && (int) $posterId === (int) $user->converter->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'brand' && $user->brand && (int) $posterId === (int) $user->brand->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'machine_dealer' && $user->machineDealer && (int) $posterId === (int) $user->machineDealer->id) {
+                $isOwner = true;
+            }
+
+            $posterLabel = 'A dealer';
+            if (!$isOwner && $posterType) {
+                $posterLabel = match ($posterType) {
+                    'dealer' => 'A dealer',
+                    'converter' => 'A converter',
+                    'brand' => 'A brand',
+                    'machine_dealer' => 'A machine dealer',
+                    default => 'A dealer',
+                };
+            }
+
+            $selectedPartners = [];
+            if ($session->status === \App\Enums\SessionStatus::LOCKED || $session->status === \App\Enums\SessionStatus::CHAT_ACTIVE) {
+                $selectedPartners = $session->participants()
+                    ->where('is_selected', true)
+                    ->where('role', 'responder')
+                    ->with('participant')
+                    ->get()
+                    ->map(function ($participant) {
+                        $dealer = $participant->participant;
+                        if (!$dealer || !($dealer instanceof \App\Models\Dealer)) {
+                            return null;
+                        }
+                        $u = $dealer->user;
+                        return [
+                            'id' => $dealer->id,
+                            'company_name' => $u->company_name ?? $u->name ?? 'Unknown',
+                            'location' => $dealer->locations->first()?->city ?? $u->city ?? 'Unknown',
+                        ];
+                    })
+                    ->filter()
+                    ->values()
+                    ->all();
+            }
+
+            $sessionData = [
+                'id' => $session->id,
+                'inquiry_id' => $inquiry->id,
                 'project_id' => 'PRJ-' . str_pad($session->id, 4, '0', STR_PAD_LEFT),
                 'status' => $session->status->value,
                 'inquiry' => [
@@ -102,11 +276,15 @@ class SessionController extends Controller
                 'selected_partners' => $selectedPartners,
                 'chat_enabled' => $session->chat_enabled,
                 'chat_thread_id' => $session->chatThread?->id,
+                'expires_at' => $session->expires_at,
                 'locked_at' => $session->locked_at,
+                'is_owner' => $isOwner,
+                'poster_label' => $posterLabel,
             ];
-            
-            return Response::success('Session details retrieved', $sessionData);
-            
+
+            return Response::success('Session retrieved by inquiry', $sessionData);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return Response::error('No session found for this requirement.', null, HttpResponse::HTTP_NOT_FOUND);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),
@@ -126,19 +304,32 @@ class SessionController extends Controller
             $user = request()->user();
             $filter = request()->input('filter', 'all'); // all, completed, expired
             $search = request()->input('search');
-            
-            $query = \App\Models\MatchingSession::query()
-                ->when($user->brand || $user->converter, function ($q) use ($user) {
-                    $q->whereHas('inquiry', function ($query) use ($user) {
-                        $query->where('poster_id', $user->brand?->id ?? $user->converter?->id)
-                            ->where('poster_type', $user->brand ? 'brand' : 'converter');
-                    });
-                })
-                ->when($user->dealer, function ($q) use ($user) {
-                    $q->visibleToDealer($user->dealer->id);
-                })
-                ->with(['inquiry.items', 'participants']);
-            
+
+            // Visible scopes: own + matched sessions
+            $query = \App\Models\MatchingSession::query();
+            $primaryRole = $user->primary_role ?? null;
+
+            if ($primaryRole === 'dealer' && $user->dealer) {
+                $query->visibleToDealer($user->dealer->id);
+            } elseif ($primaryRole === 'converter' && $user->converter) {
+                $query->visibleToConverter($user->converter->id);
+            } elseif ($primaryRole === 'brand' && $user->brand) {
+                $query->ownSessionsByBrand($user->brand->id);
+            } elseif ($primaryRole === 'machine-dealer' && $user->machineDealer) {
+                $query->visibleToMachineDealer($user->machineDealer->id);
+            } elseif ($user->dealer) {
+                $query->visibleToDealer($user->dealer->id);
+            } elseif ($user->converter) {
+                $query->visibleToConverter($user->converter->id);
+            } elseif ($user->brand) {
+                $query->ownSessionsByBrand($user->brand->id);
+            } elseif ($user->machineDealer) {
+                $query->visibleToMachineDealer($user->machineDealer->id);
+            } else {
+                $query->whereRaw('0 = 1'); // No role found
+            }
+            $query->with(['inquiry.items', 'participants']);
+
             // Apply status filter
             if ($filter === 'completed') {
                 $query->whereIn('status', [
@@ -308,31 +499,32 @@ class SessionController extends Controller
         try {
             $user = request()->user();
             $filter = request()->input('filter', 'all'); // all, finding_matches, active, locked
-            
-            $query = \App\Models\MatchingSession::query()
-                ->when($user->brand, function ($q) use ($user) {
-                    // Brands only see their own posted requirements (brand-posted inquiries)
-                    // NEVER see dealer-posted requirements
-                    $q->visibleToBrand($user->brand->id);
-                })
-                ->when($user->converter, function ($q) use ($user) {
-                    // Converters see:
-                    // 1. Their own posted requirements (converter-posted inquiries)
-                    // 2. Dealer-posted requirements where visibility = 'converters' or 'all'
-                    $q->visibleToConverter($user->converter->id);
-                })
-                ->when($user->dealer, function ($q) use ($user) {
-                    // Dealers see:
-                    // 1. Their own posted requirements (dealer-posted inquiries where they are poster)
-                    // 2. Other dealer-posted requirements where they are matched participants
-                    $q->visibleToDealer($user->dealer->id);
-                })
-                ->when($user->machineDealer, function ($q) {
-                    // Machine dealers see dealer-posted requirements where visibility = 'all'
-                    $q->visibleToMachineDealer();
-                })
-                ->with(['inquiry.items', 'participants']);
-            
+
+            // Visible scopes: users see OWN sessions + sessions where they were MATCHED
+            $query = \App\Models\MatchingSession::query();
+            $primaryRole = $user->primary_role ?? null;
+
+            if ($primaryRole === 'dealer' && $user->dealer) {
+                $query->visibleToDealer($user->dealer->id);
+            } elseif ($primaryRole === 'converter' && $user->converter) {
+                $query->visibleToConverter($user->converter->id);
+            } elseif ($primaryRole === 'brand' && $user->brand) {
+                $query->ownSessionsByBrand($user->brand->id);
+            } elseif ($primaryRole === 'machine-dealer' && $user->machineDealer) {
+                $query->visibleToMachineDealer($user->machineDealer->id);
+            } elseif ($user->dealer) {
+                $query->visibleToDealer($user->dealer->id);
+            } elseif ($user->converter) {
+                $query->visibleToConverter($user->converter->id);
+            } elseif ($user->brand) {
+                $query->ownSessionsByBrand($user->brand->id);
+            } elseif ($user->machineDealer) {
+                $query->visibleToMachineDealer($user->machineDealer->id);
+            } else {
+                $query->whereRaw('0 = 1'); // No role found
+            }
+            $query->with(['inquiry.items', 'participants']);
+
             // Apply filters
             // Note: Database enum currently only has: ACTIVE, DEAL_WON, DEAL_LOST, EXPIRED, CANCELLED
             // Using ACTIVE for newly created sessions until enum is updated
@@ -359,11 +551,39 @@ class SessionController extends Controller
             
             $sessions = $query->orderBy('created_at', 'desc')
                 ->paginate(request()->per_page ?? 15);
-            
+
+            $currentUser = $user;
+
             // Transform sessions for frontend
-            $sessions->getCollection()->transform(function ($session) {
+            $sessions->getCollection()->transform(function ($session) use ($currentUser) {
                 $inquiry = $session->inquiry;
-                
+                $posterType = $inquiry->poster_type;
+                $posterId = $inquiry->poster_id;
+
+                // Is the current user the poster (owner) of this inquiry?
+                $isOwner = false;
+                if ($posterType === 'dealer' && $currentUser->dealer && (int) $posterId === (int) $currentUser->dealer->id) {
+                    $isOwner = true;
+                } elseif ($posterType === 'converter' && $currentUser->converter && (int) $posterId === (int) $currentUser->converter->id) {
+                    $isOwner = true;
+                } elseif ($posterType === 'brand' && $currentUser->brand && (int) $posterId === (int) $currentUser->brand->id) {
+                    $isOwner = true;
+                } elseif ($posterType === 'machine_dealer' && $currentUser->machineDealer && (int) $posterId === (int) $currentUser->machineDealer->id) {
+                    $isOwner = true;
+                }
+
+                // Label for "who posted" (for receivers; keep generic for privacy)
+                $posterLabel = 'A dealer';
+                if (!$isOwner && $posterType) {
+                    $posterLabel = match ($posterType) {
+                        'dealer' => 'A dealer',
+                        'converter' => 'A converter',
+                        'brand' => 'A brand',
+                        'machine_dealer' => 'A machine dealer',
+                        default => 'A dealer',
+                    };
+                }
+
                 // Calculate countdown
                 $countdown = null;
                 if ($session->expires_at) {
@@ -373,7 +593,7 @@ class SessionController extends Controller
                         $hours = floor(($secondsLeft % 86400) / 3600);
                         $minutes = floor(($secondsLeft % 3600) / 60);
                         $secs = $secondsLeft % 60;
-                        
+
                         $countdown = [
                             'days' => $days,
                             'hours' => $hours,
@@ -383,16 +603,15 @@ class SessionController extends Controller
                         ];
                     }
                 }
-                
+
                 // Get response count
                 $responsesCount = $inquiry->responses_count ?? $inquiry->responses()->count();
                 $matchedDealersCount = $inquiry->matched_dealers_count ?? 0;
-                
+
                 // Determine status label based on session and inquiry status
                 $statusLabel = 'ACTIVE';
                 $inquiryStatus = $inquiry->status;
-                
-                // Check inquiry status to determine session state
+
                 if ($inquiryStatus === \App\Enums\InquiryStatus::MATCHING) {
                     $statusLabel = 'FINDING';
                 } elseif ($session->locked_at && $session->locked_at <= now()) {
@@ -400,7 +619,9 @@ class SessionController extends Controller
                 } elseif ($inquiryStatus === \App\Enums\InquiryStatus::RESPONSES_RECEIVED) {
                     $statusLabel = 'ACTIVE';
                 }
-                
+
+                $intent = $inquiry->intent?->value ?? $inquiry->intent ?? 'buy';
+
                 return [
                     'id' => $session->id,
                     'inquiry_id' => $inquiry->id,
@@ -408,6 +629,7 @@ class SessionController extends Controller
                     'status' => $session->status->value,
                     'status_label' => $statusLabel,
                     'urgency' => $inquiry->urgency,
+                    'intent' => $intent,
                     'created_at' => $inquiry->created_at,
                     'items' => $inquiry->items->map(function ($item) {
                         return [
@@ -421,9 +643,11 @@ class SessionController extends Controller
                     'matched_dealers_count' => $matchedDealersCount,
                     'matching_progress' => $session->status === \App\Enums\SessionStatus::MATCHING ? [
                         'matched' => $matchedDealersCount,
-                        'total' => 15, // Target dealers to match
+                        'total' => 15,
                         'status' => 'Scanning suppliers...',
                     ] : null,
+                    'is_owner' => $isOwner,
+                    'poster_label' => $posterLabel,
                 ];
             });
             

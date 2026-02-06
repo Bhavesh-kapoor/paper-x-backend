@@ -23,6 +23,10 @@ class CompleteMachineDealerProfileRequest extends FormRequest
             'location' => ['nullable', 'string', 'max:255'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'primary_machine_category' => ['nullable', 'string', 'max:100'],
+            'primary_machine_id' => ['nullable', 'integer'],
+            'preferred_brand_names' => ['nullable', 'array'],
+            'preferred_brand_names.*' => ['string', 'max:255'],
         ];
     }
 }

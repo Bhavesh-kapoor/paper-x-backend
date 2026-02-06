@@ -6,14 +6,22 @@ use App\Enums\ConverterStatus;
 use App\Enums\InquiryStatus;
 use App\Enums\InquiryType;
 use App\Enums\ResponseStatus;
+use App\Enums\SessionStatus;
 use App\Models\Converter;
 use App\Models\Inquiry;
+use App\Models\InquiryItem;
+use App\Models\Machine;
 use App\Models\MatchingSession;
 use App\Models\Response;
+use App\Services\MatchmakingService;
 use Illuminate\Support\Facades\DB;
 
 class ConverterService
 {
+    public function __construct(
+        protected MatchmakingService $matchmakingService
+    ) {
+    }
     public function completeProfile(array $data, int $userId): Converter
     {
         return DB::transaction(function () use ($data, $userId) {
@@ -72,14 +80,17 @@ class ConverterService
                 'my_inquiries_count' => 0,
                 'responses_received_count' => 0,
                 'unread_notifications_count' => 0,
+                'active_sessions' => [],
             ];
         }
 
         $converterId = $converter->id;
-        $activeSessions = MatchingSession::whereHas('inquiry', function ($query) use ($converterId) {
-            $query->where('poster_id', $converterId)
-                ->where('poster_type', 'converter');
-        })->where('status', 'ACTIVE')->count();
+        
+        // Get active sessions count (own posted only – sessions are private per user)
+        $activeSessionsCount = MatchingSession::ownSessionsByConverter($converterId)
+            ->where('status', SessionStatus::ACTIVE)
+            ->where('expires_at', '>', now())
+            ->count();
 
         $myInquiries = Inquiry::where('poster_id', $converterId)
             ->where('poster_type', 'converter')
@@ -94,13 +105,128 @@ class ConverterService
             ->where('read_at', null)
             ->count();
 
+        // Get top 5 active sessions for dashboard (own posted only)
+        $activeSessions = MatchingSession::ownSessionsByConverter($converterId)
+            ->where('status', SessionStatus::ACTIVE)
+            ->where('expires_at', '>', now())
+            ->with(['inquiry.items', 'inquiry.responses'])
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(function ($session) {
+                $inquiry = $session->inquiry;
+                
+                // Calculate countdown
+                $countdown = null;
+                if ($session->expires_at) {
+                    $secondsLeft = max(0, now()->diffInSeconds($session->expires_at, false));
+                    if ($secondsLeft > 0) {
+                        $days = floor($secondsLeft / 86400);
+                        $hours = floor(($secondsLeft % 86400) / 3600);
+                        $minutes = floor(($secondsLeft % 3600) / 60);
+                        $secs = $secondsLeft % 60;
+                        
+                        $countdown = [
+                            'days' => $days,
+                            'hours' => $hours,
+                            'minutes' => $minutes,
+                            'seconds' => $secs,
+                            'formatted' => sprintf('%02d DAYS %02d HOURS %02d MINS %02d SECS', $days, $hours, $minutes, $secs),
+                        ];
+                    }
+                }
+                
+                // Get response count
+                $responsesCount = $inquiry->responses_count ?? $inquiry->responses->count() ?? 0;
+                $matchedDealersCount = $inquiry->matched_dealers_count ?? 0;
+                
+                // Determine status label based on session and inquiry status
+                $statusLabel = 'ACTIVE';
+                $inquiryStatus = $inquiry->status;
+                
+                if ($inquiryStatus === InquiryStatus::MATCHING) {
+                    $statusLabel = 'FINDING';
+                } elseif ($session->locked_at && $session->locked_at <= now()) {
+                    $statusLabel = 'LOCKED';
+                } elseif ($inquiryStatus === InquiryStatus::RESPONSES_RECEIVED) {
+                    $statusLabel = 'ACTIVE';
+                }
+                
+                return [
+                    'id' => $session->id,
+                    'inquiry_id' => $inquiry->id,
+                    'title' => $inquiry->title ?? 'Untitled Inquiry',
+                    'status' => $session->status->value,
+                    'status_label' => $statusLabel,
+                    'urgency' => $inquiry->urgency ?? 'normal',
+                    'created_at' => $inquiry->created_at->toIso8601String(),
+                    'items' => $inquiry->items->map(function ($item) {
+                        return [
+                            'material_category' => $item->material_category ?? '',
+                            'quantity' => $item->quantity ?? 0,
+                            'quantity_unit' => $item->quantity_unit ?? '',
+                        ];
+                    })->toArray(),
+                    'countdown' => $countdown,
+                    'responses_received' => $responsesCount,
+                    'matched_dealers_count' => $matchedDealersCount,
+                    'matching_progress' => $session->status === SessionStatus::MATCHING ? [
+                        'matched' => $matchedDealersCount,
+                        'total' => 15, // Target dealers to match
+                        'status' => 'Scanning suppliers...',
+                    ] : null,
+                ];
+            })
+            ->toArray();
+
         return [
             'profile_completion_percentage' => $converter->profile_complete ? 100 : 0,
-            'active_sessions_count' => $activeSessions,
+            'active_sessions_count' => $activeSessionsCount,
             'my_inquiries_count' => $myInquiries,
             'responses_received_count' => $responsesReceived,
             'unread_notifications_count' => $unreadNotifications,
+            'active_sessions' => $activeSessions, // Top 5 active sessions
         ];
+    }
+
+    /**
+     * Post a machine requirement (buy/sell) as converter.
+     * Creates an Inquiry only (no MachineListing); poster_type = converter.
+     */
+    public function postMachine(array $data, int $userId): array
+    {
+        return DB::transaction(function () use ($data, $userId) {
+            $converter = Converter::where('user_id', $userId)->firstOrFail();
+            $machine = Machine::findOrFail($data['machine_id']);
+            $title = $data['title'] ?? 'Machine: ' . $machine->name;
+
+            $inquiry = Inquiry::create([
+                'poster_id' => $converter->id,
+                'poster_type' => 'converter',
+                'inquiry_type' => InquiryType::MACHINE,
+                'intent' => $data['intent'],
+                'title' => $title,
+                'description' => $data['description'] ?? null,
+                'urgency' => $data['urgency'],
+                'quantity' => 1,
+                'quantity_unit' => 'unit',
+                'machine_listing_id' => null,
+                'machine_condition' => $data['condition'] ?? null,
+                'location' => $data['location'] ?? null,
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
+                'status' => InquiryStatus::MATCHING,
+                'posting_fee_paid' => $data['posting_fee_paid'] ?? false,
+                'posting_fee_amount' => $data['posting_fee_amount'] ?? null,
+            ]);
+
+            $inquiry->machines()->attach($data['machine_id']);
+
+            return [
+                'inquiry_id' => $inquiry->id,
+                'status' => $inquiry->status->value,
+            ];
+        });
     }
 
     public function getRequirements(int $userId, array $filters = []): array
@@ -226,6 +352,109 @@ class ConverterService
                 'response_id' => $response->id,
                 'message' => 'Response submitted successfully',
             ];
+        });
+    }
+
+    public function postRequirement(array $data, int $userId): Inquiry
+    {
+        return DB::transaction(function () use ($data, $userId) {
+            $converter = Converter::where('user_id', $userId)->firstOrFail();
+
+            // Generate title from material and quantity if not provided
+            $title = $data['title'] ?? null;
+            if (!$title && isset($data['material_id'])) {
+                $material = \App\Models\Material::find($data['material_id']);
+                $title = ($material ? $material->name : 'Material') . ' - ' . $data['quantity'] . ' ' . ($data['quantity_unit'] ?? '');
+            }
+
+            // Create inquiry
+            $inquiry = Inquiry::create([
+                'poster_id' => $converter->id, // Store converter ID, not user ID
+                'poster_type' => 'converter',
+                'inquiry_type' => $data['inquiry_type'], // Always 'material'
+                'intent' => $data['intent'], // 'buy' or 'sell'
+                'title' => $title,
+                'description' => null, // Not in new requirements
+                'urgency' => $data['urgency'],
+                'quantity' => $data['quantity'],
+                'quantity_unit' => $data['quantity_unit'],
+                'size' => $data['size'],
+                'size_unit' => $data['size_unit'],
+                'thickness' => $data['thickness'],
+                'thickness_unit' => $data['thickness_unit'],
+                'visibility' => $data['visibility'],
+                'location' => $data['location'],
+                'location_source' => $data['location_source'],
+                'location_id' => null, // Converters don't have saved locations
+                'latitude' => $data['latitude'],
+                'longitude' => $data['longitude'],
+                'status' => InquiryStatus::MATCHING,
+                'posted_at' => now(),
+                'matching_started_at' => now(),
+                'is_visible_to_dealers' => true, // Visible to matched dealers
+                'is_visible_to_brand' => false, // NEVER visible to brands (converter-posted)
+            ]);
+
+            // Attach single material
+            if (isset($data['material_id'])) {
+                $inquiry->materials()->sync([$data['material_id']]);
+            }
+
+            // Attach finishes if provided
+            if (isset($data['finish_ids']) && is_array($data['finish_ids']) && !empty($data['finish_ids'])) {
+                $inquiry->finishes()->sync($data['finish_ids']);
+            }
+
+            // Create inquiry item for matchmaking (required for new system)
+            $material = \App\Models\Material::find($data['material_id'] ?? null);
+            $materialCategory = $material ? $material->name : null;
+            
+            // Convert thickness to GSM/MM based on unit
+            $thicknessUnit = strtolower($data['thickness_unit'] ?? 'gsm');
+            $thicknessGsm = null;
+            $thicknessMm = null;
+            if (isset($data['thickness']) && isset($data['thickness_unit'])) {
+                if (strtoupper($data['thickness_unit']) === 'GSM') {
+                    $thicknessGsm = $data['thickness'];
+                } elseif (strtoupper($data['thickness_unit']) === 'MM') {
+                    $thicknessMm = $data['thickness'];
+                }
+            }
+
+            InquiryItem::create([
+                'inquiry_id' => $inquiry->id,
+                'material_id' => $data['material_id'] ?? null,
+                'material_category' => $materialCategory,
+                'finish_coating' => null, // Can be enhanced later
+                'thickness_gsm' => $thicknessGsm,
+                'thickness_mm' => $thicknessMm,
+                'thickness_unit' => $thicknessUnit,
+                'thickness_tolerance_percent' => $data['urgency'] === 'urgent' ? 10.0 : 5.0,
+                'thickness_tolerance_absolute' => $data['urgency'] === 'urgent' ? 0.3 : 0.2,
+                'quantity' => $data['quantity'],
+                'quantity_unit' => $data['quantity_unit'],
+                'additional_specs' => null,
+            ]);
+
+            // Create matching session (required for sessions to appear)
+            $session = MatchingSession::create([
+                'inquiry_id' => $inquiry->id,
+                'status' => SessionStatus::ACTIVE, // Using ACTIVE (legacy) until enum is updated
+                'locked_at' => now(), // Required field, set to now
+                'expires_at' => now()->addHours(24), // 24 hours expiry
+                'discovery_start' => now(),
+                'active_session_start' => now(),
+                'is_visible_to_dealers' => true, // Visible to matched dealers
+                'is_visible_to_brand' => false, // Never visible to brands (converter-posted)
+            ]);
+
+            // Trigger matchmaking to find matching dealers
+            $matchedRecipients = $this->matchmakingService->findMatchingDealers($inquiry);
+
+            // Notify matched dealers
+            $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedRecipients);
+
+            return $inquiry->load(['materials', 'finishes', 'items', 'session']);
         });
     }
 }
