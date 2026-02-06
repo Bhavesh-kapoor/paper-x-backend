@@ -39,9 +39,7 @@ class BrandService
                 'mobile' => $data['mobile'] ?? null,
                 'email' => $data['email'] ?? null,
                 'gst' => $data['gst'] ?? null,
-                'state' => $data['state'] ?? null,
                 'city' => $data['city'] ?? null,
-                'address' => $data['address'] ?? null,
                 'location' => $data['location'] ?? null,
                 'latitude' => $data['latitude'] ?? null,
                 'longitude' => $data['longitude'] ?? null,
@@ -125,12 +123,8 @@ class BrandService
         return DB::transaction(function () use ($data, $userId) {
             $brand = Brand::where('user_id', $userId)->firstOrFail();
 
-            if (!$brand->profile_complete) {
-                throw new \Exception('Brand profile is incomplete. Please complete your brand profile before posting requirements.', 400);
-            }
-            
-            if ($brand->status !== BrandStatus::ACTIVE) {
-                throw new \Exception('Brand profile is not active. Current status: ' . $brand->status->value . '. Please contact support if you believe this is an error.', 400);
+            if (!$brand->profile_complete || $brand->status !== BrandStatus::ACTIVE) {
+                throw new \Exception('Brand profile must be complete and active to post requirements', 400);
             }
 
             // Calculate posting fee (example: 50 credits per requirement)
@@ -143,32 +137,25 @@ class BrandService
             );
 
             if ($wallet->balance < $postingFeeAmount) {
-                throw new \Exception('Insufficient wallet balance. You need ' . $postingFeeAmount . ' credits but only have ' . $wallet->balance . ' credits. Please purchase credits first.', 400);
+                throw new \Exception('Insufficient wallet balance. Please purchase credits first.', 400);
             }
 
-            // Deduct credits using Wallet model method (handles transaction_id generation)
-            $transaction = $wallet->deductCredits(
-                $postingFeeAmount,
-                'Post requirement fee',
-                'REQUIREMENT_POSTED',
-                null, // reference_id will be set after inquiry is created
-                'inquiry',
-                []
-            );
-            
-            if (!$transaction) {
-                \Log::error('Failed to create wallet transaction', [
-                    'user_id' => $userId,
-                    'brand_id' => $brand->id,
-                    'amount' => $postingFeeAmount,
-                    'wallet_balance' => $wallet->balance,
-                ]);
-                throw new \Exception('Failed to process payment transaction. Please try again or contact support if the issue persists.', 500);
-            }
+            // Deduct credits
+            $wallet->decrement('balance', $postingFeeAmount);
+
+            // Create wallet transaction
+            WalletTransaction::create([
+                'wallet_id' => $wallet->id,
+                'type' => 'DEBIT',
+                'amount' => $postingFeeAmount,
+                'description' => 'Post requirement fee',
+                'reference_type' => 'inquiry',
+                'status' => 'COMPLETED',
+            ]);
 
             // Determine urgency based on timeline
             $urgency = 'normal';
-            if ($data['timeline'] === 'Urgent 1-2 Days') {
+            if ($data['timeline'] === 'Emergency (Urgent)') {
                 $urgency = 'urgent';
             }
 
@@ -176,28 +163,14 @@ class BrandService
             $quantityRange = $data['quantity_range'];
             $quantityParts = explode('-', $quantityRange);
             $minQuantity = isset($quantityParts[0]) ? (float) trim($quantityParts[0]) : 0;
-            // Handle "50000+" format
-            if (strpos($quantityRange, '+') !== false) {
-                $maxQuantity = (float) trim(str_replace('+', '', $quantityParts[0]));
-            } else {
-                $maxQuantity = isset($quantityParts[1]) ? (float) trim($quantityParts[1]) : $minQuantity;
-            }
-
-            // Generate title from requirement data
-            $titleParts = [];
-            $titleParts[] = $data['requirement_type'];
-            if ($data['requirement_type'] === 'Packaging' && isset($data['packaging_type'])) {
-                $titleParts[] = $data['packaging_type'];
-            }
-            $titleParts[] = 'Requirement';
-            $title = implode(' ', $titleParts);
+            $maxQuantity = isset($quantityParts[1]) ? (float) trim($quantityParts[1]) : $minQuantity;
 
             // Create inquiry
             $inquiry = Inquiry::create([
                 'brand_id' => $brand->id,
                 'poster_id' => $brand->id, // Store brand ID, not user ID
                 'poster_type' => 'brand',
-                'title' => $title,
+                'title' => $data['title'],
                 'description' => $data['description'] ?? null,
                 'status' => InquiryStatus::MATCHING,
                 'urgency' => $urgency,
@@ -209,18 +182,13 @@ class BrandService
                 'quantity_unit' => 'pieces',
                 'quantity_range' => $data['quantity_range'],
                 'timeline' => $data['timeline'],
-                'special_needs' => null, // Not sent from frontend
-                'design_attachments' => null, // Not sent from frontend
-                'location' => $data['location'],
-                'latitude' => $data['latitude'],
-                'longitude' => $data['longitude'],
+                'special_needs' => $data['special_needs'] ?? null,
+                'design_attachments' => $data['design_attachments'] ?? null,
+                'location' => $data['location'] ?? $brand->location ?? $brand->city,
+                'latitude' => $data['latitude'] ?? $brand->latitude,
+                'longitude' => $data['longitude'] ?? $brand->longitude,
                 'posting_fee_paid' => true,
                 'posting_fee_amount' => $postingFeeAmount,
-            ]);
-            
-            // Update transaction with inquiry reference
-            $transaction->update([
-                'reference_id' => $inquiry->id,
             ]);
 
             // Find 10 best converters using matchmaking engine

@@ -6,24 +6,15 @@ use App\Enums\DealerStatus;
 use App\Enums\InquiryStatus;
 use App\Enums\InquiryType;
 use App\Enums\InquiryIntent;
-use App\Enums\ResponseStatus;
-use App\Enums\SessionStatus;
 use App\Models\Dealer;
 use App\Models\DealerLocation;
 use App\Models\DealerMaterialDetail;
 use App\Models\Inquiry;
-use App\Models\InquiryItem;
 use App\Models\MatchingSession;
-use App\Models\Response;
-use App\Services\MatchmakingService;
 use Illuminate\Support\Facades\DB;
 
 class DealerService
 {
-    public function __construct(
-        protected MatchmakingService $matchmakingService
-    ) {
-    }
     public function completeProfile(array $data, int $userId): Dealer
     {
         return DB::transaction(function () use ($data, $userId) {
@@ -189,103 +180,49 @@ class DealerService
         return DB::transaction(function () use ($data, $userId) {
             $dealer = Dealer::where('user_id', $userId)->firstOrFail();
 
-            // Generate title from material and quantity if not provided
-            $title = $data['title'] ?? null;
-            if (!$title && isset($data['material_id'])) {
-                $material = \App\Models\Material::find($data['material_id']);
-                $title = ($material ? $material->name : 'Material') . ' - ' . $data['quantity'] . ' ' . ($data['quantity_unit'] ?? '');
-            }
-
             // Create inquiry
             $inquiry = Inquiry::create([
                 'poster_id' => $dealer->id, // Store dealer ID, not user ID
                 'poster_type' => 'dealer',
-                'inquiry_type' => $data['inquiry_type'], // Always 'material'
-                'intent' => $data['intent'], // Always 'buy'
-                'title' => $title,
-                'description' => null, // Not in new requirements
+                'inquiry_type' => $data['inquiry_type'],
+                'intent' => $data['intent'],
+                'title' => $data['title'],
+                'description' => $data['description'] ?? null,
                 'urgency' => $data['urgency'],
                 'quantity' => $data['quantity'],
                 'quantity_unit' => $data['quantity_unit'],
-                'size' => $data['size'],
-                'size_unit' => $data['size_unit'],
-                'thickness' => $data['thickness'],
-                'thickness_unit' => $data['thickness_unit'],
-                'visibility' => $data['visibility'],
-                'location' => $data['location'],
-                'location_source' => $data['location_source'],
-                'location_id' => $data['location_id'] ?? null,
-                'latitude' => $data['latitude'],
-                'longitude' => $data['longitude'],
+                'size' => $data['size'] ?? null,
+                'price' => $data['price'] ?? null,
+                'price_unit' => $data['price_unit'] ?? null,
+                'price_negotiable' => $data['price_negotiable'] ?? true,
+                'approx_price_note' => $data['approx_price_note'] ?? null,
+                'thickness' => $data['thickness'] ?? null,
+                'thickness_unit' => $data['thickness_unit'] ?? null,
+                'machine_condition' => $data['machine_condition'] ?? null,
+                'job_type' => $data['job_type'] ?? null,
+                'timeline_days' => $data['timeline_days'] ?? null,
+                'location' => $data['location'] ?? null,
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
+                'specs' => $data['specs'] ?? null,
+                'attachment_paths' => $data['attachment_paths'] ?? null,
+                'deadline' => isset($data['deadline']) ? $data['deadline'] : null,
                 'status' => InquiryStatus::MATCHING,
-                'posted_at' => now(),
-                'matching_started_at' => now(),
-                'is_visible_to_dealers' => true, // Visible to matched dealers
-                'is_visible_to_brand' => false, // NEVER visible to brands (dealer-posted)
+                'posting_fee_paid' => $data['posting_fee_paid'] ?? false,
+                'posting_fee_amount' => $data['posting_fee_amount'] ?? null,
             ]);
 
-            // Attach single material
-            if (isset($data['material_id'])) {
-                $inquiry->materials()->sync([$data['material_id']]);
+            // Attach materials if provided
+            if (isset($data['material_ids']) && is_array($data['material_ids']) && !empty($data['material_ids'])) {
+                $inquiry->materials()->sync($data['material_ids']);
             }
 
-            // Attach finishes if provided
-            if (isset($data['finish_ids']) && is_array($data['finish_ids']) && !empty($data['finish_ids'])) {
-                $inquiry->finishes()->sync($data['finish_ids']);
+            // Attach machines if provided
+            if (isset($data['machine_ids']) && is_array($data['machine_ids']) && !empty($data['machine_ids'])) {
+                $inquiry->machines()->sync($data['machine_ids']);
             }
 
-            // Create inquiry item for matchmaking (required for new system)
-            $material = \App\Models\Material::find($data['material_id'] ?? null);
-            $materialCategory = $material ? $material->name : null;
-            
-            // Convert thickness to GSM/MM based on unit
-            $thicknessUnit = strtolower($data['thickness_unit'] ?? 'gsm');
-            $thicknessGsm = null;
-            $thicknessMm = null;
-            if (isset($data['thickness']) && isset($data['thickness_unit'])) {
-                if (strtoupper($data['thickness_unit']) === 'GSM') {
-                    $thicknessGsm = $data['thickness'];
-                } elseif (strtoupper($data['thickness_unit']) === 'MM') {
-                    $thicknessMm = $data['thickness'];
-                }
-            }
-
-            InquiryItem::create([
-                'inquiry_id' => $inquiry->id,
-                'material_id' => $data['material_id'] ?? null,
-                'material_category' => $materialCategory,
-                'finish_coating' => null, // Can be enhanced later
-                'thickness_gsm' => $thicknessGsm,
-                'thickness_mm' => $thicknessMm,
-                'thickness_unit' => $thicknessUnit,
-                'thickness_tolerance_percent' => $data['urgency'] === 'urgent' ? 10.0 : 5.0,
-                'thickness_tolerance_absolute' => $data['urgency'] === 'urgent' ? 0.3 : 0.2,
-                'quantity' => $data['quantity'],
-                'quantity_unit' => $data['quantity_unit'],
-                'additional_specs' => null,
-            ]);
-
-            // Create matching session (required for sessions to appear)
-            // Note: Using 'ACTIVE' as database enum doesn't have 'MATCHING' yet
-            // TODO: Update database enum to include all SessionStatus values
-            $session = MatchingSession::create([
-                'inquiry_id' => $inquiry->id,
-                'status' => SessionStatus::ACTIVE, // Using ACTIVE (legacy) until enum is updated
-                'locked_at' => now(), // Required field, set to now
-                'expires_at' => now()->addHours(24), // 24 hours expiry
-                'discovery_start' => now(),
-                'active_session_start' => now(),
-                'is_visible_to_dealers' => true, // Visible to matched dealers
-                'is_visible_to_brand' => false, // Never visible to brands (dealer-posted)
-            ]);
-
-            // Trigger matchmaking to find matching dealers
-            $matchedDealerIds = $this->matchmakingService->findMatchingDealers($inquiry, 10);
-
-            // Notify matched dealers
-            $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedDealerIds);
-
-            return $inquiry->load(['materials', 'finishes', 'dealerLocation', 'items', 'session']);
+            return $inquiry->load(['materials', 'machines']);
         });
     }
 
@@ -390,52 +327,6 @@ class DealerService
                 'to' => $inquiries->lastItem(),
             ],
         ];
-    }
-
-    public function respondToInquiry(int $inquiryId, int $userId, array $data): array
-    {
-        return DB::transaction(function () use ($inquiryId, $userId, $data) {
-            $dealer = Dealer::where('user_id', $userId)->firstOrFail();
-            $inquiry = Inquiry::findOrFail($inquiryId);
-
-            // Check if inquiry is available for response
-            if ($inquiry->status !== InquiryStatus::MATCHING) {
-                throw new \Exception('Inquiry is not available for response', 400);
-            }
-
-            // Check if dealer already responded
-            $existingResponse = Response::where('inquiry_id', $inquiryId)
-                ->where('responder_id', $userId)
-                ->where('responder_type', 'dealer')
-                ->first();
-
-            if ($existingResponse) {
-                throw new \Exception('You have already responded to this inquiry', 400);
-            }
-
-            // Get session if exists
-            $session = MatchingSession::where('inquiry_id', $inquiryId)->first();
-
-            // Create response
-            $response = Response::create([
-                'inquiry_id' => $inquiryId,
-                'responder_id' => $userId,
-                'responder_type' => 'dealer',
-                'quantity_offered' => $data['quantity_offered'] ?? null,
-                'quantity_unit' => $data['quantity_unit'] ?? null,
-                'quoted_price' => $data['quoted_price'] ?? null,
-                'price_unit' => $data['price_unit'] ?? null,
-                'price_status' => $data['price_status'] ?? null,
-                'additional_details' => $data['additional_details'] ?? null,
-                'status' => ResponseStatus::PENDING,
-                'session_id' => $session?->id,
-            ]);
-
-            return [
-                'response_id' => $response->id,
-                'message' => 'Response submitted successfully',
-            ];
-        });
     }
 }
 
