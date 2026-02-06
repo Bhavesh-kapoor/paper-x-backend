@@ -9,6 +9,9 @@ use App\Models\MaterialFinish;
 use App\Models\MaterialMill;
 use App\Models\MaterialThicknessType;
 use App\Models\Brand;
+use App\Models\ConverterType;
+use App\Models\FinishedProduct;
+use App\Models\ScrapType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\DB;
@@ -448,6 +451,227 @@ class ReferenceDataController extends Controller
                 $e->errors(),
                 HttpResponse::HTTP_UNPROCESSABLE_ENTITY
             );
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
+     * Get all converter types
+     * GET /api/v1/converter-types
+     * Returns a flat list of all converter types (ignoring categories/headers)
+     */
+    public function getConverterTypes(Request $request)
+    {
+        try {
+            $perPage = $request->input('per_page', 1000); // Large default to get all items
+            $query = ConverterType::query();
+
+            // Order by sort_order if available, otherwise by name
+            if (DB::getSchemaBuilder()->hasColumn('converter_types', 'sort_order')) {
+                $query->orderBy('sort_order')->orderBy('name');
+            } else {
+                $query->orderBy('name');
+            }
+
+            $converterTypes = $query->paginate($perPage);
+
+            // Return simple list with id and name only (ignore categories)
+            $typesData = $converterTypes->map(function ($type) {
+                return [
+                    'id' => $type->id,
+                    'name' => $type->name,
+                ];
+            });
+
+            $pagination = [
+                'current_page' => $converterTypes->currentPage(),
+                'total' => $converterTypes->total(),
+                'per_page' => $converterTypes->perPage(),
+                'last_page' => $converterTypes->lastPage(),
+            ];
+
+            return Response::success('Converter types retrieved successfully', $typesData->toArray(), $pagination);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
+     * Get all finished products
+     * GET /api/v1/finished-products
+     * Returns a flat list of all finished products (ignoring categories/headers)
+     */
+    public function getFinishedProducts(Request $request)
+    {
+        try {
+            $perPage = $request->input('per_page', 1000); // Large default to get all items
+            $query = FinishedProduct::query();
+
+            // Order by sort_order if available, otherwise by name
+            if (DB::getSchemaBuilder()->hasColumn('finished_products', 'sort_order')) {
+                $query->orderBy('sort_order')->orderBy('name');
+            } else {
+                $query->orderBy('name');
+            }
+
+            $finishedProducts = $query->paginate($perPage);
+
+            // Return simple list with id and name only (ignore categories)
+            $productsData = $finishedProducts->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                ];
+            });
+
+            $pagination = [
+                'current_page' => $finishedProducts->currentPage(),
+                'total' => $finishedProducts->total(),
+                'per_page' => $finishedProducts->perPage(),
+                'last_page' => $finishedProducts->lastPage(),
+            ];
+
+            return Response::success('Finished products retrieved successfully', $productsData->toArray(), $pagination);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
+     * Get all scrap types
+     * GET /api/v1/scrap-types
+     * Returns a flat list of all scrap types (ignoring categories/headers)
+     */
+    public function getScrapTypes(Request $request)
+    {
+        try {
+            $perPage = $request->input('per_page', 1000); // Large default to get all items
+            $query = ScrapType::query();
+
+            // Order by sort_order if available, otherwise by name
+            if (DB::getSchemaBuilder()->hasColumn('scrap_types', 'sort_order')) {
+                $query->orderBy('sort_order')->orderBy('name');
+            } else {
+                $query->orderBy('name');
+            }
+
+            $scrapTypes = $query->paginate($perPage);
+
+            // Return simple list with id and name only (ignore categories)
+            $typesData = $scrapTypes->map(function ($type) {
+                return [
+                    'id' => $type->id,
+                    'name' => $type->name,
+                ];
+            });
+
+            $pagination = [
+                'current_page' => $scrapTypes->currentPage(),
+                'total' => $scrapTypes->total(),
+                'per_page' => $scrapTypes->perPage(),
+                'last_page' => $scrapTypes->lastPage(),
+            ];
+
+            return Response::success('Scrap types retrieved successfully', $typesData->toArray(), $pagination);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
+     * Get all converter reference data in a single response
+     * GET /api/v1/converter-reference-data
+     * Returns converter types, finished products, scrap types, and machines in one call
+     */
+    public function getConverterReferenceData(Request $request)
+    {
+        try {
+            $perPage = $request->input('per_page', 1000); // Large default to get all items
+
+            // Get converter types
+            $converterTypesQuery = ConverterType::query();
+            if (DB::getSchemaBuilder()->hasColumn('converter_types', 'sort_order')) {
+                $converterTypesQuery->orderBy('sort_order')->orderBy('name');
+            } else {
+                $converterTypesQuery->orderBy('name');
+            }
+            $converterTypes = $converterTypesQuery->paginate($perPage);
+            $converterTypesData = $converterTypes->map(function ($type) {
+                return [
+                    'id' => $type->id,
+                    'name' => $type->name,
+                ];
+            })->toArray();
+
+            // Get finished products
+            $finishedProductsQuery = FinishedProduct::query();
+            if (DB::getSchemaBuilder()->hasColumn('finished_products', 'sort_order')) {
+                $finishedProductsQuery->orderBy('sort_order')->orderBy('name');
+            } else {
+                $finishedProductsQuery->orderBy('name');
+            }
+            $finishedProducts = $finishedProductsQuery->paginate($perPage);
+            $finishedProductsData = $finishedProducts->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                ];
+            })->toArray();
+
+            // Get scrap types
+            $scrapTypesQuery = ScrapType::query();
+            if (DB::getSchemaBuilder()->hasColumn('scrap_types', 'sort_order')) {
+                $scrapTypesQuery->orderBy('sort_order')->orderBy('name');
+            } else {
+                $scrapTypesQuery->orderBy('name');
+            }
+            $scrapTypes = $scrapTypesQuery->paginate($perPage);
+            $scrapTypesData = $scrapTypes->map(function ($type) {
+                return [
+                    'id' => $type->id,
+                    'name' => $type->name,
+                ];
+            })->toArray();
+
+            // Get machines
+            $machinesQuery = Machine::query();
+            if ($request->has('type')) {
+                $machinesQuery->where('type', $request->type);
+            }
+            if ($request->has('category')) {
+                $machinesQuery->where('type', $request->category);
+            }
+            $machines = $machinesQuery->orderBy('name')->paginate($perPage);
+            $machinesData = $machines->map(function ($machine) {
+                return [
+                    'id' => $machine->id,
+                    'name' => $machine->name,
+                ];
+            })->toArray();
+
+            return Response::success('Converter reference data retrieved successfully', [
+                'converter_types' => $converterTypesData,
+                'finished_products' => $finishedProductsData,
+                'scrap_types' => $scrapTypesData,
+                'machines' => $machinesData,
+            ]);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),

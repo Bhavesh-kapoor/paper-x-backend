@@ -200,12 +200,12 @@ class InquiryController extends Controller
             ]);
             
             // Trigger matchmaking
-            $matchedDealerIds = $this->matchmakingService->findMatchingDealers($inquiry, 10);
+            $matchedRecipients = $this->matchmakingService->findMatchingDealers($inquiry);
             
             // Session is already in ACTIVE status, no need to update
             
             // Notify matched dealers
-            $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedDealerIds);
+            $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedRecipients);
             
             DB::commit();
             
@@ -214,7 +214,7 @@ class InquiryController extends Controller
             
             return Response::success('Inquiry posted successfully', [
                 'inquiry' => $inquiry,
-                'matched_dealers_count' => count($matchedDealerIds),
+                'matched_dealers_count' => count($matchedRecipients),
             ]);
             
         } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
@@ -778,86 +778,27 @@ class InquiryController extends Controller
     /**
      * Get matchmaking responses with filters
      * Screen: Matchmaking Responses Screen
+     * 
+     * Returns matched dealers from MatchmakingLogs (potential matches)
+     * plus any actual responses they may have submitted.
      */
     public function getMatchmakingResponses(Request $request, Inquiry $inquiry)
     {
         try {
             Gate::authorize('viewResponses', $inquiry);
             
-            $filter = $request->input('filter', 'all'); // all, exact_match, slight_variation, nearest
-            $responses = $inquiry->responses()
-                ->with(['responder.dealer.locations'])
-                ->get();
+            $filter = $request->input('filter', 'all'); // all, responded, exact_match, slight_variation, nearest
             
-            // Get matchmaking logs for scoring
-            $matchmakingLogs = $inquiry->matchmakingLogs()
-                ->whereIn('dealer_id', $responses->pluck('responder.dealer.id')->filter())
-                ->get()
-                ->keyBy('dealer_id');
+            // Use MatchmakingService to get matches (includes both logged matches and responses)
+            $matches = $this->matchmakingService->getMatchesForInquiry($inquiry, $filter);
             
-            // Enhance responses with matchmaking data
-            $enhancedResponses = $responses->map(function ($response) use ($matchmakingLogs, $inquiry) {
-                $dealer = $response->responder->dealer ?? null;
-                $log = $dealer ? $matchmakingLogs->get($dealer->id) : null;
-                
-                // Calculate distance
-                $distance = null;
-                if ($inquiry->latitude && $inquiry->longitude && $dealer) {
-                    $dealerLocation = $dealer->locations->first();
-                    if ($dealerLocation && $dealerLocation->latitude && $dealerLocation->longitude) {
-                        $distance = $this->calculateDistance(
-                            $inquiry->latitude,
-                            $inquiry->longitude,
-                            $dealerLocation->latitude,
-                            $dealerLocation->longitude
-                        );
-                    }
-                }
-                
-                // Determine match type
-                $matchType = 'exact_match';
-                if ($log) {
-                    if (!$log->material_match || !$log->thickness_match) {
-                        $matchType = 'slight_variation';
-                    }
-                }
-                
-                return [
-                    'id' => $response->id,
-                    'match_type' => $matchType,
-                    'distance_km' => $distance,
-                    'dealer' => [
-                        'id' => $inquiry->status === InquiryStatus::LOCKED ? ($dealer->id ?? null) : null,
-                        'company_name' => $inquiry->status === InquiryStatus::LOCKED ? ($dealer->company_name ?? null) : null,
-                        'location' => $dealer ? ($dealer->locations->first()?->city . ', ' . $dealer->locations->first()?->state) : 'Unknown',
-                    ],
-                    'quantity_offered' => $response->quantity_offered,
-                    'quoted_price' => $response->quoted_price,
-                    'price_status' => $response->price_status,
-                    'additional_details' => $response->additional_details,
-                    'responded_at' => $response->created_at,
-                    'is_shortlisted' => $response->session && $response->session->participants()
-                        ->where('participant_type', 'dealer')
-                        ->where('participant_id', $dealer->id ?? 0)
-                        ->where('is_selected', true)
-                        ->exists(),
-                ];
-            });
-            
-            // Apply filters
-            if ($filter === 'exact_match') {
-                $enhancedResponses = $enhancedResponses->where('match_type', 'exact_match');
-            } elseif ($filter === 'slight_variation') {
-                $enhancedResponses = $enhancedResponses->where('match_type', 'slight_variation');
-            } elseif ($filter === 'nearest') {
-                $enhancedResponses = $enhancedResponses->sortBy('distance_km');
-            }
-            
-            // Sort by distance if nearest filter
+            // Apply "nearest" filter sorting
             if ($filter === 'nearest') {
-                $enhancedResponses = $enhancedResponses->values();
-            } else {
-                $enhancedResponses = $enhancedResponses->sortByDesc('responded_at')->values();
+                usort($matches, function ($a, $b) {
+                    $distA = $a['distance_km'] ?? PHP_INT_MAX;
+                    $distB = $b['distance_km'] ?? PHP_INT_MAX;
+                    return $distA <=> $distB;
+                });
             }
             
             // Get countdown if session exists
@@ -885,8 +826,8 @@ class InquiryController extends Controller
                     }),
                 ],
                 'countdown' => $countdown,
-                'responses_count' => $enhancedResponses->count(),
-                'responses' => $enhancedResponses,
+                'responses_count' => count($matches),
+                'responses' => $matches,
                 'filter' => $filter,
             ]);
             
@@ -985,21 +926,84 @@ class InquiryController extends Controller
     }
 
     /**
-     * Helper: Calculate distance between two coordinates
+     * Responder expresses interest (Interested). Updates MatchmakingLog.responded_at.
+     * Poster can be notified; they see this responder in matchmaking responses and can shortlist.
      */
-    private function calculateDistance(float $lat1, float $lon1, float $lat2, float $lon2): float
+    public function expressInterest(Request $request, Inquiry $inquiry)
     {
-        $earthRadius = 6371; // km
-        
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLon = deg2rad($lon2 - $lon1);
-        
-        $a = sin($dLat / 2) * sin($dLat / 2) +
-             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-             sin($dLon / 2) * sin($dLon / 2);
-        
-        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-        
-        return round($earthRadius * $c, 1);
+        try {
+            Gate::authorize('viewResponses', $inquiry);
+
+            $user = $request->user();
+            $log = $this->getMyMatchmakingLog($inquiry, $user);
+            if (!$log) {
+                return Response::error('You are not matched to this requirement', null, HttpResponse::HTTP_FORBIDDEN);
+            }
+
+            if ($log->declined_at) {
+                return Response::error('You previously declined this requirement. Cannot express interest now.', null, HttpResponse::HTTP_BAD_REQUEST);
+            }
+
+            $log->update([
+                'responded_at' => now(),
+                'declined_at' => null,
+            ]);
+
+            // TODO: Notify poster that someone expressed interest (e.g. push/email)
+
+            return Response::success('Interest expressed successfully', [
+                'expressed_interest' => true,
+                'matchmaking_log_id' => $log->id,
+            ]);
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            return Response::error('You do not have permission to respond to this requirement', null, HttpResponse::HTTP_FORBIDDEN);
+        } catch (\Exception $e) {
+            \Log::error('Express interest failed', ['inquiry_id' => $inquiry->id, 'error' => $e->getMessage()]);
+            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
+
+    /**
+     * Responder declines (Not interested). Updates MatchmakingLog.declined_at.
+     */
+    public function declineInquiry(Request $request, Inquiry $inquiry)
+    {
+        try {
+            Gate::authorize('viewResponses', $inquiry);
+
+            $user = $request->user();
+            $log = $this->getMyMatchmakingLog($inquiry, $user);
+            if (!$log) {
+                return Response::error('You are not matched to this requirement', null, HttpResponse::HTTP_FORBIDDEN);
+            }
+
+            $log->update(['declined_at' => now()]);
+
+            return Response::success('Declined successfully', [
+                'declined' => true,
+                'matchmaking_log_id' => $log->id,
+            ]);
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            return Response::error('You do not have permission to respond to this requirement', null, HttpResponse::HTTP_FORBIDDEN);
+        } catch (\Exception $e) {
+            \Log::error('Decline inquiry failed', ['inquiry_id' => $inquiry->id, 'error' => $e->getMessage()]);
+            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private function getMyMatchmakingLog(Inquiry $inquiry, $user): ?\App\Models\MatchmakingLog
+    {
+        $query = $inquiry->matchmakingLogs();
+        if ($user->dealer) {
+            $query->where('dealer_id', $user->dealer->id);
+        } elseif ($user->converter) {
+            $query->where('converter_id', $user->converter->id);
+        } elseif ($user->machineDealer) {
+            $query->where('machine_dealer_id', $user->machineDealer->id);
+        } else {
+            return null;
+        }
+        return $query->first();
+    }
+
 }

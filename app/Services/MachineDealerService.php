@@ -15,24 +15,31 @@ class MachineDealerService
     public function completeProfile(array $data, int $userId): MachineDealer
     {
         return DB::transaction(function () use ($data, $userId) {
-            $machineDealer = MachineDealer::firstOrCreate(
-                ['user_id' => $userId],
-                ['status' => MachineDealerStatus::PENDING]
-            );
-
-            $machineDealer->update([
+            $createAttributes = [
                 'company_name' => $data['company_name'],
-                'gst' => $data['gst'] ?? null,
                 'contact_person_name' => $data['contact_person_name'],
+                'gst' => $data['gst'] ?? null,
                 'mobile' => $data['mobile'] ?? null,
                 'email' => $data['email'] ?? null,
                 'city' => $data['city'] ?? null,
                 'location' => $data['location'] ?? null,
                 'latitude' => $data['latitude'] ?? null,
                 'longitude' => $data['longitude'] ?? null,
+                'primary_machine_category' => $data['primary_machine_category'] ?? null,
+                'primary_machine_id' => $data['primary_machine_id'] ?? null,
+                'preferred_brand_names' => $data['preferred_brand_names'] ?? null,
                 'profile_complete' => true,
                 'status' => MachineDealerStatus::ACTIVE,
-            ]);
+            ];
+
+            $machineDealer = MachineDealer::firstOrCreate(
+                ['user_id' => $userId],
+                $createAttributes
+            );
+
+            if ($machineDealer->wasRecentlyCreated === false) {
+                $machineDealer->update($createAttributes);
+            }
 
             return $machineDealer;
         });
@@ -99,7 +106,7 @@ class MachineDealerService
                 'posting_fee_amount' => $data['posting_fee_amount'] ?? null,
             ]);
 
-            // Create inquiry for the listing
+            // Create inquiry for the listing (quantity/quantity_unit required by inquiries table; use 1 unit for machine)
             $inquiry = Inquiry::create([
                 'poster_id' => $machineDealer->id, // Store machine dealer ID, not user ID
                 'poster_type' => 'machine_dealer',
@@ -108,6 +115,8 @@ class MachineDealerService
                 'title' => $data['title'] ?? "Machine: " . $listing->machine->name,
                 'description' => $data['description'] ?? null,
                 'urgency' => $data['urgency'],
+                'quantity' => 1,
+                'quantity_unit' => 'unit',
                 'machine_listing_id' => $listing->id,
                 'machine_condition' => $data['condition'] ?? null,
                 'location' => $data['location'] ?? null,

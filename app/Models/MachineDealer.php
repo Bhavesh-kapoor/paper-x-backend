@@ -23,6 +23,9 @@ class MachineDealer extends Model
         'location',
         'latitude',
         'longitude',
+        'primary_machine_category',
+        'primary_machine_id',
+        'preferred_brand_names',
         'status',
         'profile_complete',
     ];
@@ -32,6 +35,7 @@ class MachineDealer extends Model
         'profile_complete' => 'boolean',
         'latitude' => 'decimal:8',
         'longitude' => 'decimal:8',
+        'preferred_brand_names' => 'array',
     ];
 
     public function user(): BelongsTo

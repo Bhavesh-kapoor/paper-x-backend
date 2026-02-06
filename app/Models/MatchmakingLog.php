@@ -13,6 +13,8 @@ class MatchmakingLog extends Model
     protected $fillable = [
         'inquiry_id',
         'dealer_id',
+        'converter_id',
+        'machine_dealer_id',
         'session_id',
         'material_match',
         'finish_match',
@@ -29,6 +31,7 @@ class MatchmakingLog extends Model
         'response_id',
         'is_selected',
         'selected_at',
+        'declined_at',
     ];
 
     protected $casts = [
@@ -46,6 +49,7 @@ class MatchmakingLog extends Model
         'hidden_from_dealer_at' => 'datetime',
         'responded_at' => 'datetime',
         'selected_at' => 'datetime',
+        'declined_at' => 'datetime',
     ];
 
     public function inquiry(): BelongsTo
@@ -56,6 +60,16 @@ class MatchmakingLog extends Model
     public function dealer(): BelongsTo
     {
         return $this->belongsTo(Dealer::class);
+    }
+
+    public function converter(): BelongsTo
+    {
+        return $this->belongsTo(Converter::class);
+    }
+
+    public function machineDealer(): BelongsTo
+    {
+        return $this->belongsTo(MachineDealer::class, 'machine_dealer_id');
     }
 
     public function session(): BelongsTo
@@ -87,5 +101,35 @@ class MatchmakingLog extends Model
     public function scopeForDealer($query, $dealerId)
     {
         return $query->where('dealer_id', $dealerId);
+    }
+
+    public function scopeForConverter($query, $converterId)
+    {
+        return $query->where('converter_id', $converterId);
+    }
+
+    public function scopeForMachineDealer($query, $machineDealerId)
+    {
+        return $query->where('machine_dealer_id', $machineDealerId);
+    }
+
+    /**
+     * Get the matched entity's user_id for notifications (dealer, converter, or machine_dealer).
+     */
+    public function getMatchedUserId(): ?int
+    {
+        if ($this->dealer_id) {
+            $dealer = $this->dealer;
+            return $dealer?->user_id;
+        }
+        if ($this->converter_id) {
+            $converter = $this->converter;
+            return $converter?->user_id;
+        }
+        if ($this->machine_dealer_id) {
+            $machineDealer = $this->machineDealer;
+            return $machineDealer?->user_id;
+        }
+        return null;
     }
 }

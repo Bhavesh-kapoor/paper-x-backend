@@ -45,6 +45,12 @@ Route::prefix('v1')->group(function () {
     Route::get('/brand-types', [\App\Http\Controllers\api\ReferenceDataController::class, 'getBrandTypes'])->name('reference.brand-types');
     Route::get('/materials/{id}/details', [\App\Http\Controllers\api\ReferenceDataController::class, 'getMaterialDetails'])->name('reference.material-details');
     
+    #converter reference data
+    Route::get('/converter-types', [\App\Http\Controllers\api\ReferenceDataController::class, 'getConverterTypes'])->name('reference.converter-types');
+    Route::get('/finished-products', [\App\Http\Controllers\api\ReferenceDataController::class, 'getFinishedProducts'])->name('reference.finished-products');
+    Route::get('/scrap-types', [\App\Http\Controllers\api\ReferenceDataController::class, 'getScrapTypes'])->name('reference.scrap-types');
+    Route::get('/converter-reference-data', [\App\Http\Controllers\api\ReferenceDataController::class, 'getConverterReferenceData'])->name('reference.converter-reference-data');
+    
     #dealer profile completion - manual additions
     Route::middleware(['token.exists', 'auth:sanctum'])->group(function () {
         Route::post('/dealer/mill/add', [\App\Http\Controllers\api\ReferenceDataController::class, 'addMillBrand'])->name('dealer.mill.add');
@@ -84,6 +90,9 @@ Route::prefix('v1')->group(function () {
         // Get session history
         Route::get('/history', [SessionController::class, 'getHistory'])->name('sessions.history');
         
+        // Get session by inquiry id (e.g. from requirements list; use session id for detail)
+        Route::get('/by-inquiry/{inquiry_id}', [SessionController::class, 'getSessionByInquiry'])->name('sessions.by-inquiry');
+        
         // Lock session (select dealers)
         Route::post('/{session}/lock', [SessionController::class, 'lock'])->name('sessions.lock');
         
@@ -93,7 +102,7 @@ Route::prefix('v1')->group(function () {
         // Mark deal as failed
         Route::post('/{session}/deal-failed', [SessionController::class, 'markDealFailed'])->name('sessions.deal-failed');
         
-        // Get session details
+        // Get session details (use session id, not inquiry id)
         Route::get('/{session}', [SessionController::class, 'getSession'])->name('sessions.show');
         
         // Chat
@@ -122,6 +131,11 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('converter')->group(function () {
         Route::post('/profile/complete', [\App\Http\Controllers\api\ConverterController::class, 'completeProfile'])->name('converter.profile.complete');
         Route::get('/dashboard', [\App\Http\Controllers\api\ConverterController::class, 'getDashboard'])->name('converter.dashboard');
+        
+        // Post requirement (buy/sell)
+        Route::post('/requirement/post', [\App\Http\Controllers\api\ConverterController::class, 'postRequirement'])->name('converter.requirement.post');
+        // Post machine buy/sell (converter)
+        Route::post('/machine/post', [\App\Http\Controllers\api\ConverterController::class, 'postMachine'])->name('converter.machine.post');
         
         // Get brand requirements
         Route::get('/requirements', [\App\Http\Controllers\api\ConverterController::class, 'getRequirements'])->name('converter.requirements');
@@ -158,6 +172,10 @@ Route::prefix('v1')->group(function () {
         
         // Shortlist/Reject response
         Route::post('/responses/{response}/shortlist', [InquiryController::class, 'shortlistResponse'])->name('inquiries.shortlist-response');
+
+        // Responder: express interest or decline (matched dealers/converters/machine_dealers)
+        Route::post('/{inquiry}/express-interest', [InquiryController::class, 'expressInterest'])->name('inquiries.express-interest');
+        Route::post('/{inquiry}/decline', [InquiryController::class, 'declineInquiry'])->name('inquiries.decline');
         
         // Republish inquiry
         Route::post('/{inquiry}/republish', [InquiryController::class, 'republish'])->name('inquiries.republish');

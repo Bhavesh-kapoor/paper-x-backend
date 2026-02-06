@@ -128,26 +128,19 @@ class DealerService
 
         $profileCompletion = $this->calculateProfileCompletion($dealer);
 
-        $activeOpportunities = $dealer->acceptances()
-            ->whereHas('inquiry', function ($query) {
-                $query->where('status', 'SESSION_LOCKED');
-            })
+        // Own sessions only – sessions are private per user (what dealer posted)
+        $activeOpportunities = MatchingSession::ownSessionsByDealer($dealer->id)
+            ->where('status', SessionStatus::ACTIVE)
+            ->where('expires_at', '>', now())
             ->count();
 
-        $lockedSessions = MatchingSession::whereHas('inquiry', function ($query) use ($dealer) {
-            $query->whereHas('acceptances', function ($q) use ($dealer) {
-                $q->where('dealer_id', $dealer->id);
-            });
-        })
-            ->where('status', 'ACTIVE')
+        $lockedSessions = MatchingSession::ownSessionsByDealer($dealer->id)
+            ->whereNotNull('locked_at')
+            ->where('status', SessionStatus::ACTIVE)
             ->count();
 
-        $expiredSessions = MatchingSession::whereHas('inquiry', function ($query) use ($dealer) {
-            $query->whereHas('acceptances', function ($q) use ($dealer) {
-                $q->where('dealer_id', $dealer->id);
-            });
-        })
-            ->where('status', 'EXPIRED')
+        $expiredSessions = MatchingSession::ownSessionsByDealer($dealer->id)
+            ->where('status', SessionStatus::EXPIRED)
             ->count();
 
         $unreadNotifications = \App\Models\Notification::where('user_id', $userId)
@@ -280,10 +273,10 @@ class DealerService
             ]);
 
             // Trigger matchmaking to find matching dealers
-            $matchedDealerIds = $this->matchmakingService->findMatchingDealers($inquiry, 10);
+            $matchedRecipients = $this->matchmakingService->findMatchingDealers($inquiry);
 
             // Notify matched dealers
-            $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedDealerIds);
+            $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedRecipients);
 
             return $inquiry->load(['materials', 'finishes', 'dealerLocation', 'items', 'session']);
         });
@@ -294,7 +287,7 @@ class DealerService
         $dealer = Dealer::where('user_id', $userId)->firstOrFail();
         $query = Inquiry::where('poster_id', $dealer->id)
             ->where('poster_type', 'dealer')
-            ->with(['materials', 'machines']);
+            ->with(['materials', 'machines', 'session']);
 
         // Filter by inquiry_type
         if (isset($filters['inquiry_type']) && !empty($filters['inquiry_type'])) {
@@ -374,6 +367,7 @@ class DealerService
                     ];
                 }),
                 'responses_count' => $inquiry->responses()->count(),
+                'session_id' => $inquiry->session?->id,
                 'created_at' => $inquiry->created_at->toIso8601String(),
                 'updated_at' => $inquiry->updated_at->toIso8601String(),
             ];

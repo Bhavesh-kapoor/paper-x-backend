@@ -349,8 +349,8 @@ class BrandService
             ];
         })->sortByDesc('score');
 
-        // Return top N converters
-        return $scoredConverters->take($limit)->pluck('converter')->toArray();
+        // Return top N converters as array of Converter models
+        return $scoredConverters->take($limit)->pluck('converter')->values()->all();
     }
 
     private function calculateConverterMatchScore(Inquiry $inquiry, Converter $converter, ?string $brandCity = null): int

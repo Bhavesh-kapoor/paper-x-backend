@@ -18,93 +18,43 @@ class SessionPolicy
 
     /**
      * Determine whether the user can view the model.
+     * Allow: (1) the poster of the inquiry, or (2) a matched responder (has MatchmakingLog for this inquiry).
      */
     public function view(User $user, MatchingSession $session): bool
     {
-        // Ensure inquiry is loaded
         $inquiry = $session->inquiry;
         if (!$inquiry) {
             return false;
         }
-        
-        // DEALER CHECK FIRST - Dealers should ALWAYS see their own posted requirements
-        if ($user->dealer && $user->dealer->id) {
-            $dealerId = $user->dealer->id;
-            
-            // CRITICAL: If dealer posted this requirement, they MUST be able to view it
-            // This is the most important check - dealers need to see responses to their own posts
-            if ($inquiry->poster_type === 'dealer') {
-                // Use loose comparison to handle any type mismatches (string vs int)
-                $posterId = $inquiry->poster_id;
-                if ($posterId != null) {
-                    // Multiple comparison methods to ensure it works
-                    if ($posterId == $dealerId || 
-                        (string)$posterId === (string)$dealerId || 
-                        (int)$posterId === (int)$dealerId ||
-                        $posterId === $dealerId) {
-                        return true; // OWN POST - ALWAYS ALLOW
-                    }
-                }
-            }
-            
-            // Matched dealer inquiries (through participants or matchmaking)
-            if ($session->is_visible_to_dealers) {
-                // Has participant record
-                $hasParticipant = $session->participants()
-                    ->where('participant_type', 'dealer')
-                    ->where('participant_id', $dealerId)
-                    ->where('status', 'active')
-                    ->exists();
-                
-                if ($hasParticipant) {
-                    return true;
-                }
-                
-                // OR has matchmaking log (for newly matched dealers)
-                if ($inquiry->relationLoaded('matchmakingLogs')) {
-                    $hasMatchmakingLog = $inquiry->matchmakingLogs
-                        ->where('dealer_id', $dealerId)
-                        ->where('is_visible', true)
-                        ->isNotEmpty();
-                } else {
-                    $hasMatchmakingLog = $inquiry->matchmakingLogs()
-                        ->where('dealer_id', $dealerId)
-                        ->where('is_visible', true)
-                        ->exists();
-                }
-                
-                return $hasMatchmakingLog;
-            }
-            return false;
+
+        $posterType = $inquiry->poster_type;
+        $posterId = $inquiry->poster_id;
+
+        // Poster can always view
+        if ($user->dealer && (int) $posterId === (int) $user->dealer->id && $posterType === 'dealer') {
+            return true;
         }
-        
-        // Brand can view their own posted requirements (brand-posted inquiries)
-        // NEVER see dealer-posted requirements
-        if ($user->brand) {
-            return $inquiry->poster_type === 'brand' && $inquiry->poster_id === $user->brand->id;
+        if ($user->brand && (int) $posterId === (int) $user->brand->id && $posterType === 'brand') {
+            return true;
         }
-        
-        // Converter can view:
-        // 1. Their own posted requirements (converter-posted inquiries)
-        // 2. Dealer-posted requirements where visibility = 'converters' or 'all'
-        if ($user->converter) {
-            // Own posted requirements
-            if ($inquiry->poster_type === 'converter' && $inquiry->poster_id === $user->converter->id) {
-                return true;
-            }
-            // Dealer-posted requirements visible to converters
-            if ($inquiry->poster_type === 'dealer' && 
-                ($inquiry->visibility === 'converters' || $inquiry->visibility === 'all')) {
-                return true;
-            }
-            return false;
+        if ($user->converter && (int) $posterId === (int) $user->converter->id && $posterType === 'converter') {
+            return true;
         }
-        
-        // Machine dealer can view dealer-posted requirements where visibility = 'all'
-        if ($user->machineDealer) {
-            return $inquiry->poster_type === 'dealer' && $inquiry->visibility === 'all';
+        if ($user->machineDealer && (int) $posterId === (int) $user->machineDealer->id && $posterType === 'machine_dealer') {
+            return true;
         }
-        
+
+        // Matched responder: has a MatchmakingLog for this inquiry (dealer, converter, or machine_dealer)
+        if ($user->dealer && $inquiry->matchmakingLogs()->where('dealer_id', $user->dealer->id)->exists()) {
+            return true;
+        }
+        if ($user->converter && $inquiry->matchmakingLogs()->where('converter_id', $user->converter->id)->exists()) {
+            return true;
+        }
+        if ($user->machineDealer && $inquiry->matchmakingLogs()->where('machine_dealer_id', $user->machineDealer->id)->exists()) {
+            return true;
+        }
+
         return false;
     }
 

@@ -157,23 +157,69 @@ class MatchingSession extends Model
                 $inqQuery->where('poster_type', 'converter')
                     ->where('poster_id', $converterId);
             })
-            // OR dealer-posted requirements visible to converters
-            ->orWhereHas('inquiry', function ($inqQuery) {
-                $inqQuery->where('poster_type', 'dealer')
-                    ->where(function ($visQuery) {
-                        $visQuery->where('visibility', 'converters')
-                            ->orWhere('visibility', 'all');
+            // OR sessions where this converter was matched (MatchmakingLog)
+            ->orWhere(function ($matchedQuery) use ($converterId) {
+                $matchedQuery->where('is_visible_to_dealers', true)
+                    ->whereHas('inquiry.matchmakingLogs', function ($logQuery) use ($converterId) {
+                        $logQuery->where('converter_id', $converterId)
+                            ->where('is_visible', true);
                     });
             });
         });
     }
 
-    public function scopeVisibleToMachineDealer($query)
+    public function scopeVisibleToMachineDealer($query, $machineDealerId)
     {
-        // Machine dealers see dealer-posted requirements where visibility = 'all'
-        return $query->whereHas('inquiry', function ($inqQuery) {
+        return $query->where(function ($q) use ($machineDealerId) {
+            // Machine dealer's own posted requirements
+            $q->whereHas('inquiry', function ($inqQuery) use ($machineDealerId) {
+                $inqQuery->where('poster_type', 'machine_dealer')
+                    ->where('poster_id', $machineDealerId);
+            })
+            // OR sessions where this machine dealer was matched (MatchmakingLog)
+            ->orWhere(function ($matchedQuery) use ($machineDealerId) {
+                $matchedQuery->where('is_visible_to_dealers', true)
+                    ->whereHas('inquiry.matchmakingLogs', function ($logQuery) use ($machineDealerId) {
+                        $logQuery->where('machine_dealer_id', $machineDealerId)
+                            ->where('is_visible', true);
+                    });
+            });
+        });
+    }
+
+    /**
+     * Own-sessions-only scopes: each user sees ONLY sessions for inquiries they posted.
+     * Sessions are private per user. Matchmaking (common requirements) is separate.
+     */
+    public function scopeOwnSessionsByDealer($query, $dealerId)
+    {
+        return $query->whereHas('inquiry', function ($inqQuery) use ($dealerId) {
             $inqQuery->where('poster_type', 'dealer')
-                ->where('visibility', 'all');
+                ->where('poster_id', $dealerId);
+        });
+    }
+
+    public function scopeOwnSessionsByConverter($query, $converterId)
+    {
+        return $query->whereHas('inquiry', function ($inqQuery) use ($converterId) {
+            $inqQuery->where('poster_type', 'converter')
+                ->where('poster_id', $converterId);
+        });
+    }
+
+    public function scopeOwnSessionsByBrand($query, $brandId)
+    {
+        return $query->whereHas('inquiry', function ($inqQuery) use ($brandId) {
+            $inqQuery->where('poster_type', 'brand')
+                ->where('poster_id', $brandId);
+        });
+    }
+
+    public function scopeOwnSessionsByMachineDealer($query, $machineDealerId)
+    {
+        return $query->whereHas('inquiry', function ($inqQuery) use ($machineDealerId) {
+            $inqQuery->where('poster_type', 'machine_dealer')
+                ->where('poster_id', $machineDealerId);
         });
     }
 

@@ -17,12 +17,16 @@ class QuotationService
                 $query->where('id', $inquiryId);
             })->firstOrFail();
 
-            // Verify dealer is part of session
+            // Verify dealer is part of session: either via acceptances (legacy) or matchmaking log (matched)
             $isParticipant = $session->inquiry->acceptances()
                 ->where('dealer_id', $dealer->id)
                 ->exists();
 
-            if (!$isParticipant) {
+            $isMatched = $session->inquiry->matchmakingLogs()
+                ->where('dealer_id', $dealer->id)
+                ->exists();
+
+            if (!$isParticipant && !$isMatched) {
                 throw new \Exception('You are not part of this session', 403);
             }
 
