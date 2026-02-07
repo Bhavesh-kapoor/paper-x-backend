@@ -31,7 +31,9 @@ class OtpService
     {
         $otp = Otp::where('user_id', $user->id)
             ->where('type', 'login')
-            ->where('identifier', 'mobile')
+            ->where(function ($q) {
+                $q->where('identifier', 'mobile')->orWhereNull('identifier');
+            })
             ->first();
 
         if (!$otp) {

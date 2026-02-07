@@ -124,6 +124,7 @@ class MatchmakingService
             'finish_score' => 0,
             'thickness_score' => 0,
             'location_score' => 0,
+            'distance_km' => null,
             'priority_bonus' => 0,
             'total_score' => 0,
         ];
@@ -186,8 +187,23 @@ class MatchmakingService
             }
         }
         
-        // Location matching
+        // If no thickness requirement, consider it a match
+        if (!$score['thickness_match'] && $inquiryItems->where('thickness_gsm', '!=', null)->isEmpty()
+            && $inquiryItems->where('thickness_mm', '!=', null)->isEmpty()) {
+            $score['thickness_match'] = true;
+            $score['thickness_score'] = 5;
+        }
+
+        // ==========================================
+        // 4. LOCATION/DISTANCE SCORING
+        // When config matchmaking.use_location_in_matching is false, we treat as "all India":
+        // everyone gets full location score; distance_km is still computed for display.
+        // ==========================================
+        $useLocation = config('matchmaking.use_location_in_matching', false);
+        $radiusKm = $inquiry->urgency === 'urgent' ? 100 : 50;
+
         if ($inquiry->latitude && $inquiry->longitude && $dealer->locations->isNotEmpty()) {
+            $nearestDistance = null;
             foreach ($dealer->locations as $location) {
                 if ($location->latitude && $location->longitude) {
                     $distance = $this->calculateDistance(
@@ -196,15 +212,31 @@ class MatchmakingService
                         $location->latitude,
                         $location->longitude
                     );
-                    
-                    // Prioritize nearby dealers (within 100km)
-                    if ($distance <= 100) {
-                        $score['location_match'] = true;
-                        $score['location_score'] = max(0, 30 - ($distance / 10)); // Closer = higher score
-                        break;
+                    if ($nearestDistance === null || $distance < $nearestDistance) {
+                        $nearestDistance = $distance;
                     }
                 }
             }
+            if ($nearestDistance !== null) {
+                $score['distance_km'] = round($nearestDistance, 1);
+            }
+            if (!$useLocation) {
+                $score['location_match'] = true;
+                $score['location_score'] = 20;
+            } else {
+                if ($nearestDistance !== null) {
+                    if ($nearestDistance <= $radiusKm) {
+                        $score['location_match'] = true;
+                        $score['location_score'] = max(0, 20 * (1 - ($nearestDistance / $radiusKm)));
+                    } elseif ($nearestDistance <= $radiusKm * 2) {
+                        $score['location_match'] = true;
+                        $score['location_score'] = max(0, 20 * 0.3);
+                    }
+                }
+            }
+        } else {
+            $score['location_match'] = true;
+            $score['location_score'] = $useLocation ? 10 : 20;
         }
         
         // Priority bonuses
@@ -216,13 +248,328 @@ class MatchmakingService
         $score['priority_bonus'] = 10; // Base bonus
         
         // Calculate total score
-        $score['total_score'] = 
+        $score['total_score'] = round(
             $score['material_score'] +
             $score['finish_score'] +
             $score['thickness_score'] +
             $score['location_score'] +
-            $score['priority_bonus'];
+            $score['priority_bonus'],
+            1
+        );
+
+        return $score;
+    }
+    
+    /**
+     * Find matching seller posts for a buyer inquiry
+     * Matches buyer posts (intent='buy') with seller posts (intent='sell')
+     */
+    private function findMatchingSellerPosts(Inquiry $buyerInquiry, $buyerItems, array $tolerance, int $maxMatches): array
+    {
+        $matchedPosts = [];
         
+        // Find all active seller posts (intent='sell') that are not locked/expired
+        $sellerPosts = Inquiry::with(['items', 'poster'])
+            ->where('intent', 'sell')
+            ->where('status', InquiryStatus::MATCHING)
+            ->where('id', '!=', $buyerInquiry->id) // Don't match with self
+            ->where(function ($q) {
+                $q->whereNull('expires_at')
+                  ->orWhere('expires_at', '>', now());
+            })
+            ->get();
+        
+        foreach ($sellerPosts as $sellerPost) {
+            // Skip if same poster
+            if ($buyerInquiry->poster_type === $sellerPost->poster_type && 
+                $buyerInquiry->poster_id === $sellerPost->poster_id) {
+                continue;
+            }
+            
+            $sellerItems = $sellerPost->items;
+            if ($sellerItems->isEmpty()) {
+                continue;
+            }
+            
+            // Calculate match score between buyer and seller posts
+            $score = $this->calculatePostToPostMatchScore(
+                $buyerInquiry, 
+                $buyerItems, 
+                $sellerPost, 
+                $sellerItems, 
+                $tolerance
+            );
+            
+            if ($score['total_score'] > 0) {
+                // Determine dealer_id or converter_id based on seller post poster
+                $dealerId = null;
+                if ($sellerPost->poster_type === 'dealer') {
+                    $dealerId = $sellerPost->poster_id;
+                } elseif ($sellerPost->poster_type === 'converter') {
+                    // For converter posts, we'll store converter info in score_breakdown
+                    // and try to find associated dealer if any
+                    $converter = \App\Models\Converter::find($sellerPost->poster_id);
+                    if ($converter && $converter->user_id) {
+                        // Check if converter's user has a dealer profile
+                        $dealer = \App\Models\Dealer::where('user_id', $converter->user_id)->first();
+                        if ($dealer) {
+                            $dealerId = $dealer->id;
+                        }
+                    }
+                }
+                
+                $matchedPosts[] = [
+                    'dealer_id' => $dealerId,
+                    'score' => $score,
+                    'match_source' => 'seller_post',
+                    'matched_inquiry_id' => $sellerPost->id,
+                    'matched_poster_type' => $sellerPost->poster_type,
+                ];
+            }
+        }
+        
+        // Sort by score descending
+        usort($matchedPosts, function ($a, $b) {
+            return $b['score']['total_score'] <=> $a['score']['total_score'];
+        });
+        
+        return array_slice($matchedPosts, 0, $maxMatches);
+    }
+    
+    /**
+     * Find matching buyer posts for a seller inquiry
+     * Matches seller posts (intent='sell') with buyer posts (intent='buy')
+     */
+    private function findMatchingBuyerPosts(Inquiry $sellerInquiry, $sellerItems, array $tolerance, int $maxMatches): array
+    {
+        $matchedPosts = [];
+        
+        // Find all active buyer posts (intent='buy') that are not locked/expired
+        $buyerPosts = Inquiry::with(['items', 'poster'])
+            ->where('intent', 'buy')
+            ->where('status', InquiryStatus::MATCHING)
+            ->where('id', '!=', $sellerInquiry->id) // Don't match with self
+            ->where(function ($q) {
+                $q->whereNull('expires_at')
+                  ->orWhere('expires_at', '>', now());
+            })
+            ->get();
+        
+        foreach ($buyerPosts as $buyerPost) {
+            // Skip if same poster
+            if ($sellerInquiry->poster_type === $buyerPost->poster_type && 
+                $sellerInquiry->poster_id === $buyerPost->poster_id) {
+                continue;
+            }
+            
+            $buyerItems = $buyerPost->items;
+            if ($buyerItems->isEmpty()) {
+                continue;
+            }
+            
+            // Calculate match score between seller and buyer posts
+            $score = $this->calculatePostToPostMatchScore(
+                $sellerInquiry, 
+                $sellerItems, 
+                $buyerPost, 
+                $buyerItems, 
+                $tolerance
+            );
+            
+            if ($score['total_score'] > 0) {
+                // Determine dealer_id or converter_id based on buyer post poster
+                $dealerId = null;
+                if ($buyerPost->poster_type === 'dealer') {
+                    $dealerId = $buyerPost->poster_id;
+                } elseif ($buyerPost->poster_type === 'converter') {
+                    // For converter posts, try to find associated dealer
+                    $converter = \App\Models\Converter::find($buyerPost->poster_id);
+                    if ($converter && $converter->user_id) {
+                        $dealer = \App\Models\Dealer::where('user_id', $converter->user_id)->first();
+                        if ($dealer) {
+                            $dealerId = $dealer->id;
+                        }
+                    }
+                }
+                
+                $matchedPosts[] = [
+                    'dealer_id' => $dealerId,
+                    'score' => $score,
+                    'match_source' => 'buyer_post',
+                    'matched_inquiry_id' => $buyerPost->id,
+                    'matched_poster_type' => $buyerPost->poster_type,
+                ];
+            }
+        }
+        
+        // Sort by score descending
+        usort($matchedPosts, function ($a, $b) {
+            return $b['score']['total_score'] <=> $a['score']['total_score'];
+        });
+        
+        return array_slice($matchedPosts, 0, $maxMatches);
+    }
+    
+    /**
+     * Calculate match score between two posts (buyer <-> seller)
+     * This is the core matching logic for post-to-post matching
+     */
+    private function calculatePostToPostMatchScore(
+        Inquiry $post1, 
+        $items1, 
+        Inquiry $post2, 
+        $items2, 
+        array $tolerance
+    ): array {
+        $score = [
+            'material_match' => false,
+            'finish_match' => false,
+            'thickness_match' => false,
+            'location_match' => false,
+            'quantity_match' => false,
+            'tolerance_percent' => null,
+            'tolerance_absolute' => null,
+            'material_score' => 0,
+            'finish_score' => 0,
+            'thickness_score' => 0,
+            'location_score' => 0,
+            'quantity_score' => 0,
+            'freshness_score' => 0,
+            'total_score' => 0,
+            'distance_km' => null,
+        ];
+        
+        // ==========================================
+        // 1. MATERIAL MATCHING
+        // ==========================================
+        $materials1 = $items1->pluck('material_id')->filter();
+        $materials2 = $items2->pluck('material_id')->filter();
+        
+        if ($materials1->isNotEmpty() && $materials2->isNotEmpty()) {
+            $materialMatch = $materials1->intersect($materials2)->isNotEmpty();
+            if ($materialMatch) {
+                $score['material_match'] = true;
+                $score['material_score'] = 25; // Higher weight for post-to-post matching
+            }
+        } else {
+            // Fallback: category matching
+            $categories1 = $items1->pluck('material_category')->filter();
+            $categories2 = $items2->pluck('material_category')->filter();
+            if ($categories1->isNotEmpty() && $categories2->isNotEmpty()) {
+                if ($categories1->intersect($categories2)->isNotEmpty()) {
+                    $score['material_match'] = true;
+                    $score['material_score'] = 20;
+                }
+            }
+        }
+        
+        // ==========================================
+        // 2. THICKNESS/GSM MATCHING
+        // ==========================================
+        foreach ($items1 as $item1) {
+            foreach ($items2 as $item2) {
+                if ($item1->thickness_unit === 'gsm' && $item2->thickness_unit === 'gsm' && 
+                    $item1->thickness_gsm && $item2->thickness_gsm) {
+                    $gsmTolerance = ($item1->thickness_gsm * $tolerance['gsm_percent']) / 100;
+                    $minGsm = $item1->thickness_gsm - $gsmTolerance;
+                    $maxGsm = $item1->thickness_gsm + $gsmTolerance;
+                    
+                    if ($item2->thickness_gsm >= $minGsm && $item2->thickness_gsm <= $maxGsm) {
+                        $score['thickness_match'] = true;
+                        $score['thickness_score'] = 20;
+                        $score['tolerance_percent'] = $tolerance['gsm_percent'];
+                        break 2;
+                    }
+                } elseif ($item1->thickness_unit === 'mm' && $item2->thickness_unit === 'mm' && 
+                          $item1->thickness_mm && $item2->thickness_mm) {
+                    $mmTolerance = $tolerance['thickness_mm'];
+                    $minMm = $item1->thickness_mm - $mmTolerance;
+                    $maxMm = $item1->thickness_mm + $mmTolerance;
+                    
+                    if ($item2->thickness_mm >= $minMm && $item2->thickness_mm <= $maxMm) {
+                        $score['thickness_match'] = true;
+                        $score['thickness_score'] = 20;
+                        $score['tolerance_absolute'] = $mmTolerance;
+                        break 2;
+                    }
+                }
+            }
+        }
+        
+        // ==========================================
+        // 3. QUANTITY MATCHING
+        // ==========================================
+        $qty1 = $post1->quantity ?? 0;
+        $qty2 = $post2->quantity ?? 0;
+        
+        if ($qty1 > 0 && $qty2 > 0) {
+            // Check if seller quantity meets minimum requirement
+            $minRequiredQty = ($qty1 * $tolerance['qty_min_percent']) / 100;
+            if ($qty2 >= $minRequiredQty) {
+                $score['quantity_match'] = true;
+                // Score based on how close to required quantity
+                $qtyRatio = min(1.0, $qty2 / $qty1);
+                $score['quantity_score'] = 15 * $qtyRatio;
+            }
+        }
+        
+        // ==========================================
+        // 4. LOCATION/DISTANCE SCORING
+        // When config matchmaking.use_location_in_matching is false, treat as all India.
+        // ==========================================
+        $useLocation = config('matchmaking.use_location_in_matching', false);
+        
+        if ($post1->latitude && $post1->longitude && $post2->latitude && $post2->longitude) {
+            $distance = $this->calculateDistance(
+                $post1->latitude,
+                $post1->longitude,
+                $post2->latitude,
+                $post2->longitude
+            );
+            $score['distance_km'] = round($distance, 1);
+        }
+        
+        if (!$useLocation) {
+            $score['location_match'] = true;
+            $score['location_score'] = 20;
+        } elseif ($post1->latitude && $post1->longitude && $post2->latitude && $post2->longitude) {
+            $distance = $score['distance_km'] ?? 0;
+            if ($distance <= $tolerance['radius_km']) {
+                $score['location_match'] = true;
+                $score['location_score'] = max(0, 20 * (1 - ($distance / $tolerance['radius_km'])));
+            } elseif ($distance <= $tolerance['radius_km'] * 2) {
+                $score['location_match'] = true;
+                $score['location_score'] = max(0, 20 * 0.3);
+            }
+        } else {
+            $score['location_match'] = true;
+            $score['location_score'] = 20 * 0.5;
+        }
+        
+        // ==========================================
+        // 5. FRESHNESS SCORE (newer posts get bonus)
+        // ==========================================
+        $post2Age = $post2->created_at->diffInDays(now());
+        if ($post2Age <= 1) {
+            $score['freshness_score'] = 10; // Very fresh
+        } elseif ($post2Age <= 3) {
+            $score['freshness_score'] = 7; // Fresh
+        } elseif ($post2Age <= 7) {
+            $score['freshness_score'] = 5; // Recent
+        }
+        
+        // ==========================================
+        // TOTAL SCORE CALCULATION
+        // ==========================================
+        $score['total_score'] = round(
+            $score['material_score'] +
+            $score['thickness_score'] +
+            $score['quantity_score'] +
+            $score['location_score'] +
+            $score['freshness_score'],
+            1
+        );
+
         return $score;
     }
     
@@ -249,7 +596,9 @@ class MatchmakingService
                 $score += 30;
             }
             
-            // Location match
+            // Location: when use_location_in_matching is false, treat as all India (add score so no one excluded)
+            $useLocation = config('matchmaking.use_location_in_matching', false);
+            $radiusKm = 50;
             if ($inquiry->latitude && $inquiry->longitude) {
                 foreach ($dealer->locations as $location) {
                     if ($location->latitude && $location->longitude) {
@@ -259,12 +608,15 @@ class MatchmakingService
                             $location->latitude,
                             $location->longitude
                         );
-                        if ($distance <= 100) {
+                        if ($useLocation && $distance <= $radiusKm) {
                             $score += max(0, 30 - ($distance / 10));
                             break;
                         }
                     }
                 }
+            }
+            if (!$useLocation) {
+                $score += 15; // All India: fixed score so location doesn't exclude anyone
             }
             
             if ($score > 0) {
