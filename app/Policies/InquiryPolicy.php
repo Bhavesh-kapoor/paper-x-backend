@@ -60,7 +60,7 @@ class InquiryPolicy
      * Determine whether the user can view matchmaking responses.
      * Allow: (1) the poster, or (2) a matched responder (has MatchmakingLog for this inquiry) so they can see countdown / submit quote.
      */
-    public function forceDelete(User $user, Inquiry $inquiry): bool
+    public function viewResponses(User $user, Inquiry $inquiry): bool
     {
         // Poster can view
         if ($user->brand && $inquiry->poster_type === 'brand' && (int) $inquiry->poster_id === (int) $user->brand->id) {
@@ -87,6 +87,14 @@ class InquiryPolicy
             return true;
         }
 
+        return false;
+    }
+
+    /**
+     * Determine whether the user can force delete the model.
+     */
+    public function forceDelete(User $user, Inquiry $inquiry): bool
+    {
         return false;
     }
 }

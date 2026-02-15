@@ -191,6 +191,215 @@ class SessionController extends Controller
     }
 
     /**
+     * Get poster detail (owner only).
+     * Returns data for the poster's detail screen: requirement summary and counts only. No response list, no names.
+     * GET /sessions/{session}/poster-detail
+     */
+    public function getPosterDetail(int $session)
+    {
+        try {
+            $user = request()->user();
+            foreach (['dealer', 'brand', 'converter', 'machineDealer'] as $rel) {
+                if (!$user->relationLoaded($rel)) {
+                    $user->load($rel);
+                }
+            }
+
+            $sessionModel = \App\Models\MatchingSession::with(['inquiry', 'inquiry.items'])
+                ->findOrFail($session);
+
+            $inquiry = $sessionModel->inquiry;
+            if (!$inquiry) {
+                return Response::error('Inquiry not found', null, HttpResponse::HTTP_NOT_FOUND);
+            }
+
+            $posterType = $inquiry->poster_type;
+            $posterId = $inquiry->poster_id;
+            $isOwner = false;
+            if ($posterType === 'dealer' && $user->dealer && (int) $posterId === (int) $user->dealer->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'converter' && $user->converter && (int) $posterId === (int) $user->converter->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'brand' && $user->brand && (int) $posterId === (int) $user->brand->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'machine_dealer' && $user->machineDealer && (int) $posterId === (int) $user->machineDealer->id) {
+                $isOwner = true;
+            }
+
+            if (!$isOwner) {
+                return Response::error('Only the poster can view this detail', null, HttpResponse::HTTP_FORBIDDEN);
+            }
+
+            $intent = $inquiry->intent && is_object($inquiry->intent) ? $inquiry->intent->value : ($inquiry->intent ?? 'buy');
+
+            $reached_count = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
+                ->where('is_visible', true)
+                ->count();
+            $responses_count = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
+                ->whereNotNull('responded_at')
+                ->count();
+            $matches_count = $reached_count;
+
+            $requirement_summary = [
+                'title' => $inquiry->title,
+                'material' => $inquiry->items->first()->material_category ?? null,
+                'quantity' => $inquiry->quantity,
+                'quantity_unit' => $inquiry->quantity_unit,
+                'urgency' => $inquiry->urgency ?? 'normal',
+                'items' => $inquiry->items->map(function ($item) {
+                    return [
+                        'material_category' => $item->material_category ?? null,
+                        'quantity' => $item->quantity ?? null,
+                        'quantity_unit' => $item->quantity_unit ?? null,
+                    ];
+                })->values()->all(),
+            ];
+
+            $data = [
+                'poster_type' => $posterType,
+                'intent' => $intent,
+                'title' => $inquiry->title,
+                'requirement_summary' => $requirement_summary,
+                'created_at' => $inquiry->created_at?->toIso8601String(),
+                'reached_count' => $reached_count,
+                'matches_count' => $matches_count,
+                'responses_count' => $responses_count,
+            ];
+
+            return Response::success('Poster detail retrieved', $data);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return Response::error('Session not found', null, HttpResponse::HTTP_NOT_FOUND);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
+     * Get responder detail (non-owner only).
+     * Returns data for the responder's detail screen: "someone wants to buy/sell", poster type, requirement summary.
+     * GET /sessions/{session}/responder-detail
+     */
+    public function getResponderDetail(int $session)
+    {
+        try {
+            $user = request()->user();
+            foreach (['dealer', 'brand', 'converter', 'machineDealer'] as $rel) {
+                if (!$user->relationLoaded($rel)) {
+                    $user->load($rel);
+                }
+            }
+
+            $sessionModel = \App\Models\MatchingSession::with(['inquiry', 'inquiry.items'])
+                ->findOrFail($session);
+
+            $inquiry = $sessionModel->inquiry;
+            if (!$inquiry) {
+                return Response::error('Inquiry not found', null, HttpResponse::HTTP_NOT_FOUND);
+            }
+
+            $posterType = $inquiry->poster_type;
+            $posterId = $inquiry->poster_id;
+            $isOwner = false;
+            if ($posterType === 'dealer' && $user->dealer && (int) $posterId === (int) $user->dealer->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'converter' && $user->converter && (int) $posterId === (int) $user->converter->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'brand' && $user->brand && (int) $posterId === (int) $user->brand->id) {
+                $isOwner = true;
+            } elseif ($posterType === 'machine_dealer' && $user->machineDealer && (int) $posterId === (int) $user->machineDealer->id) {
+                $isOwner = true;
+            }
+
+            if ($isOwner) {
+                return Response::error('Use poster-detail for your own post', null, HttpResponse::HTTP_FORBIDDEN);
+            }
+
+            $hasLog = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
+                ->where(function ($q) use ($user) {
+                    if ($user->dealer) {
+                        $q->where('dealer_id', $user->dealer->id);
+                    } elseif ($user->converter) {
+                        $q->where('converter_id', $user->converter->id);
+                    } elseif ($user->machineDealer) {
+                        $q->where('machine_dealer_id', $user->machineDealer->id);
+                    } else {
+                        $q->whereRaw('0=1');
+                    }
+                })->where('is_visible', true)->exists();
+
+            $myLog = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
+                ->where(function ($q) use ($user) {
+                    if ($user->dealer) {
+                        $q->where('dealer_id', $user->dealer->id);
+                    } elseif ($user->converter) {
+                        $q->where('converter_id', $user->converter->id);
+                    } elseif ($user->machineDealer) {
+                        $q->where('machine_dealer_id', $user->machineDealer->id);
+                    } else {
+                        $q->whereRaw('0=1');
+                    }
+                })->first();
+
+            if (!$myLog || !$myLog->is_visible) {
+                return Response::error('You do not have access to this requirement', null, HttpResponse::HTTP_FORBIDDEN);
+            }
+
+            $intent = $inquiry->intent && is_object($inquiry->intent) ? $inquiry->intent->value : ($inquiry->intent ?? 'buy');
+            $posterLabel = match ($posterType) {
+                'dealer' => 'A dealer',
+                'converter' => 'A converter',
+                'brand' => 'A brand',
+                'machine_dealer' => 'A machine dealer',
+                default => 'Someone',
+            };
+
+            $requirement_summary = [
+                'title' => $inquiry->title,
+                'material' => $inquiry->items->first()->material_category ?? null,
+                'quantity' => $inquiry->quantity,
+                'quantity_unit' => $inquiry->quantity_unit,
+                'urgency' => $inquiry->urgency ?? 'normal',
+                'items' => $inquiry->items->map(function ($item) {
+                    return [
+                        'material_category' => $item->material_category ?? null,
+                        'quantity' => $item->quantity ?? null,
+                        'quantity_unit' => $item->quantity_unit ?? null,
+                    ];
+                })->values()->all(),
+            ];
+
+            $data = [
+                'inquiry_id' => $inquiry->id,
+                'intent' => $intent,
+                'poster_label' => $posterLabel,
+                'title' => $inquiry->title,
+                'requirement_summary' => $requirement_summary,
+                'created_at' => $inquiry->created_at?->toIso8601String(),
+                'expires_at' => $sessionModel->expires_at?->toIso8601String(),
+                'my_responder_status' => [
+                    'expressed_interest' => (bool) $myLog->responded_at,
+                    'shortlisted' => (bool) $myLog->is_selected,
+                    'declined' => (bool) $myLog->declined_at,
+                ],
+            ];
+
+            return Response::success('Responder detail retrieved', $data);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return Response::error('Session not found', null, HttpResponse::HTTP_NOT_FOUND);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
      * Get session by inquiry id.
      * Use this when you have inquiry id (e.g. from requirements list) but need session detail.
      * GET /sessions/by-inquiry/{inquiry_id}

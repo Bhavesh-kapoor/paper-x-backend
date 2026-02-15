@@ -32,6 +32,8 @@ class MatchmakingLog extends Model
         'is_selected',
         'selected_at',
         'declined_at',
+        'approx_price',
+        'interest_description',
     ];
 
     protected $casts = [
@@ -50,6 +52,7 @@ class MatchmakingLog extends Model
         'responded_at' => 'datetime',
         'selected_at' => 'datetime',
         'declined_at' => 'datetime',
+        'approx_price' => 'decimal:2',
     ];
 
     public function inquiry(): BelongsTo

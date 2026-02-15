@@ -7,6 +7,7 @@ use App\Models\InquiryItem;
 use App\Models\Dealer;
 use App\Models\MatchmakingLog;
 use App\Models\MatchingSession;
+use App\Enums\DealerStatus;
 use App\Enums\InquiryStatus;
 use App\Enums\SessionStatus;
 use Illuminate\Support\Facades\DB;
@@ -35,13 +36,17 @@ class MatchmakingService
             
             // Get all active dealers
             $dealers = Dealer::with(['materials', 'locations'])
-                ->where('status', 'active')
+                ->where('status', DealerStatus::ACTIVE)
                 ->where('profile_complete', true)
                 ->get();
             
             $matchedDealers = [];
             
             foreach ($dealers as $dealer) {
+                // Exclude the poster when they are a dealer (don't match post to its author)
+                if ($inquiry->poster_type === 'dealer' && $dealer->id === $inquiry->poster_id) {
+                    continue;
+                }
                 $score = $this->calculateDealerMatchScore($inquiry, $inquiryItems, $dealer);
                 
                 if ($score['total_score'] > 0) {
@@ -580,13 +585,16 @@ class MatchmakingService
     {
         // Simplified matching based on inquiry materials and location
         $dealers = Dealer::with(['materials', 'locations'])
-            ->where('status', 'active')
+            ->where('status', DealerStatus::ACTIVE)
             ->where('profile_complete', true)
             ->get();
         
         $matchedDealers = [];
         
         foreach ($dealers as $dealer) {
+            if ($inquiry->poster_type === 'dealer' && $dealer->id === $inquiry->poster_id) {
+                continue;
+            }
             $score = 0;
             
             // Material match
@@ -653,6 +661,111 @@ class MatchmakingService
         return $earthRadius * $c;
     }
     
+    /**
+     * Get matchmaking responses for an inquiry (for the poster's "Session Details" / matchmaking responses screen).
+     * Returns visible MatchmakingLogs with dealer info, distance, match score, and optional response data.
+     *
+     * @param Inquiry $inquiry
+     * @param string $filter One of: all, responded, exact_match, slight_variation (nearest is applied by controller via sort)
+     * @return array List of response items for API
+     */
+    public function getMatchesForInquiry(Inquiry $inquiry, string $filter = 'all'): array
+    {
+        $logs = MatchmakingLog::where('inquiry_id', $inquiry->id)
+            ->where('is_visible', true)
+            ->with(['dealer.user', 'dealer.locations', 'response'])
+            ->get();
+
+        $inquiryLat = $inquiry->latitude ? (float) $inquiry->latitude : null;
+        $inquiryLon = $inquiry->longitude ? (float) $inquiry->longitude : null;
+
+        $items = [];
+        foreach ($logs as $log) {
+            $dealer = $log->dealer;
+            if (!$dealer) {
+                continue;
+            }
+
+            $user = $dealer->user;
+            $companyName = $user ? ($user->company_name ?? $user->name ?? 'Potential Match') : 'Potential Match';
+
+            $locationStr = 'Unknown';
+            $distanceKm = null;
+            $firstLocation = $dealer->locations->first();
+            if ($firstLocation) {
+                $parts = array_filter([$firstLocation->city, $firstLocation->state, $firstLocation->address]);
+                $locationStr = implode(', ', $parts) ?: 'Unknown';
+                if ($inquiryLat !== null && $inquiryLon !== null && $firstLocation->latitude !== null && $firstLocation->longitude !== null) {
+                    $distanceKm = round($this->calculateDistance(
+                        $inquiryLat,
+                        $inquiryLon,
+                        (float) $firstLocation->latitude,
+                        (float) $firstLocation->longitude
+                    ), 2);
+                }
+            }
+
+            $scoreBreakdown = is_array($log->score_breakdown) ? $log->score_breakdown : [];
+            $materialMatch = $log->material_match ?? $scoreBreakdown['material_match'] ?? false;
+            $finishMatch = $log->finish_match ?? $scoreBreakdown['finish_match'] ?? false;
+            $thicknessMatch = $log->thickness_match ?? $scoreBreakdown['thickness_match'] ?? false;
+            $matchType = ($materialMatch && $finishMatch && $thicknessMatch) ? 'exact_match' : 'slight_variation';
+            $matchScore = $log->priority_score ?? 0;
+
+            $response = $log->response;
+            $hasResponded = $log->responded_at !== null;
+            $quantityOffered = $response ? (float) ($response->quantity_offered ?? 0) : 0;
+            $quotedPrice = $response && $response->quoted_price !== null ? (float) $response->quoted_price : null;
+            $priceStatus = $response && $response->price_status !== null ? $response->price_status : null;
+            $additionalDetails = $response ? ($response->additional_details ?? null) : null;
+            $respondedAt = $log->responded_at ? $log->responded_at->toIso8601String() : '';
+            $isShortlisted = (bool) ($log->is_selected ?? false);
+
+            switch ($filter) {
+                case 'responded':
+                    if (!$hasResponded) {
+                        continue 2;
+                    }
+                    break;
+                case 'exact_match':
+                    if ($matchType !== 'exact_match') {
+                        continue 2;
+                    }
+                    break;
+                case 'slight_variation':
+                    if ($matchType !== 'slight_variation') {
+                        continue 2;
+                    }
+                    break;
+                case 'all':
+                case 'nearest':
+                default:
+                    break;
+            }
+
+            $items[] = [
+                'id' => $log->id,
+                'match_type' => $matchType,
+                'distance_km' => $distanceKm,
+                'dealer' => [
+                    'id' => $dealer->id,
+                    'company_name' => $companyName,
+                    'location' => $locationStr,
+                ],
+                'quantity_offered' => $quantityOffered,
+                'quoted_price' => $quotedPrice,
+                'price_status' => $priceStatus,
+                'additional_details' => $additionalDetails,
+                'responded_at' => $respondedAt,
+                'is_shortlisted' => $isShortlisted,
+                'has_responded' => $hasResponded,
+                'match_score' => $matchScore,
+            ];
+        }
+
+        return $items;
+    }
+
     /**
      * Hide inquiry from non-selected dealers after lock
      */

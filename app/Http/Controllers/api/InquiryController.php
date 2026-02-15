@@ -3,7 +3,12 @@
 namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Inquiry;
+use App\Services\MatchmakingService;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Response;
 
 class InquiryController extends Controller
 {
@@ -917,6 +922,7 @@ class InquiryController extends Controller
 
     /**
      * Responder expresses interest (Interested). Updates MatchmakingLog.responded_at.
+     * Optionally accepts approx_price (number) and description (string) to store with the interest.
      * Poster can be notified; they see this responder in matchmaking responses and can shortlist.
      */
     public function expressInterest(Request $request, Inquiry $inquiry)
@@ -934,10 +940,21 @@ class InquiryController extends Controller
                 return Response::error('You previously declined this requirement. Cannot express interest now.', null, HttpResponse::HTTP_BAD_REQUEST);
             }
 
-            $log->update([
+            $approxPrice = $request->input('approx_price');
+            $description = $request->input('description');
+
+            $update = [
                 'responded_at' => now(),
                 'declined_at' => null,
-            ]);
+            ];
+            if ($approxPrice !== null && $approxPrice !== '') {
+                $update['approx_price'] = $approxPrice;
+            }
+            if (is_string($description) && $description !== '') {
+                $update['interest_description'] = $description;
+            }
+
+            $log->update($update);
 
             // TODO: Notify poster that someone expressed interest (e.g. push/email)
 

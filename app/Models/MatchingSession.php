@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class MatchingSession extends Model
 {
@@ -26,6 +27,8 @@ class MatchingSession extends Model
         'republish_cooldown_until',
         'is_night_mode',
         'full_matching_starts_at',
+        'is_visible_to_dealers',
+        'is_visible_to_brand',
     ];
 
     protected $casts = [
@@ -40,6 +43,8 @@ class MatchingSession extends Model
         'republish_cooldown_until' => 'datetime',
         'is_night_mode' => 'boolean',
         'full_matching_starts_at' => 'datetime',
+        'is_visible_to_dealers' => 'boolean',
+        'is_visible_to_brand' => 'boolean',
     ];
 
     public function inquiry(): BelongsTo

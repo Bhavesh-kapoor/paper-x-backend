@@ -15,6 +15,21 @@ class ChatController extends Controller
     ) {
     }
 
+    public function getChatList()
+    {
+        try {
+            $user = request()->user();
+            $list = $this->chatService->getChatList($user->id);
+            return Response::success('chat.list', $list);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
     public function getMessages(int $sessionId)
     {
         try {

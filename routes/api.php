@@ -6,6 +6,7 @@ use App\Http\Controllers\api\MaterialController;
 use App\Http\Controllers\api\DealerController;
 use App\Http\Controllers\api\OpportunityController;
 use App\Http\Controllers\api\SessionController;
+use App\Http\Controllers\api\InquiryController;
 use App\Http\Controllers\api\ChatController;
 use App\Http\Controllers\api\QuotationController;
 use App\Http\Controllers\api\NotificationController;
@@ -101,11 +102,18 @@ Route::prefix('v1')->group(function () {
         // Mark deal as failed
         Route::post('/{session}/deal-failed', [SessionController::class, 'markDealFailed'])->name('sessions.deal-failed');
         
-        // Get session details (use session id, not inquiry id)
-        Route::get('/{session}', [SessionController::class, 'getSession'])->name('sessions.show');
+        // Get poster detail (owner only: counts + requirement summary, no response list)
+        Route::get('/{session}/poster-detail', [SessionController::class, 'getPosterDetail'])->name('sessions.poster-detail');
+        // Get responder detail (non-owner only: someone wants to buy/sell + requirement summary)
+        Route::get('/{session}/responder-detail', [SessionController::class, 'getResponderDetail'])->name('sessions.responder-detail');
         
+        // Chat list (must be before /{session} catch-all)
+        Route::get('/chat-list', [ChatController::class, 'getChatList'])->name('sessions.chat-list');
         // Chat
         Route::get('/chat/{session_id}', [ChatController::class, 'getMessages'])->name('dealer.chat.messages');
+        
+        // Get session details (use session id, not inquiry id)
+        Route::get('/{session}', [SessionController::class, 'getSession'])->name('sessions.show');
         Route::post('/chat/{session_id}/message', [ChatController::class, 'sendMessage'])->name('dealer.chat.send');
         
         // Quotations

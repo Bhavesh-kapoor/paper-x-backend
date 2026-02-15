@@ -10,6 +10,9 @@ class PostRequirementRequest extends ApiRequest
     public function rules(): array
     {
         return [
+            // Required: Title (display name for the requirement, e.g. material name)
+            'title' => ['required', 'string', 'max:255'],
+
             // Required: Inquiry Type & Intent (material with buy or sell intent for dealer requirements)
             'inquiry_type' => ['required', 'string', Rule::in(['material'])],
             'intent' => ['required', 'string', Rule::in(['buy', 'sell'])],
@@ -118,6 +121,8 @@ class PostRequirementRequest extends ApiRequest
     public function messages(): array
     {
         return [
+            'title.required' => 'Please provide a title for the requirement',
+            'title.max' => 'Title must not exceed 255 characters',
             'material_id.required' => 'Please select a material',
             'material_id.exists' => 'Selected material does not exist',
             'thickness.required' => 'Please enter thickness',

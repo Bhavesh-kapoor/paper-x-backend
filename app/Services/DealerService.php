@@ -6,15 +6,23 @@ use App\Enums\DealerStatus;
 use App\Enums\InquiryStatus;
 use App\Enums\InquiryType;
 use App\Enums\InquiryIntent;
+use App\Enums\SessionStatus;
 use App\Models\Dealer;
 use App\Models\DealerLocation;
 use App\Models\DealerMaterialDetail;
 use App\Models\Inquiry;
+use App\Models\InquiryItem;
 use App\Models\MatchingSession;
+use App\Services\MatchmakingService;
 use Illuminate\Support\Facades\DB;
 
 class DealerService
 {
+    public function __construct(
+        protected MatchmakingService $matchmakingService
+    ) {
+    }
+
     public function completeProfile(array $data, int $userId): Dealer
     {
         return DB::transaction(function () use ($data, $userId) {
@@ -74,6 +82,8 @@ class DealerService
                         'thickness_ranges' => $materialData['thickness_ranges'] ?? [],
                     ]);
                 }
+                // Ensure dealer_materials pivot stays in sync with material details (used by matchmaking)
+                $dealer->materials()->sync(array_column($data['materials'], 'material_id'));
             }
 
             // Sync machines (optional)
@@ -205,9 +215,11 @@ class DealerService
                 'posting_fee_amount' => $data['posting_fee_amount'] ?? null,
             ]);
 
-            // Attach materials if provided
+            // Attach materials if provided (array or single material_id for consistency)
             if (isset($data['material_ids']) && is_array($data['material_ids']) && !empty($data['material_ids'])) {
                 $inquiry->materials()->sync($data['material_ids']);
+            } elseif (isset($data['material_id'])) {
+                $inquiry->materials()->sync([$data['material_id']]);
             }
 
             // Attach machines if provided
