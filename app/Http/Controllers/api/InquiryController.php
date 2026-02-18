@@ -956,6 +956,9 @@ class InquiryController extends Controller
 
             $log->update($update);
 
+            // Auto-lock session when 10 people have responded (post moves from Inquiries to Locked)
+            app(\App\Services\MatchmakingService::class)->lockSessionIfResponseThresholdReached($inquiry, 10);
+
             // TODO: Notify poster that someone expressed interest (e.g. push/email)
 
             return Response::success('Interest expressed successfully', [

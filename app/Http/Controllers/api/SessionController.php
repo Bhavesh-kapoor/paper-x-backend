@@ -738,20 +738,29 @@ class SessionController extends Controller
             // Note: Database enum currently only has: ACTIVE, DEAL_WON, DEAL_LOST, EXPIRED, CANCELLED
             // Using ACTIVE for newly created sessions until enum is updated
             if ($filter === 'finding_matches') {
-                // Sessions that are actively matching (status = ACTIVE and inquiry status = MATCHING)
-                $query->where('status', \App\Enums\SessionStatus::ACTIVE)
+                // Active inquiries: open until 10 people have expressed interest (responded_at)
+                $query->whereIn('status', [\App\Enums\SessionStatus::ACTIVE, \App\Enums\SessionStatus::LOCKED])
                     ->whereHas('inquiry', function ($inqQuery) {
-                        $inqQuery->where('status', \App\Enums\InquiryStatus::MATCHING);
+                        $inqQuery->whereRaw('(SELECT COUNT(*) FROM matchmaking_logs WHERE matchmaking_logs.inquiry_id = inquiries.id AND matchmaking_logs.responded_at IS NOT NULL) < 10');
                     });
             } elseif ($filter === 'active') {
-                // Active sessions (ACTIVE status, not expired)
-                $query->where('status', \App\Enums\SessionStatus::ACTIVE)
-                    ->where('expires_at', '>', now());
+                // Active (open) sessions: not expired, < 10 people responded
+                $query->whereIn('status', [\App\Enums\SessionStatus::ACTIVE, \App\Enums\SessionStatus::LOCKED])
+                    ->where(function ($q) {
+                        $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                    })
+                    ->whereHas('inquiry', function ($inqQuery) {
+                        $inqQuery->whereRaw('(SELECT COUNT(*) FROM matchmaking_logs WHERE matchmaking_logs.inquiry_id = inquiries.id AND matchmaking_logs.responded_at IS NOT NULL) < 10');
+                    });
             } elseif ($filter === 'locked') {
-                // Locked sessions (when enum is updated, use LOCKED status)
-                // For now, check if locked_at is set and not null
-                $query->whereNotNull('locked_at')
-                    ->where('status', \App\Enums\SessionStatus::ACTIVE);
+                // Locked sessions: >= 10 people responded (expressed interest) or manually locked
+                $query->whereIn('status', [\App\Enums\SessionStatus::ACTIVE, \App\Enums\SessionStatus::LOCKED])
+                    ->where(function ($q) {
+                        $q->whereNotNull('locked_at')
+                            ->orWhereHas('inquiry', function ($iq) {
+                                $iq->whereRaw('(SELECT COUNT(*) FROM matchmaking_logs WHERE matchmaking_logs.inquiry_id = inquiries.id AND matchmaking_logs.responded_at IS NOT NULL) >= 10');
+                            });
+                    });
             } else {
                 // All active sessions (ACTIVE status, not expired)
                 $query->where('status', \App\Enums\SessionStatus::ACTIVE)

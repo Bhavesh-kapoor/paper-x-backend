@@ -5,9 +5,11 @@ namespace App\Services;
 use App\Models\Inquiry;
 use App\Models\InquiryItem;
 use App\Models\Dealer;
+use App\Models\Converter;
 use App\Models\MatchmakingLog;
 use App\Models\MatchingSession;
 use App\Enums\DealerStatus;
+use App\Enums\ConverterStatus;
 use App\Enums\InquiryStatus;
 use App\Enums\SessionStatus;
 use Illuminate\Support\Facades\DB;
@@ -83,12 +85,16 @@ class MatchmakingService
                 ]);
             }
             
-            // Update inquiry visibility
+            // Update inquiry visibility and total matched count
+            $totalMatchmakingLogs = MatchmakingLog::where('inquiry_id', $inquiry->id)->count();
             $inquiry->update([
                 'is_visible_to_dealers' => true,
-                'matched_dealers_count' => count($matchedDealers),
+                'matched_dealers_count' => $totalMatchmakingLogs,
                 'matching_started_at' => now(),
             ]);
+
+            // Auto-lock only when 10 people have *expressed interest* (responded_at), not on initial match
+            $this->lockSessionIfResponseThresholdReached($inquiry, 10);
             
             DB::commit();
             
@@ -112,7 +118,103 @@ class MatchmakingService
             throw new \Exception('Matchmaking failed for inquiry #' . $inquiry->id . ': ' . $e->getMessage(), 500, $e);
         }
     }
-    
+
+    /**
+     * Find and match converters for an inquiry.
+     * Uses converter registration/profile data (raw materials, factory location) similar to dealer matching.
+     *
+     * @param Inquiry $inquiry
+     * @param int $maxConverters Maximum number of converters to match (default: 10)
+     * @return array Array of matched converter IDs with scores
+     */
+    public function findMatchingConverters(Inquiry $inquiry, int $maxConverters = 10): array
+    {
+        DB::beginTransaction();
+        try {
+            $inquiryItems = $inquiry->items;
+
+            if ($inquiryItems->isEmpty()) {
+                // For now, skip legacy path for converters if there are no items
+                return [];
+            }
+
+            $converters = Converter::with(['rawMaterials'])
+                ->where('status', ConverterStatus::ACTIVE)
+                ->where('profile_complete', true)
+                ->get();
+
+            $matchedConverters = [];
+
+            foreach ($converters as $converter) {
+                // Exclude the poster when they are a converter (don't match post to its author)
+                if ($inquiry->poster_type === 'converter' && $converter->id === $inquiry->poster_id) {
+                    continue;
+                }
+
+                $score = $this->calculateConverterMatchScore($inquiry, $inquiryItems, $converter);
+
+                if ($score['total_score'] > 0) {
+                    $matchedConverters[] = [
+                        'converter_id' => $converter->id,
+                        'score' => $score,
+                    ];
+                }
+            }
+
+            usort($matchedConverters, function ($a, $b) {
+                return $b['score']['total_score'] <=> $a['score']['total_score'];
+            });
+
+            $matchedConverters = array_slice($matchedConverters, 0, $maxConverters);
+
+            foreach ($matchedConverters as $match) {
+                MatchmakingLog::create([
+                    'inquiry_id' => $inquiry->id,
+                    'converter_id' => $match['converter_id'],
+                    'material_match' => $match['score']['material_match'],
+                    'finish_match' => $match['score']['finish_match'],
+                    'thickness_match' => $match['score']['thickness_match'],
+                    'location_match' => $match['score']['location_match'],
+                    'thickness_tolerance_percent' => $match['score']['tolerance_percent'] ?? null,
+                    'thickness_tolerance_absolute' => $match['score']['tolerance_absolute'] ?? null,
+                    'priority_score' => $match['score']['total_score'],
+                    'score_breakdown' => $match['score'],
+                    'is_visible' => true,
+                    'visible_to_dealer_at' => now(),
+                ]);
+            }
+
+            // Ensure matching_started_at is set when converters are matched as well
+            if ($matchedConverters) {
+                $inquiry->update([
+                    'matching_started_at' => $inquiry->matching_started_at ?? now(),
+                ]);
+            }
+
+            $this->lockSessionIfResponseThresholdReached($inquiry, 10);
+
+            DB::commit();
+
+            return array_column($matchedConverters, 'converter_id');
+        } catch (\Illuminate\Database\QueryException $e) {
+            DB::rollBack();
+            Log::error('Database error during converter matchmaking', [
+                'inquiry_id' => $inquiry->id,
+                'error' => $e->getMessage(),
+                'sql' => $e->getSql() ?? null,
+            ]);
+            throw new \Exception('Database error during converter matchmaking: ' . $e->getMessage(), 500, $e);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Converter matchmaking failed', [
+                'inquiry_id' => $inquiry->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw new \Exception('Converter matchmaking failed for inquiry #' . $inquiry->id . ': ' . $e->getMessage(), 500, $e);
+        }
+    }
+
     /**
      * Calculate match score for a dealer against an inquiry
      */
@@ -264,7 +366,120 @@ class MatchmakingService
 
         return $score;
     }
-    
+
+    /**
+     * Calculate match score for a converter against an inquiry.
+     * Mirrors dealer scoring but uses converter raw materials and factory location.
+     */
+    private function calculateConverterMatchScore(Inquiry $inquiry, $inquiryItems, Converter $converter): array
+    {
+        $score = [
+            'material_match' => false,
+            'finish_match' => false,
+            'thickness_match' => false,
+            'location_match' => false,
+            'tolerance_percent' => null,
+            'tolerance_absolute' => null,
+            'material_score' => 0,
+            'finish_score' => 0,
+            'thickness_score' => 0,
+            'location_score' => 0,
+            'distance_km' => null,
+            'priority_bonus' => 0,
+            'total_score' => 0,
+        ];
+
+        // Material matching (category-based)
+        $inquiryMaterials = $inquiryItems->pluck('material_id')->filter();
+        $converterMaterials = $converter->rawMaterials->pluck('id');
+
+        if ($inquiryMaterials->isNotEmpty() && $converterMaterials->isNotEmpty()) {
+            $materialMatch = $inquiryMaterials->intersect($converterMaterials)->isNotEmpty();
+            if ($materialMatch) {
+                $score['material_match'] = true;
+                $score['material_score'] = 30;
+            }
+        }
+
+        // Finish/Coating matching – placeholder similar to dealers
+        $inquiryFinishes = $inquiryItems->pluck('finish_coating')->filter();
+        if ($inquiryFinishes->isNotEmpty()) {
+            $score['finish_match'] = true;
+            $score['finish_score'] = 15;
+        }
+
+        // Thickness matching with tolerance (same placeholder logic as dealers)
+        $tolerancePercent = $inquiry->urgency === 'urgent' ? 10.0 : 5.0;
+        $toleranceAbsolute = $inquiry->urgency === 'urgent' ? 0.3 : 0.2;
+
+        foreach ($inquiryItems as $item) {
+            if ($item->thickness_unit === 'gsm' && $item->thickness_gsm) {
+                $score['thickness_match'] = true;
+                $score['thickness_score'] = 25;
+                $score['tolerance_percent'] = $tolerancePercent;
+                break;
+            } elseif ($item->thickness_unit === 'mm' && $item->thickness_mm) {
+                $score['thickness_match'] = true;
+                $score['thickness_score'] = 25;
+                $score['tolerance_absolute'] = $toleranceAbsolute;
+                break;
+            }
+        }
+
+        if (
+            !$score['thickness_match'] &&
+            $inquiryItems->where('thickness_gsm', '!=', null)->isEmpty() &&
+            $inquiryItems->where('thickness_mm', '!=', null)->isEmpty()
+        ) {
+            $score['thickness_match'] = true;
+            $score['thickness_score'] = 5;
+        }
+
+        // Location scoring using converter factory coordinates
+        $useLocation = config('matchmaking.use_location_in_matching', false);
+        $radiusKm = $inquiry->urgency === 'urgent' ? 100 : 50;
+
+        if ($inquiry->latitude && $inquiry->longitude && $converter->factory_latitude && $converter->factory_longitude) {
+            $distance = $this->calculateDistance(
+                (float) $inquiry->latitude,
+                (float) $inquiry->longitude,
+                (float) $converter->factory_latitude,
+                (float) $converter->factory_longitude
+            );
+            $score['distance_km'] = round($distance, 1);
+
+            if (!$useLocation) {
+                $score['location_match'] = true;
+                $score['location_score'] = 20;
+            } else {
+                if ($distance <= $radiusKm) {
+                    $score['location_match'] = true;
+                    $score['location_score'] = max(0, 20 * (1 - ($distance / $radiusKm)));
+                } elseif ($distance <= $radiusKm * 2) {
+                    $score['location_match'] = true;
+                    $score['location_score'] = max(0, 20 * 0.3);
+                }
+            }
+        } else {
+            $score['location_match'] = true;
+            $score['location_score'] = $useLocation ? 10 : 20;
+        }
+
+        // Priority bonuses – placeholder
+        $score['priority_bonus'] = 10;
+
+        $score['total_score'] = round(
+            $score['material_score'] +
+            $score['finish_score'] +
+            $score['thickness_score'] +
+            $score['location_score'] +
+            $score['priority_bonus'],
+            1
+        );
+
+        return $score;
+    }
+
     /**
      * Find matching seller posts for a buyer inquiry
      * Matches buyer posts (intent='buy') with seller posts (intent='sell')
@@ -764,6 +979,32 @@ class MatchmakingService
         }
 
         return $items;
+    }
+
+    /**
+     * Auto-lock session when 10 people have responded (expressed interest – responded_at set).
+     * Post moves from Inquiries to Locked sessions on dashboard.
+     */
+    public function lockSessionIfResponseThresholdReached(Inquiry $inquiry, int $threshold = 10): void
+    {
+        $count = MatchmakingLog::where('inquiry_id', $inquiry->id)->whereNotNull('responded_at')->count();
+        if ($count < $threshold) {
+            return;
+        }
+
+        $session = MatchingSession::where('inquiry_id', $inquiry->id)->first();
+        if (!$session || $session->locked_at !== null) {
+            return;
+        }
+
+        $session->update([
+            'status' => SessionStatus::LOCKED,
+            'locked_at' => now(),
+        ]);
+        $inquiry->update([
+            'status' => InquiryStatus::LOCKED,
+            'locked_at' => now(),
+        ]);
     }
 
     /**

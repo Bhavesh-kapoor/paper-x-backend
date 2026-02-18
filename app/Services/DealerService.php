@@ -120,6 +120,7 @@ class DealerService
             return [
                 'profile_completion_percentage' => 0,
                 'active_opportunities_count' => 0,
+                'active_inquiries_count' => 0,
                 'locked_sessions_count' => 0,
                 'expired_sessions_count' => 0,
                 'unread_notifications_count' => 0,
@@ -135,9 +136,23 @@ class DealerService
             ->where('expires_at', '>', now())
             ->count();
 
+        // Inquiries: posts with < 10 people who responded (expressed interest) – open until 10 respond
+        $activeInquiriesCount = MatchingSession::ownSessionsByDealer($dealer->id)
+            ->whereIn('status', [SessionStatus::ACTIVE, SessionStatus::LOCKED])
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->whereHas('inquiry', function ($q) {
+                $q->whereRaw('(SELECT COUNT(*) FROM matchmaking_logs WHERE matchmaking_logs.inquiry_id = inquiries.id AND matchmaking_logs.responded_at IS NOT NULL) < 10');
+            })
+            ->count();
+
+        // Locked sessions: posts with >= 10 people who responded – removed from active inquiries
         $lockedSessions = MatchingSession::ownSessionsByDealer($dealer->id)
-            ->whereNotNull('locked_at')
-            ->where('status', SessionStatus::ACTIVE)
+            ->whereIn('status', [SessionStatus::ACTIVE, SessionStatus::LOCKED])
+            ->whereHas('inquiry', function ($iq) {
+                $iq->whereRaw('(SELECT COUNT(*) FROM matchmaking_logs WHERE matchmaking_logs.inquiry_id = inquiries.id AND matchmaking_logs.responded_at IS NOT NULL) >= 10');
+            })
             ->count();
 
         $expiredSessions = MatchingSession::ownSessionsByDealer($dealer->id)
@@ -157,6 +172,7 @@ class DealerService
         return [
             'profile_completion_percentage' => $profileCompletion,
             'active_opportunities_count' => $activeOpportunities,
+            'active_inquiries_count' => $activeInquiriesCount,
             'locked_sessions_count' => $lockedSessions,
             'expired_sessions_count' => $expiredSessions,
             'unread_notifications_count' => $unreadNotifications,
@@ -182,6 +198,8 @@ class DealerService
     {
         return DB::transaction(function () use ($data, $userId) {
             $dealer = Dealer::where('user_id', $userId)->firstOrFail();
+
+            $visibility = $data['visibility'] ?? 'dealers';
 
             // Create inquiry
             $inquiry = Inquiry::create([
@@ -213,6 +231,7 @@ class DealerService
                 'status' => InquiryStatus::MATCHING,
                 'posting_fee_paid' => $data['posting_fee_paid'] ?? false,
                 'posting_fee_amount' => $data['posting_fee_amount'] ?? null,
+                'visibility' => $visibility,
             ]);
 
             // Attach materials if provided (array or single material_id for consistency)
@@ -263,20 +282,26 @@ class DealerService
             // TODO: Update database enum to include all SessionStatus values
             $session = MatchingSession::create([
                 'inquiry_id' => $inquiry->id,
-                'status' => SessionStatus::ACTIVE, // Using ACTIVE (legacy) until enum is updated
-                'locked_at' => now(), // Required field, set to now
+                'status' => SessionStatus::ACTIVE,
+                'locked_at' => null, // Open until 10 people respond (express interest)
                 'expires_at' => now()->addHours(24), // 24 hours expiry
                 'discovery_start' => now(),
                 'active_session_start' => now(),
-                'is_visible_to_dealers' => true, // Visible to matched dealers
+                'is_visible_to_dealers' => in_array($visibility, ['dealers', 'all'], true),
                 'is_visible_to_brand' => false, // Never visible to brands (dealer-posted)
             ]);
 
-            // Trigger matchmaking to find matching dealers
-            $matchedRecipients = $this->matchmakingService->findMatchingDealers($inquiry);
+            // Trigger matchmaking based on visibility
+            if (in_array($visibility, ['dealers', 'all'], true)) {
+                $matchedDealers = $this->matchmakingService->findMatchingDealers($inquiry);
+                $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedDealers);
+            }
 
-            // Notify matched dealers
-            $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedRecipients);
+            if (in_array($visibility, ['converters', 'all'], true)) {
+                // Match converters using their registration/profile data
+                $this->matchmakingService->findMatchingConverters($inquiry);
+                // Notification to converters can be wired later if needed
+            }
 
             return $inquiry->load(['materials', 'finishes', 'dealerLocation', 'items', 'session']);
         });

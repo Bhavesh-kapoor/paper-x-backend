@@ -137,7 +137,10 @@ class MatchingSession extends Model
             })
             // OR sessions where this converter was matched (MatchmakingLog)
             ->orWhere(function ($matchedQuery) use ($converterId) {
-                $matchedQuery->where('is_visible_to_dealers', true)
+                $matchedQuery
+                    ->whereHas('inquiry', function ($inqQuery) {
+                        $inqQuery->whereIn('visibility', ['converters', 'all']);
+                    })
                     ->whereHas('inquiry.matchmakingLogs', function ($logQuery) use ($converterId) {
                         $logQuery->where('converter_id', $converterId)
                             ->where('is_visible', true);

@@ -360,6 +360,8 @@ class ConverterService
         return DB::transaction(function () use ($data, $userId) {
             $converter = Converter::where('user_id', $userId)->firstOrFail();
 
+            $visibility = $data['visibility'] ?? 'dealers';
+
             // Generate title from material and quantity if not provided
             $title = $data['title'] ?? null;
             if (!$title && isset($data['material_id'])) {
@@ -382,7 +384,7 @@ class ConverterService
                 'size_unit' => $data['size_unit'],
                 'thickness' => $data['thickness'],
                 'thickness_unit' => $data['thickness_unit'],
-                'visibility' => $data['visibility'],
+                'visibility' => $visibility,
                 'location' => $data['location'],
                 'location_source' => $data['location_source'],
                 'location_id' => null, // Converters don't have saved locations
@@ -391,7 +393,7 @@ class ConverterService
                 'status' => InquiryStatus::MATCHING,
                 'posted_at' => now(),
                 'matching_started_at' => now(),
-                'is_visible_to_dealers' => true, // Visible to matched dealers
+                'is_visible_to_dealers' => in_array($visibility, ['dealers', 'all'], true),
                 'is_visible_to_brand' => false, // NEVER visible to brands (converter-posted)
             ]);
 
@@ -444,15 +446,20 @@ class ConverterService
                 'expires_at' => now()->addHours(24), // 24 hours expiry
                 'discovery_start' => now(),
                 'active_session_start' => now(),
-                'is_visible_to_dealers' => true, // Visible to matched dealers
+                'is_visible_to_dealers' => in_array($visibility, ['dealers', 'all'], true),
                 'is_visible_to_brand' => false, // Never visible to brands (converter-posted)
             ]);
 
-            // Trigger matchmaking to find matching dealers
-            $matchedRecipients = $this->matchmakingService->findMatchingDealers($inquiry);
+            // Trigger matchmaking based on visibility
+            if (in_array($visibility, ['dealers', 'all'], true)) {
+                $matchedDealers = $this->matchmakingService->findMatchingDealers($inquiry);
+                $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedDealers);
+            }
 
-            // Notify matched dealers
-            $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedRecipients);
+            if (in_array($visibility, ['converters', 'all'], true)) {
+                $this->matchmakingService->findMatchingConverters($inquiry);
+                // Notifications for converters can be added similarly to dealers
+            }
 
             return $inquiry->load(['materials', 'finishes', 'items', 'session']);
         });
