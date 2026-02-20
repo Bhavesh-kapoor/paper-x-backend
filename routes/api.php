@@ -12,6 +12,8 @@ use App\Http\Controllers\api\QuotationController;
 use App\Http\Controllers\api\NotificationController;
 use App\Http\Controllers\api\RoleController;
 use App\Http\Controllers\api\DashboardController;
+use App\Http\Controllers\api\RTDProductController;
+use App\Http\Controllers\api\RTDOrderController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -219,6 +221,32 @@ Route::prefix('v1')->group(function () {
 
     #unified dashboard API for all roles
     Route::middleware(['token.exists', 'auth:sanctum'])->get('/dashboard', [DashboardController::class, 'getDashboard'])->name('dashboard');
+
+    #rtd product routes (ready-to-dispatch)
+    Route::middleware(['token.exists', 'auth:sanctum'])->prefix('rtd/products')->group(function () {
+        Route::post('/', [RTDProductController::class, 'store'])->name('rtd.products.store');
+        Route::put('/{id}', [RTDProductController::class, 'update'])->name('rtd.products.update');
+        Route::post('/{id}/pause', [RTDProductController::class, 'pause'])->name('rtd.products.pause');
+        Route::post('/{id}/resume', [RTDProductController::class, 'resume'])->name('rtd.products.resume');
+        Route::get('/my', [RTDProductController::class, 'myProducts'])->name('rtd.products.my');
+        Route::get('/catalog', [RTDProductController::class, 'catalog'])->name('rtd.products.catalog');
+        Route::get('/{id}', [RTDProductController::class, 'show'])->name('rtd.products.show');
+    });
+
+    #rtd order routes (ready-to-dispatch)
+    Route::middleware(['token.exists', 'auth:sanctum'])->prefix('rtd/orders')->group(function () {
+        Route::post('/', [RTDOrderController::class, 'requestOrder'])->name('rtd.orders.request');
+        Route::post('/{id}/accept', [RTDOrderController::class, 'accept'])->name('rtd.orders.accept');
+        Route::post('/{id}/decline', [RTDOrderController::class, 'decline'])->name('rtd.orders.decline');
+        Route::post('/{id}/confirm-payment', [RTDOrderController::class, 'confirmPayment'])->name('rtd.orders.confirm-payment');
+        Route::post('/{id}/in-production', [RTDOrderController::class, 'markInProduction'])->name('rtd.orders.in-production');
+        Route::post('/{id}/dispatch', [RTDOrderController::class, 'dispatch'])->name('rtd.orders.dispatch');
+        Route::post('/{id}/confirm-delivery', [RTDOrderController::class, 'confirmDelivery'])->name('rtd.orders.confirm-delivery');
+        Route::post('/{id}/dispute', [RTDOrderController::class, 'raiseDispute'])->name('rtd.orders.dispute');
+        Route::post('/{id}/cancel', [RTDOrderController::class, 'cancel'])->name('rtd.orders.cancel');
+        Route::get('/my', [RTDOrderController::class, 'myOrders'])->name('rtd.orders.my');
+        Route::get('/{id}', [RTDOrderController::class, 'show'])->name('rtd.orders.show');
+    });
 
     #wallet routes
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('wallet')->group(function () {

@@ -22,12 +22,10 @@ return new class extends Migration
             if (!Schema::hasColumn('inquiries', 'visibility')) {
                 $table->enum('visibility', ['dealers', 'converters', 'all'])->default('all')->after('urgency');
             } else {
-                // Update existing visibility enum to remove 'manufacturers' if it exists
-                DB::statement("ALTER TABLE inquiries MODIFY COLUMN visibility ENUM('dealers', 'converters', 'all') NOT NULL DEFAULT 'all'");
-                // Update any existing 'manufacturers' values to 'all'
-                DB::table('inquiries')
-                    ->where('visibility', 'manufacturers')
-                    ->update(['visibility' => 'all']);
+                if (DB::getDriverName() === 'mysql') {
+                    DB::statement("ALTER TABLE inquiries MODIFY COLUMN visibility ENUM('dealers', 'converters', 'all') NOT NULL DEFAULT 'all'");
+                    DB::table('inquiries')->where('visibility', 'manufacturers')->update(['visibility' => 'all']);
+                }
             }
             
             // Add location_source if it doesn't exist

@@ -70,19 +70,30 @@ return new class extends Migration
                 }
             });
 
-            // Add indexes if they don't exist (using raw SQL check)
-            $indexes = DB::select("SHOW INDEXES FROM brands");
-            $indexNames = array_column($indexes, 'Key_name');
-            
-            if (!in_array('brands_status_index', $indexNames) && Schema::hasColumn('brands', 'status')) {
+            // Add indexes if they don't exist (MySQL: SHOW INDEXES; SQLite: add if column exists)
+            if (DB::getDriverName() === 'mysql') {
+                $indexes = DB::select("SHOW INDEXES FROM brands");
+                $indexNames = array_column($indexes, 'Key_name');
+
+                if (!in_array('brands_status_index', $indexNames) && Schema::hasColumn('brands', 'status')) {
+                    Schema::table('brands', function (Blueprint $table) {
+                        $table->index('status', 'brands_status_index');
+                    });
+                }
+
+                if (!in_array('brands_profile_complete_index', $indexNames) && Schema::hasColumn('brands', 'profile_complete')) {
+                    Schema::table('brands', function (Blueprint $table) {
+                        $table->index('profile_complete', 'brands_profile_complete_index');
+                    });
+                }
+            } elseif (Schema::hasColumn('brands', 'status') || Schema::hasColumn('brands', 'profile_complete')) {
                 Schema::table('brands', function (Blueprint $table) {
-                    $table->index('status', 'brands_status_index');
-                });
-            }
-            
-            if (!in_array('brands_profile_complete_index', $indexNames) && Schema::hasColumn('brands', 'profile_complete')) {
-                Schema::table('brands', function (Blueprint $table) {
-                    $table->index('profile_complete', 'brands_profile_complete_index');
+                    if (Schema::hasColumn('brands', 'status')) {
+                        $table->index('status', 'brands_status_index');
+                    }
+                    if (Schema::hasColumn('brands', 'profile_complete')) {
+                        $table->index('profile_complete', 'brands_profile_complete_index');
+                    }
                 });
             }
         } else {

@@ -107,4 +107,12 @@ class User extends Authenticatable
     {
         return $this->hasOne(Wallet::class);
     }
+
+    /**
+     * Role for RTD and other role-aware features (maps to primary_role).
+     */
+    public function getRoleAttribute(): ?string
+    {
+        return $this->primary_role;
+    }
 }

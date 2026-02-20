@@ -24,13 +24,14 @@ return new class extends Migration
         } else {
             // Table exists, just add the unique constraint if it doesn't exist
             Schema::table('converter_finished_products', function (Blueprint $table) {
-                // Check if unique constraint exists
-                $indexes = DB::select("SHOW INDEXES FROM converter_finished_products");
-                $indexNames = array_column($indexes, 'Key_name');
-                
-                if (!in_array('conv_fp_unique', $indexNames)) {
-                    $table->unique(['converter_id', 'finished_product_id'], 'conv_fp_unique');
+                if (DB::getDriverName() === 'mysql') {
+                    $indexes = DB::select("SHOW INDEXES FROM converter_finished_products");
+                    $indexNames = array_column($indexes, 'Key_name');
+                    if (in_array('conv_fp_unique', $indexNames)) {
+                        return;
+                    }
                 }
+                $table->unique(['converter_id', 'finished_product_id'], 'conv_fp_unique');
             });
         }
     }

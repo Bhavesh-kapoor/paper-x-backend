@@ -1,0 +1,396 @@
+{
+	"info": {
+		"_postman_id": "rtd-api-collection-001",
+		"name": "RTD API (Ready-to-Dispatch)",
+		"description": "API collection for testing the Ready-to-Dispatch module: products (converter) and orders (brand/converter). All routes require `Authorization: Bearer {{token}}` and live under `/v1/rtd/`.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{ "key": "base_url", "value": "http://localhost:8000/api" },
+		{ "key": "token", "value": "" },
+		{ "key": "product_id", "value": "" },
+		{ "key": "order_id", "value": "" }
+	],
+	"item": [
+		{
+			"name": "RTD Products",
+			"item": [
+				{
+					"name": "Create Product (Converter)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status 201', () => pm.response.to.have.status(201));",
+									"pm.test('Product status active', () => { const d = pm.response.json().data; pm.expect(d.status).to.eql('active'); });",
+									"pm.test('Save product_id', () => { const id = pm.response.json().data?.id; if (id) pm.environment.set('product_id', id); });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"category\": \"Box\",\n  \"product_name\": \"Corrugated Box 10x10\",\n  \"image_path\": null,\n  \"size\": \"10x10x10\",\n  \"material\": \"Paper\",\n  \"gsm\": \"300\",\n  \"finish\": \"Matte\",\n  \"branding_method\": \"Sticker\",\n  \"lead_time\": \"H24\",\n  \"moq\": 10,\n  \"max_capacity\": 1000,\n  \"base_price\": 25.50,\n  \"buy_now_enabled\": true,\n  \"delivery_geography\": \"North India\",\n  \"price_slabs\": [\n    { \"min_qty\": 10, \"max_qty\": 99, \"price_per_unit\": 25.50 },\n    { \"min_qty\": 100, \"max_qty\": 499, \"price_per_unit\": 23.00 },\n    { \"min_qty\": 500, \"max_qty\": 1000, \"price_per_unit\": 20.00 }\n  ]\n}"
+						},
+						"url": "{{base_url}}/v1/rtd/products",
+						"description": "Converter creates an RTD product. lead_time: SAME_DAY | H24 | H48 | DAYS_3_5. Price slabs must not overlap (min_qty < max_qty)."
+					}
+				},
+				{
+					"name": "Update Product (Converter)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"product_name\": \"Corrugated Box 10x10 (Updated)\",\n  \"base_price\": 26.00,\n  \"price_slabs\": [\n    { \"min_qty\": 10, \"max_qty\": 99, \"price_per_unit\": 26.00 },\n    { \"min_qty\": 100, \"max_qty\": 500, \"price_per_unit\": 24.00 }\n  ]\n}"
+						},
+						"url": "{{base_url}}/v1/rtd/products/{{product_id}}",
+						"description": "Update product. All fields optional. Set product_id in collection/env."
+					}
+				},
+				{
+					"name": "Pause Product (Converter)",
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": "{{base_url}}/v1/rtd/products/{{product_id}}/pause",
+						"description": "Pause product. Cannot pause inactive."
+					}
+				},
+				{
+					"name": "Resume Product (Converter)",
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": "{{base_url}}/v1/rtd/products/{{product_id}}/resume",
+						"description": "Resume paused product."
+					}
+				},
+				{
+					"name": "My Products (Converter)",
+					"request": {
+						"method": "GET",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": {
+							"raw": "{{base_url}}/v1/rtd/products/my?per_page=15&status=active&category=Box",
+							"host": [ "{{base_url}}" ],
+							"path": [ "v1", "rtd", "products", "my" ],
+							"query": [
+								{ "key": "per_page", "value": "15" },
+								{ "key": "status", "value": "active" },
+								{ "key": "category", "value": "Box" }
+							]
+						},
+						"description": "Paginated list of converter's products. Optional: status, category, per_page."
+					}
+				},
+				{
+					"name": "Catalog (Brand)",
+					"request": {
+						"method": "GET",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": {
+							"raw": "{{base_url}}/v1/rtd/products/catalog?per_page=15&category=Box&lead_time=H24&sort_by=base_price&sort_dir=asc",
+							"host": [ "{{base_url}}" ],
+							"path": [ "v1", "rtd", "products", "catalog" ],
+							"query": [
+								{ "key": "per_page", "value": "15" },
+								{ "key": "category", "value": "Box" },
+								{ "key": "lead_time", "value": "H24" },
+								{ "key": "sort_by", "value": "base_price" },
+								{ "key": "sort_dir", "value": "asc" }
+							]
+						},
+						"description": "Brand-facing catalog. Optional: category, lead_time, delivery_geography, sort_by (base_price|created_at|visibility_score), sort_dir, per_page."
+					}
+				},
+				{
+					"name": "Get Product by ID",
+					"request": {
+						"method": "GET",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": "{{base_url}}/v1/rtd/products/{{product_id}}",
+						"description": "Product detail. Use product_id variable."
+					}
+				}
+			]
+		},
+		{
+			"name": "RTD Orders",
+			"item": [
+				{
+					"name": "Request Order (Brand)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status 201', () => pm.response.to.have.status(201));",
+									"pm.test('Order status REQUESTED', () => { const d = pm.response.json().data; pm.expect(d.status).to.eql('REQUESTED'); });",
+									"pm.test('confirmation_deadline set', () => { const d = pm.response.json().data; pm.expect(d.confirmation_deadline).to.be.a('string'); });",
+									"pm.test('Financials present', () => { const d = pm.response.json().data; pm.expect(d.subtotal).to.be.a('number'); pm.expect(d.commission_amount).to.be.a('number'); pm.expect(d.gst_amount).to.be.a('number'); pm.expect(d.total_amount).to.be.a('number'); });",
+									"pm.test('Save order_id', () => { const id = pm.response.json().data?.id; if (id) pm.environment.set('order_id', id); });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"product_id\": {{product_id}},\n  \"quantity\": 50\n}"
+						},
+						"url": "{{base_url}}/v1/rtd/orders",
+						"description": "Brand requests an order. quantity must be >= product MOQ and within a price slab. Subtotal cap ₹3,00,000. For logo upload use form-data with 'logo' file."
+					}
+				},
+				{
+					"name": "Accept Order (Converter)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"pm.test('Order status ACCEPTED', () => { const d = pm.response.json().data; pm.expect(d.status).to.eql('ACCEPTED'); });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/accept",
+						"description": "Converter accepts. Must be before confirmation_deadline. Concurrency-safe (FOR UPDATE)."
+					}
+				},
+				{
+					"name": "Decline Order (Converter)",
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/decline",
+						"description": "Converter declines. Increments product decline_count."
+					}
+				},
+				{
+					"name": "Confirm Payment (Brand)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"pm.test('Order status PAID', () => { const d = pm.response.json().data; pm.expect(d.status).to.eql('PAID'); });",
+									"pm.test('paid_at set', () => { const d = pm.response.json().data; pm.expect(d.paid_at).to.be.a('string'); });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"order_id\": {{order_id}},\n  \"transaction_id\": \"txn_optional_123\"\n}"
+						},
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/confirm-payment",
+						"description": "Brand confirms payment. Order moves to PAID. Idempotent if already PAID."
+					}
+				},
+				{
+					"name": "Mark In Production (Converter)",
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/in-production",
+						"description": "Converter marks order as in production. PAID → IN_PRODUCTION."
+					}
+				},
+				{
+					"name": "Dispatch Order (Converter) – tracking",
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{ "key": "proof_type", "value": "tracking_number", "type": "text" },
+								{ "key": "tracking_number", "value": "TRK123456789", "type": "text" }
+							]
+						},
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/dispatch",
+						"description": "Dispatch with tracking. proof_type: tracking_number | lr_photo | delivery_challan. For lr_photo/challan send 'file' as well."
+					}
+				},
+				{
+					"name": "Dispatch Order (Converter) – file",
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{ "key": "proof_type", "value": "lr_photo", "type": "text" },
+								{ "key": "file", "value": "", "type": "file", "src": "" }
+							]
+						},
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/dispatch",
+						"description": "Dispatch with file proof. Attach file in form-data."
+					}
+				},
+				{
+					"name": "Confirm Delivery (Brand)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"pm.test('Order status COMPLETED', () => { const d = pm.response.json().data; pm.expect(d.status).to.eql('COMPLETED'); });",
+									"pm.test('Payout released', () => { const d = pm.response.json().data; if (d.payout) pm.expect(d.payout.payout_status).to.eql('RELEASED'); });"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/confirm-delivery",
+						"description": "Brand confirms delivery. DISPATCHED → COMPLETED, payout released, rewardCompletion on product."
+					}
+				},
+				{
+					"name": "Raise Dispute (Brand)",
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/dispute",
+						"description": "Brand raises dispute. Payout set to HOLD_DISPUTE."
+					}
+				},
+				{
+					"name": "Cancel Order (Brand)",
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/cancel",
+						"description": "Brand cancels. Only when status is ACCEPTED (before payment)."
+					}
+				},
+				{
+					"name": "My Orders",
+					"request": {
+						"method": "GET",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": {
+							"raw": "{{base_url}}/v1/rtd/orders/my?per_page=15&status=REQUESTED",
+							"host": [ "{{base_url}}" ],
+							"path": [ "v1", "rtd", "orders", "my" ],
+							"query": [
+								{ "key": "per_page", "value": "15" },
+								{ "key": "status", "value": "REQUESTED" }
+							]
+						},
+						"description": "Orders for current user (brand or converter by role). Optional: status, per_page."
+					}
+				},
+				{
+					"name": "Get Order by ID",
+					"request": {
+						"method": "GET",
+						"header": [ { "key": "Accept", "value": "application/json" } ],
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}",
+						"description": "Order detail. Use order_id variable."
+					}
+				}
+			]
+		},
+		{
+			"name": "Negative (expect 4xx)",
+			"item": [
+				{
+					"name": "[N] Create Product – Overlapping Slabs (expect 422)",
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 422', () => pm.response.to.have.status(422));"], "type": "text/javascript" } }],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }],
+						"body": { "mode": "raw", "raw": "{\n  \"category\": \"Box\",\n  \"product_name\": \"Bad Slabs\",\n  \"lead_time\": \"H24\",\n  \"moq\": 10,\n  \"base_price\": 10,\n  \"price_slabs\": [\n    { \"min_qty\": 10, \"max_qty\": 100, \"price_per_unit\": 10 },\n    { \"min_qty\": 50, \"max_qty\": 200, \"price_per_unit\": 9 }\n  ]\n}" },
+						"url": "{{base_url}}/v1/rtd/products"
+					}
+				},
+				{
+					"name": "[N] Request Order – Qty below MOQ (expect 422)",
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 422', () => pm.response.to.have.status(422));"], "type": "text/javascript" } }],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }],
+						"body": { "mode": "raw", "raw": "{\n  \"product_id\": {{product_id}},\n  \"quantity\": 5\n}" },
+						"url": "{{base_url}}/v1/rtd/orders"
+					}
+				},
+				{
+					"name": "[N] Accept Twice (expect 422 on 2nd)",
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 422', () => pm.response.to.have.status(422));"], "type": "text/javascript" } }],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Accept", "value": "application/json" }],
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/accept"
+					}
+				},
+				{
+					"name": "[N] Confirm Payment Before Accept (expect 422)",
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 422', () => pm.response.to.have.status(422));"], "type": "text/javascript" } }],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }],
+						"body": { "mode": "raw", "raw": "{\n  \"order_id\": {{order_id}},\n  \"transaction_id\": \"\"\n}" },
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/confirm-payment"
+					}
+				},
+				{
+					"name": "[N] Cancel After Payment (expect 422)",
+					"event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 422', () => pm.response.to.have.status(422));"], "type": "text/javascript" } }],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Accept", "value": "application/json" }],
+						"url": "{{base_url}}/v1/rtd/orders/{{order_id}}/cancel"
+					}
+				}
+			]
+		}
+	]
+}

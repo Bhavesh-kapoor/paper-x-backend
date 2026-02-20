@@ -12,6 +12,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
         // Update matching_sessions.status enum to include all SessionStatus values
         // MySQL doesn't support direct enum modification, so we use raw SQL
         DB::statement("ALTER TABLE `matching_sessions` MODIFY COLUMN `status` ENUM(
@@ -37,6 +40,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
         // Revert to original enum values
         DB::statement("ALTER TABLE `matching_sessions` MODIFY COLUMN `status` ENUM(
             'ACTIVE',

@@ -15,27 +15,26 @@ return new class extends Migration
     public function up(): void
     {
         // Add foreign key constraint only if both tables exist
-        if (Schema::hasTable('inquiries') && Schema::hasTable('machine_listings')) {
-            // Check if the column exists
-            if (Schema::hasColumn('inquiries', 'machine_listing_id')) {
-                // Check if foreign key already exists
+        if (Schema::hasTable('inquiries') && Schema::hasTable('machine_listings') && Schema::hasColumn('inquiries', 'machine_listing_id')) {
+            $addFk = true;
+            if (DB::getDriverName() === 'mysql') {
                 $foreignKeys = DB::select("
-                    SELECT CONSTRAINT_NAME 
-                    FROM information_schema.KEY_COLUMN_USAGE 
-                    WHERE TABLE_SCHEMA = DATABASE() 
-                    AND TABLE_NAME = 'inquiries' 
-                    AND COLUMN_NAME = 'machine_listing_id' 
+                    SELECT CONSTRAINT_NAME
+                    FROM information_schema.KEY_COLUMN_USAGE
+                    WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = 'inquiries'
+                    AND COLUMN_NAME = 'machine_listing_id'
                     AND REFERENCED_TABLE_NAME IS NOT NULL
                 ");
-                
-                if (empty($foreignKeys)) {
-                    Schema::table('inquiries', function (Blueprint $table) {
-                        $table->foreign('machine_listing_id')
-                            ->references('id')
-                            ->on('machine_listings')
-                            ->onDelete('set null');
-                    });
-                }
+                $addFk = empty($foreignKeys);
+            }
+            if ($addFk) {
+                Schema::table('inquiries', function (Blueprint $table) {
+                    $table->foreign('machine_listing_id')
+                        ->references('id')
+                        ->on('machine_listings')
+                        ->onDelete('set null');
+                });
             }
         }
     }

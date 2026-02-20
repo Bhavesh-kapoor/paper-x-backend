@@ -3,7 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\File;
 
-// Helper function to render markdown beautifully
+// Helper function to render markdown beautifully (guarded for test/bootstrap loading twice)
+if (!function_exists('renderMarkdown')) {
 function renderMarkdown($filePath, $title) {
         $content = File::get($filePath);
         $lines = explode("\n", $content);
@@ -250,6 +251,7 @@ function renderMarkdown($filePath, $title) {
         $html .= '</div></div></body></html>';
         
         return $html;
+}
 }
 
 Route::get('/', function () {

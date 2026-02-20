@@ -27,13 +27,15 @@ class DatabaseSeeder extends Seeder
             BrandTypeSeeder::class,
             FinishedProductSeeder::class,
             ScrapTypeSeeder::class,
+            AdminSeeder::class,
+            MaterialSeeder::class,
         ]);
 
         // User::factory(10)->create();
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        // User::factory()->create([
+        //     'name' => 'Test User',
+        //     'email' => 'test@example.com',
+        // ]);
     }
 }

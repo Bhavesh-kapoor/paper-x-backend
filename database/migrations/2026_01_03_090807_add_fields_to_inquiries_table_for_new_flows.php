@@ -82,43 +82,62 @@ return new class extends Migration
         });
 
         // Add indexes only if columns exist and indexes don't exist
-        $indexes = DB::select("SHOW INDEXES FROM inquiries");
-        $indexNames = array_column($indexes, 'Key_name');
-        
-        Schema::table('inquiries', function (Blueprint $table) use ($indexNames) {
-            if (Schema::hasColumn('inquiries', 'poster_id') && !in_array('inquiries_poster_id_index', $indexNames)) {
-                $table->index('poster_id');
-            }
-            if (Schema::hasColumn('inquiries', 'poster_type') && !in_array('inquiries_poster_type_index', $indexNames)) {
-                $table->index('poster_type');
-            }
-            if (Schema::hasColumn('inquiries', 'inquiry_type') && !in_array('inquiries_inquiry_type_index', $indexNames)) {
-                $table->index('inquiry_type');
-            }
-            if (Schema::hasColumn('inquiries', 'intent') && !in_array('inquiries_intent_index', $indexNames)) {
-                $table->index('intent');
-            }
-        });
+        if (DB::getDriverName() === 'mysql') {
+            $indexes = DB::select("SHOW INDEXES FROM inquiries");
+            $indexNames = array_column($indexes, 'Key_name');
+
+            Schema::table('inquiries', function (Blueprint $table) use ($indexNames) {
+                if (Schema::hasColumn('inquiries', 'poster_id') && !in_array('inquiries_poster_id_index', $indexNames)) {
+                    $table->index('poster_id');
+                }
+                if (Schema::hasColumn('inquiries', 'poster_type') && !in_array('inquiries_poster_type_index', $indexNames)) {
+                    $table->index('poster_type');
+                }
+                if (Schema::hasColumn('inquiries', 'inquiry_type') && !in_array('inquiries_inquiry_type_index', $indexNames)) {
+                    $table->index('inquiry_type');
+                }
+                if (Schema::hasColumn('inquiries', 'intent') && !in_array('inquiries_intent_index', $indexNames)) {
+                    $table->index('intent');
+                }
+            });
+        } else {
+            Schema::table('inquiries', function (Blueprint $table) {
+                if (Schema::hasColumn('inquiries', 'poster_id')) {
+                    $table->index('poster_id');
+                }
+                if (Schema::hasColumn('inquiries', 'poster_type')) {
+                    $table->index('poster_type');
+                }
+                if (Schema::hasColumn('inquiries', 'inquiry_type')) {
+                    $table->index('inquiry_type');
+                }
+                if (Schema::hasColumn('inquiries', 'intent')) {
+                    $table->index('intent');
+                }
+            });
+        }
 
         // Add foreign key constraint only if machine_listings table exists
         if (Schema::hasTable('machine_listings') && Schema::hasColumn('inquiries', 'machine_listing_id')) {
-            $foreignKeys = DB::select("
-                SELECT CONSTRAINT_NAME 
-                FROM information_schema.KEY_COLUMN_USAGE 
-                WHERE TABLE_SCHEMA = DATABASE() 
-                AND TABLE_NAME = 'inquiries' 
-                AND COLUMN_NAME = 'machine_listing_id' 
-                AND REFERENCED_TABLE_NAME IS NOT NULL
-            ");
-            
-            if (empty($foreignKeys)) {
-                Schema::table('inquiries', function (Blueprint $table) {
-                    $table->foreign('machine_listing_id')
-                        ->references('id')
-                        ->on('machine_listings')
-                        ->onDelete('set null');
-                });
+            if (DB::getDriverName() === 'mysql') {
+                $foreignKeys = DB::select("
+                    SELECT CONSTRAINT_NAME
+                    FROM information_schema.KEY_COLUMN_USAGE
+                    WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = 'inquiries'
+                    AND COLUMN_NAME = 'machine_listing_id'
+                    AND REFERENCED_TABLE_NAME IS NOT NULL
+                ");
+                if (!empty($foreignKeys)) {
+                    return;
+                }
             }
+            Schema::table('inquiries', function (Blueprint $table) {
+                $table->foreign('machine_listing_id')
+                    ->references('id')
+                    ->on('machine_listings')
+                    ->onDelete('set null');
+            });
         }
     }
 
