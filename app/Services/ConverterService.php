@@ -6,9 +6,12 @@ use App\Enums\ConverterStatus;
 use App\Enums\InquiryStatus;
 use App\Enums\InquiryType;
 use App\Enums\ResponseStatus;
+use App\Enums\RTDOrderStatus;
 use App\Enums\SessionStatus;
 use App\Models\Converter;
 use App\Models\Inquiry;
+use App\Models\RtdOrder;
+use App\Models\RtdProduct;
 use App\Models\InquiryItem;
 use App\Models\Machine;
 use App\Models\MatchingSession;
@@ -81,6 +84,16 @@ class ConverterService
                 'responses_received_count' => 0,
                 'unread_notifications_count' => 0,
                 'active_sessions' => [],
+                'rtd_snapshot' => [
+                    'active_listings' => 0,
+                    'active_listings_change' => '',
+                    'pending_orders' => 0,
+                    'pending_orders_label' => 'Action needed',
+                    'total_orders' => 0,
+                    'orders_label' => 'All time',
+                    'revenue' => '₹0',
+                    'revenue_change' => '',
+                ],
             ];
         }
 
@@ -179,6 +192,13 @@ class ConverterService
             })
             ->toArray();
 
+        // RTD (Ready-to-Dispatch) snapshot for dashboard
+        $activeListings = RtdProduct::where('converter_id', $userId)->where('status', 'active')->count();
+        $pendingOrders = RtdOrder::where('converter_id', $userId)->where('status', RTDOrderStatus::REQUESTED)->count();
+        $totalOrders = RtdOrder::where('converter_id', $userId)->count();
+        $revenueSum = (float) RtdOrder::where('converter_id', $userId)->where('status', RTDOrderStatus::COMPLETED)->sum('total_amount');
+        $revenueFormatted = '₹' . number_format($revenueSum, 0);
+
         return [
             'profile_completion_percentage' => $converter->profile_complete ? 100 : 0,
             'active_sessions_count' => $activeSessionsCount,
@@ -186,6 +206,16 @@ class ConverterService
             'responses_received_count' => $responsesReceived,
             'unread_notifications_count' => $unreadNotifications,
             'active_sessions' => $activeSessions, // Top 5 active sessions
+            'rtd_snapshot' => [
+                'active_listings' => $activeListings,
+                'active_listings_change' => $activeListings > 0 ? 'Live' : 'No listings',
+                'pending_orders' => $pendingOrders,
+                'pending_orders_label' => $pendingOrders > 0 ? 'Action needed' : 'None',
+                'total_orders' => $totalOrders,
+                'orders_label' => 'All time',
+                'revenue' => $revenueFormatted,
+                'revenue_change' => $revenueSum > 0 ? 'From RTD' : '',
+            ],
         ];
     }
 

@@ -26,15 +26,23 @@ class BrandService
     public function completeProfile(array $data, int $userId): Brand
     {
         return DB::transaction(function () use ($data, $userId) {
+            // DB column `name` is NOT NULL; use brand_name or company_name for user brand profiles
+            $name = !empty($data['brand_name'])
+                ? $data['brand_name']
+                : ($data['company_name'] ?? 'Brand');
+
             $brand = Brand::firstOrCreate(
                 ['user_id' => $userId],
-                ['status' => BrandStatus::PENDING]
+                [
+                    'status' => BrandStatus::PENDING,
+                    'name' => $name,
+                ]
             );
 
             $brand->update([
                 'company_name' => $data['company_name'],
                 'brand_name' => $data['brand_name'] ?? null,
-                'name' => null, // Always null for user brand profiles (name is only for mill brands)
+                'name' => $name,
                 'contact_person_name' => $data['contact_person_name'],
                 'mobile' => $data['mobile'] ?? null,
                 'email' => $data['email'] ?? null,
