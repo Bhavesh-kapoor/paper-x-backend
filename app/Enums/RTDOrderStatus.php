@@ -41,4 +41,21 @@ enum RTDOrderStatus: string
             self::DISPUTED,
         ]);
     }
+
+    /**
+     * Statuses that represent an active/in-progress order.
+     * A brand is blocked from placing a new order for a product
+     * while any order in one of these statuses exists.
+     */
+    public static function activeStatuses(): array
+    {
+        return [
+            self::REQUESTED,
+            self::ACCEPTED,
+            self::PAID,
+            self::IN_PRODUCTION,
+            self::DISPATCHED,
+            self::DISPUTED,
+        ];
+    }
 }

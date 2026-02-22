@@ -85,45 +85,98 @@ class BrandService
     public function getDashboard(int $userId): array
     {
         $brand = Brand::where('user_id', $userId)->first();
-        
+
         if (!$brand) {
             return [
-                'profile_completion_percentage' => 0,
-                'my_inquiries_count' => 0,
-                'active_sessions_count' => 0,
-                'unread_messages_count' => 0,
-                'unread_notifications_count' => 0,
+                'activeInquiries' => 0,
+                'newProposals' => 0,
+                'unreadMessages' => 0,
+                'recentInquiries' => [],
             ];
         }
 
         $brandId = $brand->id;
-        $myInquiries = Inquiry::where('poster_id', $brandId)
+
+        $activeStatuses = [
+            InquiryStatus::MATCHING,
+            InquiryStatus::POSTED,
+            InquiryStatus::RESPONSES_RECEIVED,
+            InquiryStatus::LOCKED,
+            InquiryStatus::CHAT_ACTIVE,
+            InquiryStatus::REPUBLISHED,
+        ];
+
+        $activeInquiries = Inquiry::where('poster_id', $brandId)
             ->where('poster_type', 'brand')
+            ->whereIn('status', $activeStatuses)
             ->count();
 
-        $activeSessions = MatchingSession::whereHas('inquiry', function ($query) use ($brandId) {
+        $newProposals = Response::whereHas('inquiry', function ($query) use ($brandId) {
             $query->where('poster_id', $brandId)
                 ->where('poster_type', 'brand');
-        })->where('status', 'ACTIVE')->count();
+        })->where('status', \App\Enums\ResponseStatus::PENDING)->count();
 
         $unreadMessages = \App\Models\ChatMessage::whereHas('session.inquiry', function ($query) use ($brandId) {
             $query->where('poster_id', $brandId)
                 ->where('poster_type', 'brand');
         })->where('sender_id', '!=', $userId)
-        ->where('status', '!=', 'READ')
-        ->count();
+          ->where('status', '!=', 'READ')
+          ->count();
 
-        $unreadNotifications = \App\Models\Notification::where('user_id', $userId)
-            ->where('read_at', null)
-            ->count();
+        $recentInquiries = Inquiry::where('poster_id', $brandId)
+            ->where('poster_type', 'brand')
+            ->withCount('responses')
+            ->orderBy('updated_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(function (Inquiry $inquiry) {
+                return [
+                    'id' => $inquiry->id,
+                    'title' => $inquiry->title ?? 'Untitled Inquiry',
+                    'quantity' => $inquiry->quantity_range ?? (string) ($inquiry->quantity ?? '0'),
+                    'specifications' => trim(
+                        ($inquiry->requirement_type ?? '') .
+                        ($inquiry->packaging_type ? ' - ' . $inquiry->packaging_type : '')
+                    ) ?: 'General',
+                    'urgency' => strtoupper($inquiry->urgency ?? 'normal') === 'URGENT' ? 'URGENT' : 'NORMAL',
+                    'status' => $this->mapInquiryStatusForDashboard($inquiry->status),
+                    'time' => $inquiry->updated_at?->diffForHumans() ?? '',
+                    'matchCount' => $inquiry->responses_count ?? 0,
+                ];
+            })
+            ->toArray();
 
         return [
-            'profile_completion_percentage' => $brand->profile_complete ? 100 : 0,
-            'my_inquiries_count' => $myInquiries,
-            'active_sessions_count' => $activeSessions,
-            'unread_messages_count' => $unreadMessages,
-            'unread_notifications_count' => $unreadNotifications,
+            'activeInquiries' => $activeInquiries,
+            'newProposals' => $newProposals,
+            'unreadMessages' => $unreadMessages,
+            'recentInquiries' => $recentInquiries,
         ];
+    }
+
+    private function mapInquiryStatusForDashboard(InquiryStatus $status): string
+    {
+        return match ($status) {
+            InquiryStatus::MATCHING,
+            InquiryStatus::POSTED,
+            InquiryStatus::REPUBLISHED => 'MATCHING',
+
+            InquiryStatus::RESPONSES_RECEIVED => 'NEW',
+
+            InquiryStatus::LOCKED,
+            InquiryStatus::CHAT_ACTIVE,
+            InquiryStatus::SESSION_LOCKED => 'OPEN',
+
+            InquiryStatus::DEAL_SUCCESS,
+            InquiryStatus::DEAL_FAILED,
+            InquiryStatus::EXPIRED,
+            InquiryStatus::DEAL_WON,
+            InquiryStatus::DEAL_LOST,
+            InquiryStatus::SESSION_EXPIRED,
+            InquiryStatus::BRAND_CANCELLED => 'CLOSED',
+
+            default => 'OPEN',
+        };
     }
 
     public function postRequirement(array $data, int $userId): array

@@ -14,6 +14,7 @@ use App\Http\Controllers\api\RoleController;
 use App\Http\Controllers\api\DashboardController;
 use App\Http\Controllers\api\RTDProductController;
 use App\Http\Controllers\api\RTDOrderController;
+use App\Http\Controllers\api\UploadController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -272,4 +273,6 @@ Route::prefix('v1')->group(function () {
         Route::post('/deduct', [\App\Http\Controllers\api\WalletController::class, 'deductCredits'])->name('wallet.deduct');
     });
 
+    #upload (single file for product image etc.)
+    Route::middleware(['token.exists', 'auth:sanctum'])->post('upload/single', [UploadController::class, 'single'])->name('upload.single');
 });

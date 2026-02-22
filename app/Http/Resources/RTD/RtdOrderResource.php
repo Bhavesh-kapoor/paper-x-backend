@@ -20,6 +20,7 @@ class RtdOrderResource extends JsonResource
 
         return [
             'id'                  => $this->id,
+            'product_id'          => $this->product_id,
             'product'             => new RtdProductResource($this->whenLoaded('product')),
             'quantity'            => $this->quantity,
             'logo_path'           => $this->logo_path,

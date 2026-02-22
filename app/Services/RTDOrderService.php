@@ -33,7 +33,7 @@ class RTDOrderService
     {
         $product = RtdProduct::with('priceSlabs')->find($data['product_id']);
 
-        $this->validateOrderCreation($product, $data['quantity']);
+        $this->validateOrderCreation($product, $data['quantity'], $brandUserId);
 
         $slab = $this->resolveMatchingPriceSlab($product, $data['quantity']);
 
@@ -42,6 +42,19 @@ class RTDOrderService
         $this->commissionCalculator->validateOrderCap($breakdown['subtotal']);
 
         return DB::transaction(function () use ($data, $brandUserId, $product, $slab, $breakdown) {
+            $existingActive = RtdOrder::where('brand_id', $brandUserId)
+                ->where('product_id', $product->id)
+                ->whereIn('status', RTDOrderStatus::activeStatuses())
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingActive) {
+                throw new RTDDomainException(
+                    'You already have an active order for this product (Order #' . $existingActive->id . ')',
+                    422
+                );
+            }
+
             $leadTime = $product->lead_time;
             $deadline = now()->addMinutes($leadTime->acceptanceWindowMinutes());
 
@@ -331,7 +344,7 @@ class RTDOrderService
 
     // ── Private helpers ──
 
-    private function validateOrderCreation(?RtdProduct $product, int $quantity): void
+    private function validateOrderCreation(?RtdProduct $product, int $quantity, int $brandUserId): void
     {
         if (!$product) {
             throw new RTDDomainException('Product not found', 404);
@@ -354,6 +367,18 @@ class RTDOrderService
         if ($product->max_capacity !== null && $quantity > $product->max_capacity) {
             throw new RTDDomainException(
                 "Quantity {$quantity} exceeds maximum capacity of {$product->max_capacity}"
+            );
+        }
+
+        $activeOrder = RtdOrder::where('brand_id', $brandUserId)
+            ->where('product_id', $product->id)
+            ->whereIn('status', RTDOrderStatus::activeStatuses())
+            ->first();
+
+        if ($activeOrder) {
+            throw new RTDDomainException(
+                'You already have an active order for this product (Order #' . $activeOrder->id . ')',
+                422
             );
         }
     }
