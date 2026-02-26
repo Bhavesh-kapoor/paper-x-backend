@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\ChatThread;
+use App\Policies\ChatThreadPolicy;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Gate::policy(ChatThread::class, ChatThreadPolicy::class);
+
         // Map polymorphic types for inquiries poster relationship, notifications, and Sanctum tokens
         // User must be in the map or OTP verify (createToken) throws "morph map" → 500
         \Illuminate\Database\Eloquent\Relations\Relation::enforceMorphMap([

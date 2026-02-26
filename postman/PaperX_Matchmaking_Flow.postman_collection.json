@@ -1,0 +1,282 @@
+{
+	"info": {
+		"_postman_id": "paper-x-matchmaking-v1",
+		"name": "PaperX — Auth, Registration & Matchmaking Flow",
+		"description": "Flow: OTP Auth → Brand profile (optional) → Create inquiry → Post → Sessions → Matchmaking responses → Express interest. Pre-filled bodies for Postman testing.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "base_url", "value": "http://localhost:8000/api/v1" },
+		{ "key": "token", "value": "" },
+		{ "key": "inquiry_id", "value": "" }
+	],
+	"item": [
+		{
+			"name": "1. Auth",
+			"item": [
+				{
+					"name": "Request OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mobile\": \"9876543210\"\n}"
+						},
+						"url": "{{base_url}}/auth/otp/request",
+						"description": "Send OTP to mobile. Use 10-digit Indian mobile. For local testing OTP may be in logs or use a fixed test OTP if configured."
+					}
+				},
+				{
+					"name": "Verify OTP (Login)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var json = pm.response.json();",
+									"if (json.data && json.data.token) {",
+									"  pm.collectionVariables.set('token', json.data.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mobile\": \"9876543210\",\n  \"otp\": \"123456\"\n}"
+						},
+						"url": "{{base_url}}/auth/otp/verify",
+						"description": "Verify OTP and get Bearer token. Token is saved to collection variable 'token' for subsequent requests. Replace '123456' with actual OTP from logs/SMS."
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Profile (Brand)",
+			"item": [
+				{
+					"name": "Complete Brand Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"company_name\": \"Test Company Pvt Ltd\",\n  \"brand_name\": \"Test Brand\",\n  \"contact_person_name\": \"Rahul Kumar\",\n  \"mobile\": \"9876543210\",\n  \"email\": \"rahul@testcompany.com\",\n  \"gst\": \"29AABCT1332L1ZV\",\n  \"state\": \"Delhi\",\n  \"city\": \"New Delhi\",\n  \"address\": \"123 Connaught Place\",\n  \"location\": \"Connaught Place, New Delhi\",\n  \"latitude\": 28.6139,\n  \"longitude\": 77.2090,\n  \"brand_type_ids\": [1]\n}"
+						},
+						"url": "{{base_url}}/brand/profile/complete",
+						"description": "Required to create inquiries as brand. Get brand_type_ids from GET /api/v1/brand-types if needed; [1] is a placeholder."
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Inquiry (Create & Post)",
+			"item": [
+				{
+					"name": "Create Inquiry (DRAFT)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var json = pm.response.json();",
+									"if (json.data && json.data.id) {",
+									"  pm.collectionVariables.set('inquiry_id', json.data.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Requirement for 200 GSM Art Card\",\n  \"description\": \"Need 200 GSM art card for packaging, quantity 1000 kg. Delivery in 7 days.\",\n  \"urgency\": \"normal\",\n  \"location\": \"New Delhi\",\n  \"latitude\": 28.6139,\n  \"longitude\": 77.2090,\n  \"timeline\": \"7 Days\",\n  \"items\": [\n    {\n      \"material_id\": 1,\n      \"material_category\": \"Paper\",\n      \"finish_coating\": \"Coated\",\n      \"thickness_gsm\": 200,\n      \"thickness_mm\": null,\n      \"thickness_unit\": \"gsm\",\n      \"quantity\": 1000,\n      \"quantity_unit\": \"kg\"\n    }\n  ]\n}"
+						},
+						"url": "{{base_url}}/inquiries",
+						"description": "Creates inquiry in DRAFT. Only brand or converter can create. material_id can be from GET /api/v1/materials. inquiry_id is saved to collection variable."
+					}
+				},
+				{
+					"name": "Post Inquiry (Trigger Matchmaking)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": "{{base_url}}/inquiries/{{inquiry_id}}/post",
+						"description": "Posts the inquiry, deducts posting fee from wallet, triggers matchmaking (v1), creates/updates session. Session will appear in Sessions API."
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Sessions",
+			"item": [
+				{
+					"name": "Get Active Sessions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": "{{base_url}}/sessions/active",
+						"description": "Returns active sessions (Sourcing Hub). After posting an inquiry, the new session should appear here."
+					}
+				},
+				{
+					"name": "Get Session by Inquiry ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": "{{base_url}}/sessions/by-inquiry/{{inquiry_id}}",
+						"description": "Get session linked to a specific inquiry."
+					}
+				},
+				{
+					"name": "Get Session History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": "{{base_url}}/sessions/history",
+						"description": "Past/locked sessions."
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Matchmaking Responses",
+			"item": [
+				{
+					"name": "Get Matchmaking Responses",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": "{{base_url}}/inquiries/{{inquiry_id}}/matchmaking-responses",
+						"description": "Get matched dealers/converters for this inquiry (poster only). Optional query: filter=all|responded|exact_match|slight_variation|nearest."
+					}
+				},
+				{
+					"name": "Get Posting Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": "{{base_url}}/inquiries/{{inquiry_id}}/posting-status",
+						"description": "Matchmaking progress for the inquiry."
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Responder (Express Interest)",
+			"item": [
+				{
+					"name": "Express Interest",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"approx_price\": 45000,\n  \"description\": \"We can supply 200 GSM art card, 1000 kg. Ready in 5 days. Price includes delivery in NCR.\"\n}"
+						},
+						"url": "{{base_url}}/inquiries/{{inquiry_id}}/express-interest",
+						"description": "Call as a matched dealer/converter (different user token). When 10 people express interest, session auto-locks."
+					}
+				},
+				{
+					"name": "Decline Inquiry",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": "{{base_url}}/inquiries/{{inquiry_id}}/decline",
+						"description": "Responder declines (not interested)."
+					}
+				}
+			]
+		},
+		{
+			"name": "7. Other",
+			"item": [
+				{
+					"name": "Get User Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": "{{base_url}}/user/profile",
+						"description": "Current user profile."
+					}
+				},
+				{
+					"name": "Brand — My Inquiries",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": "{{base_url}}/brand/inquiries",
+						"description": "List inquiries created by the brand."
+					}
+				},
+				{
+					"name": "Dealer — Matched Inquiries",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{token}}" }
+						],
+						"url": "{{base_url}}/dealer/inquiries",
+						"description": "Inquiries visible to the dealer (matched only). Use dealer token."
+					}
+				}
+			]
+		}
+	]
+}

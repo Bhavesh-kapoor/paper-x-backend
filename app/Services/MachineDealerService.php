@@ -5,13 +5,21 @@ namespace App\Services;
 use App\Enums\MachineDealerStatus;
 use App\Enums\InquiryStatus;
 use App\Enums\InquiryType;
+use App\Enums\SessionStatus;
 use App\Models\MachineDealer;
 use App\Models\MachineListing;
 use App\Models\Inquiry;
+use App\Models\MatchingSession;
+use App\Domain\MatchEngine\MatchEngineOrchestrator;
 use Illuminate\Support\Facades\DB;
 
 class MachineDealerService
 {
+    public function __construct(
+        protected MatchEngineOrchestrator $matchEngineOrchestrator,
+    ) {
+    }
+
     public function completeProfile(array $data, int $userId): MachineDealer
     {
         return DB::transaction(function () use ($data, $userId) {
@@ -84,6 +92,7 @@ class MachineDealerService
     {
         return DB::transaction(function () use ($data, $userId) {
             $machineDealer = MachineDealer::where('user_id', $userId)->firstOrFail();
+            $visibility = $data['visibility'] ?? 'converters';
 
             // Create machine listing
             $listing = MachineListing::create([
@@ -125,10 +134,26 @@ class MachineDealerService
                 'status' => InquiryStatus::MATCHING,
                 'posting_fee_paid' => $data['posting_fee_paid'] ?? false,
                 'posting_fee_amount' => $data['posting_fee_amount'] ?? null,
+                'visibility' => $visibility,
             ]);
 
             // Attach machine to inquiry
             $inquiry->machines()->attach($data['machine_id']);
+
+            $session = MatchingSession::create([
+                'inquiry_id' => $inquiry->id,
+                'status' => SessionStatus::ACTIVE,
+                'locked_at' => null,
+                'expires_at' => now()->addHours(24),
+                'discovery_start' => now(),
+                'active_session_start' => now(),
+                'is_visible_to_dealers' => true,
+                'is_visible_to_brand' => false,
+            ]);
+
+            $inquiry->setRelation('session', $session);
+
+            $this->matchEngineOrchestrator->runMatchmaking($inquiry);
 
             return [
                 'id' => $listing->id,

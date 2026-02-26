@@ -4,15 +4,19 @@ namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Inquiry;
+use App\Domain\MatchEngine\MatchEngineOrchestrator;
+use App\Domain\MatchEngine\ResponseService as MatchEngineResponseService;
 use App\Services\MatchmakingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Response;
 
 class InquiryController extends Controller
 {
     public function __construct(
+        protected MatchEngineOrchestrator $matchEngineOrchestrator,
         protected MatchmakingService $matchmakingService
     ) {
     }
@@ -194,11 +198,10 @@ class InquiryController extends Controller
                 'active_session_start' => now(),
             ]);
             
-            // Trigger matchmaking
-            $matchedRecipients = $this->matchmakingService->findMatchingDealers($inquiry);
-            
-            // Session is already in ACTIVE status, no need to update
-            
+            // Trigger matchmaking via orchestrator (V1 or V2 based on config)
+            $result = $this->matchEngineOrchestrator->runMatchmaking($inquiry);
+            $matchedRecipients = $result['dealer_ids'];
+
             // Notify matched dealers
             $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedRecipients);
             
@@ -941,8 +944,23 @@ class InquiryController extends Controller
             }
 
             $approxPrice = $request->input('approx_price');
-            $description = $request->input('description');
+            $description = $request->input('description') ?? '';
 
+            // When V2 engine: also write to inquiry_responses (V2 ResponseService)
+            if (config('matchmaking.engine_version') === 'v2') {
+                try {
+                    app(MatchEngineResponseService::class)->respond(
+                        $inquiry,
+                        $user,
+                        $description,
+                        $approxPrice !== null && $approxPrice !== '' ? (float) $approxPrice : null,
+                    );
+                } catch (\InvalidArgumentException $e) {
+                    return Response::error($e->getMessage(), null, HttpResponse::HTTP_BAD_REQUEST);
+                }
+            }
+
+            // Keep existing MatchmakingLog update so session API keeps working (V1 compat)
             $update = [
                 'responded_at' => now(),
                 'declined_at' => null,
@@ -953,7 +971,6 @@ class InquiryController extends Controller
             if (is_string($description) && $description !== '') {
                 $update['interest_description'] = $description;
             }
-
             $log->update($update);
 
             // Auto-lock session when 10 people have responded (post moves from Inquiries to Locked)

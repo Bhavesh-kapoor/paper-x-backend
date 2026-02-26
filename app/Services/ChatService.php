@@ -2,19 +2,264 @@
 
 namespace App\Services;
 
+use App\Domain\MatchEngine\Models\InquiryResponse;
+use App\Domain\MatchEngine\Models\MatchHistory;
 use App\Enums\SessionStatus;
 use App\Models\Brand;
 use App\Models\ChatMessage;
+use App\Models\ChatThread;
 use App\Models\Converter;
 use App\Models\Dealer;
+use App\Models\Inquiry;
 use App\Models\MatchingSession;
+use App\Models\Message;
 use App\Models\MachineDealer;
 use App\Models\SessionParticipant;
+use App\Models\User;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class ChatService
 {
+    /**
+     * Deterministically open or create a chat thread for one inquiry+responder pair.
+     *
+     * Thread identity is always: (inquiry_id, responder_user_id).
+     *
+     * @throws \Exception
+     */
+    public function openOrCreateThread(int $inquiryId, User $responderUser): ChatThread
+    {
+        if (!$responderUser->exists || !$responderUser->id) {
+            throw new \Exception('Responder not found.', 404);
+        }
+
+        $inquiry = Inquiry::query()
+            ->with(['session', 'poster'])
+            ->find($inquiryId);
+
+        if (!$inquiry) {
+            throw new \Exception('Inquiry not found.', 404);
+        }
+
+        $response = InquiryResponse::query()
+            ->where('inquiry_id', $inquiry->id)
+            ->where('responder_id', $responderUser->id)
+            ->first();
+
+        if (!$response) {
+            throw new \Exception('Responder has not responded to this inquiry.', 403);
+        }
+
+        $isMatched = MatchHistory::query()
+            ->where('inquiry_id', $inquiry->id)
+            ->where('matched_user_id', $responderUser->id)
+            ->exists();
+
+        if (!$isMatched) {
+            throw new \Exception('Responder is not matched for this inquiry.', 403);
+        }
+
+        $existing = ChatThread::query()
+            ->where('inquiry_id', $inquiry->id)
+            ->where('responder_user_id', $responderUser->id)
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        $posterUserId = $this->resolvePosterUserId($inquiry);
+        $responderRole = (string) ($response->responder_role ?: $responderUser->primary_role ?: 'dealer');
+        $sessionId = $inquiry->session?->id;
+
+        // Legacy schema still enforces UNIQUE(session_id), so attach session_id
+        // only when free; canonical identity remains inquiry+responder.
+        if ($sessionId !== null) {
+            $sessionLinkExists = ChatThread::query()
+                ->where('session_id', $sessionId)
+                ->exists();
+
+            if ($sessionLinkExists) {
+                $sessionId = null;
+            }
+        }
+
+        if ($sessionId === null && !$this->chatThreadSessionIdNullable()) {
+            throw new \Exception('Matching session is required before opening thread.', 422);
+        }
+
+        try {
+            return DB::transaction(function () use ($inquiry, $posterUserId, $responderUser, $responderRole, $sessionId) {
+                $insideTxnExisting = ChatThread::query()
+                    ->where('inquiry_id', $inquiry->id)
+                    ->where('responder_user_id', $responderUser->id)
+                    ->first();
+
+                if ($insideTxnExisting) {
+                    return $insideTxnExisting;
+                }
+
+                return ChatThread::query()->create([
+                    'inquiry_id' => $inquiry->id,
+                    'poster_user_id' => $posterUserId,
+                    'responder_user_id' => $responderUser->id,
+                    'responder_role' => $responderRole,
+                    'session_id' => $sessionId,
+                    'thread_type' => 'one_to_one',
+                    'is_active' => true,
+                ]);
+            });
+        } catch (QueryException $e) {
+            if (!$this->isDuplicateKeyException($e)) {
+                throw $e;
+            }
+
+            $thread = ChatThread::query()
+                ->where('inquiry_id', $inquiry->id)
+                ->where('responder_user_id', $responderUser->id)
+                ->first();
+
+            if ($thread) {
+                return $thread;
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
+     * List structured threads for one inquiry (poster scope only).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getInquiryThreadsForPoster(int $inquiryId, User $posterUser): array
+    {
+        $threads = ChatThread::query()
+            ->where('inquiry_id', $inquiryId)
+            ->where('poster_user_id', $posterUser->id)
+            ->with([
+                'responder:id,name,company_name,primary_role',
+                'lastStructuredMessage:id,thread_id,body,attachment,created_at',
+            ])
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return $threads->map(function (ChatThread $thread) {
+            $last = $thread->lastStructuredMessage;
+            $preview = '';
+
+            if ($last) {
+                $preview = $last->body ?: ($last->attachment ? '[Attachment]' : '');
+            }
+
+            return [
+                'id' => $thread->id,
+                'thread_id' => $thread->id,
+                'inquiry_id' => $thread->inquiry_id,
+                'responder_user_id' => $thread->responder_user_id,
+                'responder_role' => $thread->responder_role,
+                'responder_user' => [
+                    'id' => $thread->responder?->id,
+                    'name' => $thread->responder?->name,
+                    'company_name' => $thread->responder?->company_name,
+                    'role' => $thread->responder_role ?: $thread->responder?->primary_role,
+                ],
+                'last_message_preview' => $preview,
+                'last_message_at' => $thread->last_message_at?->toIso8601String(),
+                'unread_count' => 0,
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * Cursor-paginated structured messages for a thread.
+     *
+     * @return array{data: array<int, array<string, mixed>>, meta: array<string, mixed>}
+     */
+    public function getThreadMessages(ChatThread $thread, int $limit = 20, ?int $cursor = null): array
+    {
+        $limit = max(1, min($limit, 100));
+
+        $query = Message::query()
+            ->where('thread_id', $thread->id)
+            ->when($cursor, fn ($q) => $q->where('id', '<', $cursor))
+            ->orderByDesc('id')
+            ->limit($limit + 1);
+
+        $rows = $query->get();
+        $hasMore = $rows->count() > $limit;
+        $slice = $hasMore ? $rows->take($limit) : $rows;
+        $oldestInChunk = $slice->last();
+
+        $messages = $slice
+            ->reverse()
+            ->values()
+            ->map(function (Message $message) {
+                return [
+                    'id' => $message->id,
+                    'thread_id' => $message->thread_id,
+                    'sender_user_id' => $message->sender_user_id,
+                    'sender_role' => $message->sender_role,
+                    'body' => $message->body,
+                    'attachment' => $message->attachment,
+                    'status' => $message->status,
+                    'created_at' => $message->created_at?->toIso8601String(),
+                ];
+            })
+            ->all();
+
+        return [
+            'data' => $messages,
+            'meta' => [
+                'limit' => $limit,
+                'next_cursor' => $hasMore && $oldestInChunk ? $oldestInChunk->id : null,
+                'has_more' => $hasMore,
+            ],
+        ];
+    }
+
+    public function sendThreadMessage(ChatThread $thread, User $actor, array $payload): Message
+    {
+        $body = isset($payload['body']) ? trim((string) $payload['body']) : null;
+        /** @var UploadedFile|null $attachment */
+        $attachment = $payload['attachment'] ?? null;
+
+        if (($body === null || $body === '') && !$attachment) {
+            throw new \InvalidArgumentException('Message body or attachment is required.');
+        }
+
+        return DB::transaction(function () use ($thread, $actor, $body, $attachment) {
+            $attachmentPath = null;
+            if ($attachment instanceof UploadedFile) {
+                $filename = time() . '_' . $attachment->getClientOriginalName();
+                $attachment->move(public_path('chat_attachments'), $filename);
+                $attachmentPath = 'chat_attachments/' . $filename;
+            }
+
+            $message = Message::query()->create([
+                'thread_id' => $thread->id,
+                'sender_user_id' => $actor->id,
+                'sender_role' => $this->normalizeSenderRole($actor->primary_role),
+                'body' => $body !== '' ? $body : null,
+                'attachment' => $attachmentPath,
+                'status' => 'SENT',
+            ]);
+
+            $thread->update([
+                'last_message_id' => $message->id,
+                'last_message_at' => $message->created_at,
+            ]);
+
+            return $message;
+        });
+    }
+
     /**
      * Resolve the current actor (dealer, converter, brand, machine_dealer) from the authenticated user.
      *
@@ -104,7 +349,7 @@ class ChatService
             'inquiry',
             'inquiry.poster',
             'inquiry.matchmakingLogs' => function ($q) {
-                $q->whereNotNull('responded_at')->with(['dealer.user', 'converter.user']);
+                $q->whereNotNull('responded_at')->with(['dealer.user', 'converter.user', 'machineDealer.user']);
             },
             'inquiry.acceptances.dealer.user',
             'participants' => function ($q) {
@@ -159,11 +404,14 @@ class ChatService
                     // Poster (any role): one row per responder from matchmaking logs or acceptances
                     $responderIdsByType = [];
                     foreach ($inquiry->matchmakingLogs->whereNotNull('responded_at') as $log) {
-                        if ($log->dealer_id && (int) $log->dealer_id !== (int) $actorId) {
+                        if ($log->dealer_id && $actorType !== 'dealer') {
                             $responderIdsByType['dealer'][$log->dealer_id] = true;
                         }
-                        if ($log->converter_id && (int) $log->converter_id !== (int) $actorId) {
+                        if ($log->converter_id && $actorType !== 'converter') {
                             $responderIdsByType['converter'][$log->converter_id] = true;
+                        }
+                        if ($log->machine_dealer_id && $actorType !== 'machine_dealer') {
+                            $responderIdsByType['machine_dealer'][$log->machine_dealer_id] = true;
                         }
                     }
                     foreach ($inquiry->acceptances ?? [] as $acc) {
@@ -393,7 +641,8 @@ class ChatService
         if ($inquiry) {
             $isResponder = $inquiry->acceptances()->where('dealer_id', $actorModel->id)->exists()
                 || $inquiry->matchmakingLogs()->where('dealer_id', $actorModel->id)->whereNotNull('responded_at')->exists()
-                || $inquiry->matchmakingLogs()->where('converter_id', $actorModel->id)->whereNotNull('responded_at')->exists();
+                || $inquiry->matchmakingLogs()->where('converter_id', $actorModel->id)->whereNotNull('responded_at')->exists()
+                || $inquiry->matchmakingLogs()->where('machine_dealer_id', $actorModel->id)->whereNotNull('responded_at')->exists();
         }
 
         if (!$isParticipant && !$isPoster && !$isResponder) {
@@ -457,7 +706,8 @@ class ChatService
         if ($inquiry) {
             $isResponder = $inquiry->acceptances()->where('dealer_id', $actorModel->id)->exists()
                 || $inquiry->matchmakingLogs()->where('dealer_id', $actorModel->id)->whereNotNull('responded_at')->exists()
-                || $inquiry->matchmakingLogs()->where('converter_id', $actorModel->id)->whereNotNull('responded_at')->exists();
+                || $inquiry->matchmakingLogs()->where('converter_id', $actorModel->id)->whereNotNull('responded_at')->exists()
+                || $inquiry->matchmakingLogs()->where('machine_dealer_id', $actorModel->id)->whereNotNull('responded_at')->exists();
         }
 
         if (!$isParticipant && !$isPoster && !$isResponder) {
@@ -483,6 +733,56 @@ class ChatService
             'attachment_path' => $attachmentPath,
             'status' => 'SENT',
         ]);
+    }
+
+    private function resolvePosterUserId(Inquiry $inquiry): int
+    {
+        $poster = $inquiry->poster;
+
+        if (!$poster || !isset($poster->user_id) || !$poster->user_id) {
+            throw new \Exception('Unable to resolve inquiry poster user.', 422);
+        }
+
+        return (int) $poster->user_id;
+    }
+
+    private function isDuplicateKeyException(QueryException $e): bool
+    {
+        $sqlState = $e->errorInfo[0] ?? null;
+        $driverCode = (int) ($e->errorInfo[1] ?? 0);
+
+        return $sqlState === '23000' || $driverCode === 1062;
+    }
+
+    private function normalizeSenderRole(?string $role): string
+    {
+        $role = strtolower((string) $role);
+
+        return match ($role) {
+            'machine-dealer', 'machinedealer', 'machine_dealer' => 'MACHINE_DEALER',
+            'converter' => 'CONVERTER',
+            'brand' => 'BRAND',
+            default => 'DEALER',
+        };
+    }
+
+    private function chatThreadSessionIdNullable(): bool
+    {
+        if (!Schema::hasColumn('chat_threads', 'session_id')) {
+            return true;
+        }
+
+        $driver = DB::getDriverName();
+        if ($driver === 'mysql') {
+            $row = DB::selectOne("SHOW COLUMNS FROM `chat_threads` LIKE 'session_id'");
+            if (!$row) {
+                return true;
+            }
+
+            return strtoupper((string) ($row->Null ?? 'YES')) === 'YES';
+        }
+
+        return true;
     }
 }
 

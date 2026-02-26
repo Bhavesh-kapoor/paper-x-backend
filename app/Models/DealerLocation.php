@@ -18,6 +18,7 @@ class DealerLocation extends Model
         'longitude',
         'city',
         'state',
+        'pincode',
     ];
 
     protected $casts = [

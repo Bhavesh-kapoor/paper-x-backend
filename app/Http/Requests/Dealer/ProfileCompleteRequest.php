@@ -40,6 +40,7 @@ class ProfileCompleteRequest extends ApiRequest
             'locations.*.longitude' => ['required', 'numeric', 'between:-180,180'],
             'locations.*.city' => ['nullable', 'string'],
             'locations.*.state' => ['nullable', 'string'],
+            'locations.*.pincode' => ['nullable', 'string', 'max:10'],
         ];
     }
 }

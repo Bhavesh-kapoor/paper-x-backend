@@ -32,6 +32,7 @@ class PostMachineRequest extends FormRequest
             'title' => ['nullable', 'string', 'max:255'],
             'posting_fee_paid' => ['nullable', 'boolean'],
             'posting_fee_amount' => ['nullable', 'numeric', 'min:0'],
+            'visibility' => ['nullable', 'string', Rule::in(['dealers', 'converters', 'machine_dealers', 'all'])],
         ];
     }
 }

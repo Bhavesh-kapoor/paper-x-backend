@@ -707,6 +707,12 @@ class SessionController extends Controller
     {
         try {
             $user = request()->user();
+
+            // V2: lazy matching so newly registered users see qualifying inquiries
+            if (config('matchmaking.engine_version') === 'v2' && config('matchmaking.auto_match_on_login', true)) {
+                app(\App\Domain\MatchEngine\MatchEngineOrchestrator::class)->ensureMatchesForUser($user);
+            }
+
             $filter = request()->input('filter', 'all'); // all, finding_matches, active, locked
 
             // Visible scopes: users see OWN sessions + sessions where they were MATCHED
@@ -764,7 +770,9 @@ class SessionController extends Controller
             } else {
                 // All active sessions (ACTIVE status, not expired)
                 $query->where('status', \App\Enums\SessionStatus::ACTIVE)
-                    ->where('expires_at', '>', now());
+                    ->where(function ($q) {
+                        $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                    });
             }
             
             $sessions = $query->orderBy('created_at', 'desc')

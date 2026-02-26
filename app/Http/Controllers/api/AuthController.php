@@ -50,12 +50,16 @@ class AuthController extends Controller
                 );
             }
             
+            $statusCode = method_exists($e, 'getStatusCode')
+                ? $e->getStatusCode()
+                : ((int) $e->getCode() >= 100 && (int) $e->getCode() < 600
+                    ? (int) $e->getCode()
+                    : HttpResponse::HTTP_BAD_REQUEST);
+
             return Response::error(
                 $e->getMessage(),
                 null,
-                method_exists($e, 'getStatusCode')
-                ? $e->getStatusCode()
-                : HttpResponse::HTTP_BAD_REQUEST
+                $statusCode
             );
         }
     }

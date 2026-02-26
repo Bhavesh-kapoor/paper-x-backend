@@ -8,6 +8,7 @@ use App\Http\Controllers\api\OpportunityController;
 use App\Http\Controllers\api\SessionController;
 use App\Http\Controllers\api\InquiryController;
 use App\Http\Controllers\api\ChatController;
+use App\Http\Controllers\api\ChatThreadController;
 use App\Http\Controllers\api\QuotationController;
 use App\Http\Controllers\api\NotificationController;
 use App\Http\Controllers\api\RoleController;
@@ -54,10 +55,11 @@ Route::prefix('v1')->group(function () {
     Route::get('/scrap-types', [\App\Http\Controllers\api\ReferenceDataController::class, 'getScrapTypes'])->name('reference.scrap-types');
     Route::get('/converter-reference-data', [\App\Http\Controllers\api\ReferenceDataController::class, 'getConverterReferenceData'])->name('reference.converter-reference-data');
     
-    #dealer profile completion - manual additions
+    #dealer profile completion - manual additions & custom material
     Route::middleware(['token.exists', 'auth:sanctum'])->group(function () {
         Route::post('/dealer/mill/add', [\App\Http\Controllers\api\ReferenceDataController::class, 'addMillBrand'])->name('dealer.mill.add');
         Route::post('/dealer/finish/add', [\App\Http\Controllers\api\ReferenceDataController::class, 'addFinish'])->name('dealer.finish.add');
+        Route::post('/materials', [MaterialController::class, 'store'])->name('materials.store');
     });
 
     #dealer routes
@@ -128,6 +130,12 @@ Route::prefix('v1')->group(function () {
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('dealer.notifications.read-all');
     });
 
+    #structured chat routes (thread-native; additive to legacy session chat)
+    Route::middleware(['token.exists', 'auth:sanctum'])->prefix('chat-threads')->group(function () {
+        Route::get('/{thread_id}/messages', [ChatThreadController::class, 'getMessages'])->name('chat-threads.messages');
+        Route::post('/{thread_id}/messages', [ChatThreadController::class, 'sendMessage'])->name('chat-threads.send');
+    });
+
     #machine dealer routes
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('machine-dealer')->group(function () {
         Route::post('/profile/complete', [\App\Http\Controllers\api\MachineDealerController::class, 'completeProfile'])->name('machine-dealer.profile.complete');
@@ -189,6 +197,10 @@ Route::prefix('v1')->group(function () {
         
         // Republish inquiry
         Route::post('/{inquiry}/republish', [InquiryController::class, 'republish'])->name('inquiries.republish');
+
+        // Structured chat (thread-native)
+        Route::get('/{inquiry_id}/chat-threads', [ChatThreadController::class, 'listByInquiry'])->name('inquiries.chat-threads');
+        Route::post('/{inquiry_id}/chat-threads/open', [ChatThreadController::class, 'open'])->name('inquiries.chat-threads.open');
     });
     
     #dealer inquiry routes (matched inquiries only)

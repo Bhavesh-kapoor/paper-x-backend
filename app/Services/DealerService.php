@@ -13,12 +13,14 @@ use App\Models\DealerMaterialDetail;
 use App\Models\Inquiry;
 use App\Models\InquiryItem;
 use App\Models\MatchingSession;
+use App\Domain\MatchEngine\MatchEngineOrchestrator;
 use App\Services\MatchmakingService;
 use Illuminate\Support\Facades\DB;
 
 class DealerService
 {
     public function __construct(
+        protected MatchEngineOrchestrator $matchEngineOrchestrator,
         protected MatchmakingService $matchmakingService
     ) {
     }
@@ -103,6 +105,7 @@ class DealerService
                         'longitude' => $locationData['longitude'],
                         'city' => $locationData['city'] ?? null,
                         'state' => $locationData['state'] ?? null,
+                        'pincode' => $locationData['pincode'] ?? null,
                     ]);
                 }
             }
@@ -291,16 +294,10 @@ class DealerService
                 'is_visible_to_brand' => false, // Never visible to brands (dealer-posted)
             ]);
 
-            // Trigger matchmaking based on visibility
+            // Trigger matchmaking via orchestrator (V1 or V2 based on config)
+            $result = $this->matchEngineOrchestrator->runMatchmaking($inquiry);
             if (in_array($visibility, ['dealers', 'all'], true)) {
-                $matchedDealers = $this->matchmakingService->findMatchingDealers($inquiry);
-                $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedDealers);
-            }
-
-            if (in_array($visibility, ['converters', 'all'], true)) {
-                // Match converters using their registration/profile data
-                $this->matchmakingService->findMatchingConverters($inquiry);
-                // Notification to converters can be wired later if needed
+                $this->matchmakingService->notifyMatchedDealers($inquiry, $result['dealer_ids']);
             }
 
             return $inquiry->load(['materials', 'finishes', 'dealerLocation', 'items', 'session']);

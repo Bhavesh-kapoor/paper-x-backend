@@ -16,12 +16,14 @@ use App\Models\InquiryItem;
 use App\Models\Machine;
 use App\Models\MatchingSession;
 use App\Models\Response;
+use App\Domain\MatchEngine\MatchEngineOrchestrator;
 use App\Services\MatchmakingService;
 use Illuminate\Support\Facades\DB;
 
 class ConverterService
 {
     public function __construct(
+        protected MatchEngineOrchestrator $matchEngineOrchestrator,
         protected MatchmakingService $matchmakingService
     ) {
     }
@@ -229,6 +231,7 @@ class ConverterService
             $converter = Converter::where('user_id', $userId)->firstOrFail();
             $machine = Machine::findOrFail($data['machine_id']);
             $title = $data['title'] ?? 'Machine: ' . $machine->name;
+            $visibility = $data['visibility'] ?? 'machine_dealers';
 
             $inquiry = Inquiry::create([
                 'poster_id' => $converter->id,
@@ -248,9 +251,25 @@ class ConverterService
                 'status' => InquiryStatus::MATCHING,
                 'posting_fee_paid' => $data['posting_fee_paid'] ?? false,
                 'posting_fee_amount' => $data['posting_fee_amount'] ?? null,
+                'visibility' => $visibility,
             ]);
 
             $inquiry->machines()->attach($data['machine_id']);
+
+            $session = MatchingSession::create([
+                'inquiry_id' => $inquiry->id,
+                'status' => SessionStatus::ACTIVE,
+                'locked_at' => null,
+                'expires_at' => now()->addHours(24),
+                'discovery_start' => now(),
+                'active_session_start' => now(),
+                'is_visible_to_dealers' => true,
+                'is_visible_to_brand' => false,
+            ]);
+
+            $inquiry->setRelation('session', $session);
+
+            $this->matchEngineOrchestrator->runMatchmaking($inquiry);
 
             return [
                 'inquiry_id' => $inquiry->id,
@@ -480,15 +499,10 @@ class ConverterService
                 'is_visible_to_brand' => false, // Never visible to brands (converter-posted)
             ]);
 
-            // Trigger matchmaking based on visibility
+            // Trigger matchmaking via orchestrator (V1 or V2 based on config)
+            $result = $this->matchEngineOrchestrator->runMatchmaking($inquiry);
             if (in_array($visibility, ['dealers', 'all'], true)) {
-                $matchedDealers = $this->matchmakingService->findMatchingDealers($inquiry);
-                $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedDealers);
-            }
-
-            if (in_array($visibility, ['converters', 'all'], true)) {
-                $this->matchmakingService->findMatchingConverters($inquiry);
-                // Notifications for converters can be added similarly to dealers
+                $this->matchmakingService->notifyMatchedDealers($inquiry, $result['dealer_ids']);
             }
 
             return $inquiry->load(['materials', 'finishes', 'items', 'session']);

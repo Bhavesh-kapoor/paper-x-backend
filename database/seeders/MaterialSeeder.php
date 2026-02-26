@@ -11,8 +11,9 @@ class MaterialSeeder extends Seeder
     public function run(): void
     {
         // 1️⃣ Materials
+        // Materials from DEALER's REGISTRATION spec (lines 27-226)
         $materials = [
-            // PAPER – WRITING & PRINTING
+            // A. PAPER – WRITING & PRINTING
             ['name' => 'Maplitho Paper', 'category' => 'PAPER – WRITING & PRINTING'],
             ['name' => 'Creamwove Paper', 'category' => 'PAPER – WRITING & PRINTING'],
             ['name' => 'Ledger Paper', 'category' => 'PAPER – WRITING & PRINTING'],
@@ -61,9 +62,9 @@ class MaterialSeeder extends Seeder
             ['name' => 'Bristol Board', 'category' => 'PAPERBOARDS'],
 
             // D. SPECIALITY & FUNCTIONAL PAPERS
-            ['name' => 'Black Paper', 'category' => 'SPECIALITY & FUNCTIONAL PAPERS'],
+            ['name' => 'Black paper', 'category' => 'SPECIALITY & FUNCTIONAL PAPERS'],
             ['name' => 'Thermal Paper', 'category' => 'SPECIALITY & FUNCTIONAL PAPERS'],
-            ['name' => 'OGR Paper', 'category' => 'SPECIALITY & FUNCTIONAL PAPERS'],
+            ['name' => 'OGR Paper (Oil & Grease Resistant)', 'category' => 'SPECIALITY & FUNCTIONAL PAPERS'],
             ['name' => 'Butter Paper', 'category' => 'SPECIALITY & FUNCTIONAL PAPERS'],
             ['name' => 'Glassine Paper', 'category' => 'SPECIALITY & FUNCTIONAL PAPERS'],
             ['name' => 'Wax Paper', 'category' => 'SPECIALITY & FUNCTIONAL PAPERS'],
@@ -98,7 +99,7 @@ class MaterialSeeder extends Seeder
             ['name' => 'Cupstock Paper', 'category' => 'INDUSTRIAL & TECHNICAL PAPERS'],
             ['name' => 'Straw Paper', 'category' => 'INDUSTRIAL & TECHNICAL PAPERS'],
 
-            // G. ANCILLARY MATERIALS
+            // G. ANCILLARY MATERIALS DEALT BY DEALERS
             ['name' => 'Adhesives (PVA)', 'category' => 'ANCILLARY MATERIALS'],
             ['name' => 'Cold Glue', 'category' => 'ANCILLARY MATERIALS'],
             ['name' => 'Hot Melt Glue', 'category' => 'ANCILLARY MATERIALS'],

@@ -13,12 +13,14 @@ use App\Models\MatchingSession;
 use App\Models\Response;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
+use App\Domain\MatchEngine\MatchEngineOrchestrator;
 use App\Services\NotificationService;
 use Illuminate\Support\Facades\DB;
 
 class BrandService
 {
     public function __construct(
+        protected MatchEngineOrchestrator $matchEngineOrchestrator,
         protected NotificationService $notificationService
     ) {
     }
@@ -252,11 +254,7 @@ class BrandService
                 'posting_fee_amount' => $postingFeeAmount,
             ]);
 
-            // Find 10 best converters using matchmaking engine
-            $inquiry->load('brand');
-            $matchedConverters = $this->findBestConverters($inquiry, 10);
-
-            // Create matching session
+            // Create matching session first (orchestrator needs it for MatchmakingLog)
             $session = MatchingSession::create([
                 'inquiry_id' => $inquiry->id,
                 'status' => SessionStatus::ACTIVE,
@@ -266,7 +264,14 @@ class BrandService
                 'active_session_start' => now(),
             ]);
 
+            // Run matchmaking via orchestrator (V1 or V2 based on config)
+            $inquiry->load(['brand', 'items', 'materials', 'session']);
+            $result = $this->matchEngineOrchestrator->runMatchmaking($inquiry);
+
             // Notify matched converters
+            $matchedConverters = $result['converter_ids']
+                ? Converter::whereIn('id', $result['converter_ids'])->get()
+                : collect();
             foreach ($matchedConverters as $converter) {
                 $this->notificationService->create(
                     $converter->user_id,
