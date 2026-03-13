@@ -2,10 +2,13 @@
 
 namespace App\Services;
 
+use App\Enums\NavigationType;
+use App\Enums\NotificationType;
+use App\Models\Converter;
 use App\Models\Inquiry;
 use App\Models\InquiryItem;
 use App\Models\Dealer;
-use App\Models\Converter;
+use App\Models\MachineDealer;
 use App\Models\MatchmakingLog;
 use App\Models\MatchingSession;
 use App\Enums\DealerStatus;
@@ -17,6 +20,11 @@ use Illuminate\Support\Facades\Log;
 
 class MatchmakingService
 {
+    public function __construct(
+        protected NotificationService $notificationService
+    ) {
+    }
+
     /**
      * Find and match dealers for an inquiry
      * 
@@ -1021,15 +1029,133 @@ class MatchmakingService
     }
     
     /**
+     * Hide inquiry from non-selected converters after lock (brand → converter flows).
+     */
+    public function hideFromNonSelectedConverters(Inquiry $inquiry, array $selectedConverterIds): void
+    {
+        MatchmakingLog::where('inquiry_id', $inquiry->id)
+            ->whereNotIn('converter_id', $selectedConverterIds)
+            ->update([
+                'is_visible' => false,
+                'hidden_from_dealer_at' => now(),
+            ]);
+    }
+    
+    /**
      * Notify matched dealers about new inquiry
      */
     public function notifyMatchedDealers(Inquiry $inquiry, array $dealerIds): void
     {
-        // This would integrate with your NotificationService
-        // Placeholder for notification logic
-        foreach ($dealerIds as $dealerId) {
-            // Create notification for dealer
-            // NotificationService::create(...)
+        $this->notifyMatchedRecipients($inquiry, $dealerIds, [], []);
+    }
+
+    /**
+     * Notify matched recipients across supported role pools.
+     */
+    public function notifyMatchedRecipients(
+        Inquiry $inquiry,
+        array $dealerIds = [],
+        array $converterIds = [],
+        array $machineDealerIds = []
+    ): void
+    {
+        if (empty($dealerIds) && empty($converterIds) && empty($machineDealerIds)) {
+            return;
+        }
+
+        $sessionId = $inquiry->session?->id;
+        $navigationType = $sessionId ? NavigationType::SESSION : NavigationType::INQUIRY;
+        $navigationId = (string) ($sessionId ?? $inquiry->id);
+
+        $inquiry->loadMissing('poster');
+        $posterUserId = (int) ($inquiry->poster?->user_id ?? 0);
+
+        $counterpartyName = match ($inquiry->poster_type) {
+            'brand' => 'Brand',
+            'converter' => 'Converter',
+            'machine_dealer', 'machineDealer' => 'Machine Dealer',
+            default => 'Poster',
+        };
+
+        $materialName = $inquiry->title ?: 'Requirement';
+
+        $this->notifyRecipientsByModel(
+            Dealer::class,
+            $dealerIds,
+            $inquiry,
+            $navigationType,
+            $navigationId,
+            $materialName,
+            $counterpartyName,
+            $posterUserId
+        );
+        $this->notifyRecipientsByModel(
+            Converter::class,
+            $converterIds,
+            $inquiry,
+            $navigationType,
+            $navigationId,
+            $materialName,
+            $counterpartyName,
+            $posterUserId
+        );
+        $this->notifyRecipientsByModel(
+            MachineDealer::class,
+            $machineDealerIds,
+            $inquiry,
+            $navigationType,
+            $navigationId,
+            $materialName,
+            $counterpartyName,
+            $posterUserId
+        );
+    }
+
+    private function notifyRecipientsByModel(
+        string $modelClass,
+        array $entityIds,
+        Inquiry $inquiry,
+        NavigationType $navigationType,
+        string $navigationId,
+        string $materialName,
+        string $counterpartyName,
+        int $posterUserId
+    ): void {
+        if (empty($entityIds)) {
+            return;
+        }
+
+        $recipientUserIds = $modelClass::query()
+            ->whereIn('id', $entityIds)
+            ->whereNotNull('user_id')
+            ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        foreach ($recipientUserIds as $userId) {
+            $viewTarget = $posterUserId > 0 && $userId === $posterUserId ? 'poster' : 'responder';
+            $title = $viewTarget === 'poster' ? 'New Match Found' : 'Matching Post Available';
+            $body = $viewTarget === 'poster'
+                ? 'Your requirement has new matching responders.'
+                : sprintf('A post matching your profile is available: %s.', $materialName);
+            $counterpartyForMeta = $viewTarget === 'poster' ? $counterpartyName : 'Poster';
+            $this->notificationService->create(
+                $userId,
+                NotificationType::MATCH_FOUND,
+                $title,
+                $body,
+                $navigationType,
+                $navigationId,
+                [
+                    'inquiry_id' => $inquiry->id,
+                    'material_name' => $materialName,
+                    'counterparty_name' => $counterpartyForMeta,
+                    'view_target' => $viewTarget,
+                    'poster_user_id' => $posterUserId > 0 ? $posterUserId : null,
+                ],
+                sprintf('match_found_%s_%s', $inquiry->id, $userId)
+            );
         }
     }
 }

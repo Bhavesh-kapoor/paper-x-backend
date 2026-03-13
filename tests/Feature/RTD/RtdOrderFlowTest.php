@@ -13,7 +13,7 @@ class RtdOrderFlowTest extends TestCase
 {
     use RefreshDatabase, RtdTestHelpers;
 
-    /** Golden path: Request → Accept → Pay → In Production → Dispatch → Confirm Delivery */
+    /** Golden path: Request → Accept → Pay → In Production → Dispatch (auto-completes) */
     public function test_full_happy_flow(): void
     {
         $converter = $this->createConverterUser();
@@ -56,18 +56,13 @@ class RtdOrderFlowTest extends TestCase
         $order->refresh();
         $this->assertEquals(RTDOrderStatus::IN_PRODUCTION, $order->status);
 
-        // 5) Converter → Dispatch (TC-D3)
+        // 5) Converter → Dispatch (auto-completes to COMPLETED)
         $this->dispatchOrderAsConverter($converter, $order->id);
         $order->refresh();
-        $this->assertEquals(RTDOrderStatus::DISPATCHED, $order->status);
-        $this->assertNotNull($order->delivery_deadline);
-        $this->assertNotNull($order->dispatched_at);
-        $this->assertGreaterThan(0, $order->dispatchProofs()->count());
-
-        // 6) Brand → Confirm Delivery (TC-C1)
-        $this->confirmDeliveryAsBrand($brand, $order->id);
-        $order->refresh();
         $this->assertEquals(RTDOrderStatus::COMPLETED, $order->status);
+        $this->assertNotNull($order->dispatched_at);
+        $this->assertNotNull($order->completed_at);
+        $this->assertGreaterThan(0, $order->dispatchProofs()->count());
         $payout->refresh();
         $this->assertEquals(RTDPayoutStatus::RELEASED, $payout->payout_status);
         $this->assertNotNull($payout->released_at);
@@ -114,7 +109,7 @@ class RtdOrderFlowTest extends TestCase
         $this->assertEquals('paused', $product->status);
     }
 
-    /** TC-C3: Raise dispute */
+    /** TC-C3: Raise dispute on completed order */
     public function test_raise_dispute(): void
     {
         $converter = $this->createConverterUser();
@@ -125,6 +120,9 @@ class RtdOrderFlowTest extends TestCase
         $this->confirmPaymentAsBrand($brand, $order->id);
         $this->markInProductionAsConverter($converter, $order->id);
         $this->dispatchOrderAsConverter($converter, $order->id);
+
+        $order->refresh();
+        $this->assertEquals(RTDOrderStatus::COMPLETED, $order->status);
 
         $this->withHeaders($this->authHeaders($brand))
             ->postJson("/api/v1/rtd/orders/{$order->id}/dispute")

@@ -104,7 +104,13 @@ class RTDProductController extends Controller
     {
         try {
             $products = $this->productService->browseCatalog(
-                $request->only(['category', 'lead_time', 'delivery_geography', 'sort_by', 'sort_dir', 'per_page'])
+                $request->only([
+                    'category', 'lead_time', 'delivery_geography',
+                    'min_price', 'max_price',
+                    'min_moq', 'max_moq',
+                    'has_branding',
+                    'sort_by', 'sort_dir', 'per_page',
+                ])
             );
 
             return Response::success('RTD Catalog', RtdProductResource::collection($products));
@@ -116,7 +122,7 @@ class RTDProductController extends Controller
     public function show(int $id)
     {
         try {
-            $product = \App\Models\RtdProduct::with('priceSlabs')->findOrFail($id);
+            $product = \App\Models\RtdProduct::with('priceSlabs', 'converter')->findOrFail($id);
 
             return Response::success('Product detail', new RtdProductResource($product));
         } catch (\Exception $e) {

@@ -17,7 +17,7 @@ use Illuminate\Support\Collection;
  *   - Runs CandidateResolver → SpecFilter → ScoreCalculator
  *   - Persists to match_histories via MatchPersister
  *   - Creates V1-compatible MatchmakingLog entries (dealer_id, converter_id, etc.)
- *   - Returns ['dealer_ids' => [...], 'converter_ids' => [...]]
+ *   - Returns ['dealer_ids' => [...], 'converter_ids' => [...], 'machine_dealer_ids' => [...]]
  *
  * When engine_version === 'v1':
  *   - Delegates to MatchmakingService::findMatchingDealers / findMatchingConverters
@@ -34,7 +34,7 @@ class MatchEngineOrchestrator
     /**
      * Run matchmaking for an inquiry.
      *
-     * @return array{dealer_ids: int[], converter_ids: int[]}
+     * @return array{dealer_ids: int[], converter_ids: int[], machine_dealer_ids: int[]}
      */
     public function runMatchmaking(Inquiry $inquiry): array
     {
@@ -123,6 +123,7 @@ class MatchEngineOrchestrator
                 if ($result !== null) {
                     $this->matchPersister->persistOne($inquiry, $result);
                     $this->createCompatibilityLogForEntry($inquiry, $result);
+                    $this->notifyLazyMatch($inquiry, $user, $this->normalizeRole((string) ($result['role'] ?? '')));
                 }
             } finally {
                 $inquiry->visibility = $originalVisibility;
@@ -196,6 +197,7 @@ class MatchEngineOrchestrator
     {
         $dealerIds = [];
         $converterIds = [];
+        $machineDealerIds = [];
 
         // Brand inquiries often have no visibility; infer from poster_type
         $visibility = $inquiry->visibility ?? ($inquiry->poster_type === 'brand' ? 'converters' : 'dealers');
@@ -211,6 +213,7 @@ class MatchEngineOrchestrator
         return [
             'dealer_ids' => $dealerIds,
             'converter_ids' => $converterIds,
+            'machine_dealer_ids' => $machineDealerIds,
         ];
     }
 
@@ -322,6 +325,7 @@ class MatchEngineOrchestrator
 
         $dealerIds = [];
         $converterIds = [];
+        $machineDealerIds = [];
 
         foreach ($top as $entry) {
             $user = $entry['user'];
@@ -331,13 +335,59 @@ class MatchEngineOrchestrator
                 $dealerIds[] = $user->dealer->id;
             } elseif ($role === 'converter' && $user->converter) {
                 $converterIds[] = $user->converter->id;
+            } elseif (($role === 'machine_dealer' || $role === 'machineDealer') && $user->machineDealer) {
+                $machineDealerIds[] = $user->machineDealer->id;
             }
         }
 
         return [
             'dealer_ids' => $dealerIds,
             'converter_ids' => $converterIds,
+            'machine_dealer_ids' => $machineDealerIds,
         ];
+    }
+
+    /**
+     * Emit notification when a late-joining user is matched via lazy matching.
+     * Dedupe is handled by NotificationService unique (user_id, dedupe_key).
+     */
+    private function notifyLazyMatch(Inquiry $inquiry, User $user, string $role): void
+    {
+        // Fallback: some older users may not have primary_role set correctly yet.
+        if ($role === '') {
+            if ($user->dealer) {
+                $role = 'dealer';
+            } elseif ($user->converter) {
+                $role = 'converter';
+            } elseif ($user->machineDealer) {
+                $role = 'machine_dealer';
+            }
+        }
+
+        if ($role === 'dealer') {
+            $dealerId = (int) ($user->dealer?->id ?? 0);
+            if ($dealerId > 0) {
+                $this->matchmakingService->notifyMatchedRecipients($inquiry, [$dealerId], [], []);
+            }
+
+            return;
+        }
+
+        if ($role === 'converter') {
+            $converterId = (int) ($user->converter?->id ?? 0);
+            if ($converterId > 0) {
+                $this->matchmakingService->notifyMatchedRecipients($inquiry, [], [$converterId], []);
+            }
+
+            return;
+        }
+
+        if ($role === 'machine_dealer') {
+            $machineDealerId = (int) ($user->machineDealer?->id ?? 0);
+            if ($machineDealerId > 0) {
+                $this->matchmakingService->notifyMatchedRecipients($inquiry, [], [], [$machineDealerId]);
+            }
+        }
     }
 
     private function topNForUrgency(?string $urgency): int

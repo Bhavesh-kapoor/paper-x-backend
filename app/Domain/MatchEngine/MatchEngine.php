@@ -95,16 +95,14 @@ class MatchEngine
         $maxResponses   = (int) config('matchmaking.max_responses', 10);
         $expiryThreshold = now()->subDays($autoExpiryDays);
 
-        return Inquiry::query()
-            ->where('status', InquiryStatus::POSTED)
-            ->where('poster_id', '!=', $user->id)
+        $query = Inquiry::query()
+            ->whereIn('status', [InquiryStatus::POSTED, InquiryStatus::MATCHING])
             ->whereNull('locked_at')
             ->where(function ($q) {
                 $q->whereNull('expires_at')
                   ->orWhere('expires_at', '>', now());
             })
             ->where(function ($q) use ($expiryThreshold, $maxResponses) {
-                // Keep if newer than threshold OR already has enough responses
                 $q->where('created_at', '>=', $expiryThreshold)
                   ->orWhere(function ($sub) use ($maxResponses) {
                       $sub->whereRaw(
@@ -113,8 +111,33 @@ class MatchEngine
                       );
                   });
             })
-            ->with(['materials', 'items'])
-            ->get();
+            ->with(['materials', 'items']);
+
+        // Exclude the user's own inquiries across all their role entities
+        $query->where(function ($q) use ($user) {
+            if ($user->dealer) {
+                $q->whereNot(function ($sub) use ($user) {
+                    $sub->where('poster_type', 'dealer')->where('poster_id', $user->dealer->id);
+                });
+            }
+            if ($user->converter) {
+                $q->whereNot(function ($sub) use ($user) {
+                    $sub->where('poster_type', 'converter')->where('poster_id', $user->converter->id);
+                });
+            }
+            if ($user->brand) {
+                $q->whereNot(function ($sub) use ($user) {
+                    $sub->where('poster_type', 'brand')->where('poster_id', $user->brand->id);
+                });
+            }
+            if ($user->machineDealer) {
+                $q->whereNot(function ($sub) use ($user) {
+                    $sub->where('poster_type', 'machine_dealer')->where('poster_id', $user->machineDealer->id);
+                });
+            }
+        });
+
+        return $query->get();
     }
 
     // ---------------------------------------------------------------

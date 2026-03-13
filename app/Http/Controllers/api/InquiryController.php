@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers\api;
 
+use App\Enums\NavigationType;
+use App\Enums\NotificationType;
 use App\Http\Controllers\Controller;
 use App\Models\Inquiry;
 use App\Domain\MatchEngine\MatchEngineOrchestrator;
-use App\Domain\MatchEngine\ResponseService as MatchEngineResponseService;
 use App\Services\MatchmakingService;
+use App\Services\NotificationService;
+use App\Services\InquiryService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +20,9 @@ class InquiryController extends Controller
 {
     public function __construct(
         protected MatchEngineOrchestrator $matchEngineOrchestrator,
-        protected MatchmakingService $matchmakingService
+        protected MatchmakingService $matchmakingService,
+        protected NotificationService $notificationService,
+        protected InquiryService $inquiryService
     ) {
     }
 
@@ -200,10 +205,41 @@ class InquiryController extends Controller
             
             // Trigger matchmaking via orchestrator (V1 or V2 based on config)
             $result = $this->matchEngineOrchestrator->runMatchmaking($inquiry);
-            $matchedRecipients = $result['dealer_ids'];
+            $dealerIds = $result['dealer_ids'] ?? [];
+            $converterIds = $result['converter_ids'] ?? [];
+            $machineDealerIds = $result['machine_dealer_ids'] ?? [];
+            $matchedRecipientsCount = count($dealerIds) + count($converterIds) + count($machineDealerIds);
 
-            // Notify matched dealers
-            $this->matchmakingService->notifyMatchedDealers($inquiry, $matchedRecipients);
+            // Notify poster that matches are available (poster view target)
+            if ($matchedRecipientsCount > 0) {
+                $posterUserId = (int) ($user->id ?? 0);
+                if ($posterUserId > 0) {
+                    $this->notificationService->create(
+                        $posterUserId,
+                        NotificationType::MATCH_FOUND,
+                        'New Match Found',
+                        'Your requirement has new matching responders.',
+                        NavigationType::SESSION,
+                        (string) $session->id,
+                        [
+                            'inquiry_id' => $inquiry->id,
+                            'material_name' => $inquiry->title ?? 'Requirement',
+                            'counterparty_name' => 'Responder',
+                            'view_target' => 'poster',
+                            'poster_user_id' => $posterUserId,
+                        ],
+                        sprintf('match_found_poster_%s_%s', $inquiry->id, $posterUserId)
+                    );
+                }
+            }
+
+            // Notify matched recipients across all supported role pools.
+            $this->matchmakingService->notifyMatchedRecipients(
+                $inquiry,
+                $dealerIds,
+                $converterIds,
+                $machineDealerIds
+            );
             
             DB::commit();
             
@@ -212,7 +248,7 @@ class InquiryController extends Controller
             
             return Response::success('Inquiry posted successfully', [
                 'inquiry' => $inquiry,
-                'matched_dealers_count' => count($matchedRecipients),
+                'matched_dealers_count' => count($dealerIds),
             ]);
             
         } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
@@ -934,59 +970,30 @@ class InquiryController extends Controller
             Gate::authorize('viewResponses', $inquiry);
 
             $user = $request->user();
-            $log = $this->getMyMatchmakingLog($inquiry, $user);
-            if (!$log) {
-                return Response::error('You are not matched to this requirement', null, HttpResponse::HTTP_FORBIDDEN);
-            }
-
-            if ($log->declined_at) {
-                return Response::error('You previously declined this requirement. Cannot express interest now.', null, HttpResponse::HTTP_BAD_REQUEST);
-            }
-
             $approxPrice = $request->input('approx_price');
-            $description = $request->input('description') ?? '';
-
-            // When V2 engine: also write to inquiry_responses (V2 ResponseService)
-            if (config('matchmaking.engine_version') === 'v2') {
-                try {
-                    app(MatchEngineResponseService::class)->respond(
-                        $inquiry,
-                        $user,
-                        $description,
-                        $approxPrice !== null && $approxPrice !== '' ? (float) $approxPrice : null,
-                    );
-                } catch (\InvalidArgumentException $e) {
-                    return Response::error($e->getMessage(), null, HttpResponse::HTTP_BAD_REQUEST);
-                }
-            }
-
-            // Keep existing MatchmakingLog update so session API keeps working (V1 compat)
-            $update = [
-                'responded_at' => now(),
-                'declined_at' => null,
-            ];
-            if ($approxPrice !== null && $approxPrice !== '') {
-                $update['approx_price'] = $approxPrice;
-            }
-            if (is_string($description) && $description !== '') {
-                $update['interest_description'] = $description;
-            }
-            $log->update($update);
-
-            // Auto-lock session when 10 people have responded (post moves from Inquiries to Locked)
-            app(\App\Services\MatchmakingService::class)->lockSessionIfResponseThresholdReached($inquiry, 10);
-
-            // TODO: Notify poster that someone expressed interest (e.g. push/email)
+            $description = $request->input('description');
+            $result = $this->inquiryService->expressInterestWithAutoMessage(
+                $inquiry,
+                $user,
+                $approxPrice,
+                $description
+            );
 
             return Response::success('Interest expressed successfully', [
                 'expressed_interest' => true,
-                'matchmaking_log_id' => $log->id,
+                'matchmaking_log_id' => $result['matchmaking_log_id'],
+                'chat_message_created' => $result['chat_message_created'],
+                'thread_id' => $result['thread_id'],
             ]);
         } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
             return Response::error('You do not have permission to respond to this requirement', null, HttpResponse::HTTP_FORBIDDEN);
         } catch (\Exception $e) {
+            $statusCode = (int) $e->getCode();
+            if ($statusCode < 400 || $statusCode >= 600) {
+                $statusCode = HttpResponse::HTTP_INTERNAL_SERVER_ERROR;
+            }
             \Log::error('Express interest failed', ['inquiry_id' => $inquiry->id, 'error' => $e->getMessage()]);
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+            return Response::error($e->getMessage(), null, $statusCode);
         }
     }
 

@@ -102,33 +102,11 @@ class RTDOrderController extends Controller
     public function dispatch(DispatchOrderRequest $request, int $id)
     {
         try {
-            $proofData = [
-                'proof_type' => $request->validated()['proof_type'],
-                'file_path'  => '',
-            ];
-
-            if ($request->hasFile('file')) {
-                $proofData['file_path'] = $request->file('file')->store('rtd/dispatch-proofs', 'public');
-            } elseif ($request->filled('tracking_number')) {
-                $proofData['file_path'] = $request->validated()['tracking_number'];
-            }
+            $proofData = $request->validated();
 
             $order = $this->orderService->markDispatched($id, $proofData, $request->user()->id);
 
             return Response::success('Order dispatched', new RtdOrderResource($order));
-        } catch (RTDDomainException $e) {
-            return Response::error($e->getMessage(), null, $e->getStatusCode());
-        } catch (\Exception $e) {
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_BAD_REQUEST);
-        }
-    }
-
-    public function confirmDelivery(int $id)
-    {
-        try {
-            $order = $this->orderService->confirmDelivery($id, request()->user()->id);
-
-            return Response::success('Delivery confirmed', new RtdOrderResource($order));
         } catch (RTDDomainException $e) {
             return Response::error($e->getMessage(), null, $e->getStatusCode());
         } catch (\Exception $e) {
@@ -189,5 +167,12 @@ class RTDOrderController extends Controller
         } catch (\Exception $e) {
             return Response::error($e->getMessage(), null, HttpResponse::HTTP_NOT_FOUND);
         }
+    }
+
+    public function dispatchOptions()
+    {
+        return Response::success('Dispatch options', [
+            'allowed_couriers' => config('rtd.allowed_couriers', []),
+        ]);
     }
 }

@@ -32,7 +32,13 @@ class ScoreCalculator
     ): array {
         $weights = $this->weights();
 
-        $specRaw      = $this->specScore($specResult);
+        // For brand-posted inquiries, interpret \"spec\" as capability relevance
+        // rather than material/spec-sheet similarity.
+        $isBrandInquiry = $inquiry->poster_type === 'brand';
+
+        $specRaw      = $isBrandInquiry
+            ? $this->brandCapabilityScore($specResult)
+            : $this->specScore($specResult);
         $distanceRaw  = $this->distanceScore($distanceKm, $inquiry->urgency);
         $activityRaw  = $this->activityProvider->score($candidate);
         $freshnessRaw = $this->freshnessScore($inquiry);
@@ -73,6 +79,26 @@ class ScoreCalculator
     {
         if ($specResult['status'] === SpecFilter::STATUS_HARD_FAIL) {
             return 0.0;
+        }
+
+        return $this->specFilter->similarityRatio($specResult);
+    }
+
+    /**
+     * Brand capability score: when there is no structured spec sheet, use a
+     * coarse 0.0–1.0 score based on whether SpecFilter considered this a
+     * hard fail or not. V2 compatibility logs already expose material_match;
+     * for brand flows we treat any non-hard-fail as a good capability match.
+     */
+    private function brandCapabilityScore(array $specResult): float
+    {
+        if ($specResult['status'] === SpecFilter::STATUS_HARD_FAIL) {
+            return 0.0;
+        }
+
+        // When there is no detailed spec, fall back to neutral-high score.
+        if (empty($specResult['details'] ?? [])) {
+            return 0.8;
         }
 
         return $this->specFilter->similarityRatio($specResult);

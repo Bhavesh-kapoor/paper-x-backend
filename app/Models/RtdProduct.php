@@ -22,9 +22,15 @@ class RtdProduct extends Model
         'product_name',
         'image_path',
         'size',
+        'size_unit',
+        'material_id',
         'material',
-        'gsm',
+        'material_custom',
+        'thickness',
+        'thickness_unit',
+        'finish_ids',
         'finish',
+        'branding_methods',
         'branding_method',
         'lead_time',
         'moq',
@@ -35,16 +41,26 @@ class RtdProduct extends Model
         'visibility_score',
         'status',
         'delivery_geography',
+        'location_id',
+        'location_source',
+        'latitude',
+        'longitude',
     ];
 
     protected $casts = [
         'lead_time'       => RTDLeadTime::class,
+        'material_id'     => 'integer',
+        'finish_ids'      => 'array',
+        'branding_methods'=> 'array',
         'moq'             => 'integer',
         'max_capacity'    => 'integer',
         'base_price'      => 'decimal:2',
         'buy_now_enabled' => 'boolean',
         'decline_count'   => 'integer',
         'visibility_score'=> 'integer',
+        'location_id'     => 'integer',
+        'latitude'        => 'float',
+        'longitude'       => 'float',
     ];
 
     // ── Relationships ──

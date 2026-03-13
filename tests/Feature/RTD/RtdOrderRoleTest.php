@@ -64,24 +64,6 @@ class RtdOrderRoleTest extends TestCase
         $this->assertGreaterThanOrEqual(400, $response->status());
     }
 
-    /** Converter cannot confirm delivery (brand-only) → must fail with 4xx. */
-    public function test_converter_cannot_confirm_delivery(): void
-    {
-        $converter = $this->createConverterUser();
-        $brand    = $this->createBrandUser();
-        $product  = $this->createProductAsConverter($converter);
-        $order    = $this->requestOrderAsBrand($brand, $product->id);
-        $this->acceptOrderAsConverter($converter, $order->id);
-        $this->confirmPaymentAsBrand($brand, $order->id);
-        $this->markInProductionAsConverter($converter, $order->id);
-        $this->dispatchOrderAsConverter($converter, $order->id);
-
-        $response = $this->withHeaders($this->authHeaders($converter))
-            ->postJson("/api/v1/rtd/orders/{$order->id}/confirm-delivery");
-
-        $this->assertGreaterThanOrEqual(400, $response->status());
-    }
-
     /** TC-P4: Brand tries to create product. Expect 403 if role middleware added; currently may be 201. */
     public function test_brand_can_or_cannot_create_product_depending_on_middleware(): void
     {

@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             FinishedProductSeeder::class,
             ScrapTypeSeeder::class,
             AdminSeeder::class,
+            RtdListingPackSeeder::class,
         ]);
 
         // User::factory(10)->create();

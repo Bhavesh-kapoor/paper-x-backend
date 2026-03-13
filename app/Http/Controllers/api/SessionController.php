@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
+use App\Enums\InquiryIntent;
+use App\Enums\InquiryType;
+use App\Models\Inquiry;
 use App\Services\SessionService;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Storage;
 
 class SessionController extends Controller
 {
@@ -117,18 +121,41 @@ class SessionController extends Controller
                     ->with('participant')
                     ->get()
                     ->map(function ($participant) {
-                        $dealer = $participant->participant;
-                        if (!$dealer || !($dealer instanceof \App\Models\Dealer)) {
+                        $entity = $participant->participant;
+                        if (!$entity) {
                             return null;
                         }
-                        $user = $dealer->user;
-                        return [
-                            'id' => $dealer->id,
-                            'company_name' => $user->company_name ?? $user->name ?? 'Unknown',
-                            'location' => $dealer->locations->first()?->city ?? $user->city ?? 'Unknown',
-                        ];
+
+                        if ($entity instanceof \App\Models\Dealer) {
+                            $user = $entity->user;
+                            return [
+                                'id' => $entity->id,
+                                'company_name' => $user->company_name ?? $user->name ?? 'Unknown',
+                                'location' => $entity->locations->first()?->city ?? $user->city ?? 'Unknown',
+                            ];
+                        }
+
+                        if ($entity instanceof \App\Models\Converter) {
+                            $user = $entity->user;
+                            return [
+                                'id' => $entity->id,
+                                'company_name' => $user->company_name ?? $user->name ?? 'Unknown',
+                                'location' => $entity->factory_city ?? $user->city ?? 'Unknown',
+                            ];
+                        }
+
+                        if ($entity instanceof \App\Models\Brand) {
+                            return [
+                                'id' => $entity->id,
+                                'company_name' => $entity->brand_name ?? $entity->company_name ?? 'Brand',
+                                'location' => $entity->city ?? 'Unknown',
+                            ];
+                        }
+
+                        return null;
                     })
-                    ->filter();
+                    ->filter()
+                    ->values();
             }
             
             $intent = $inquiry->intent?->value ?? $inquiry->intent ?? 'buy';
@@ -235,11 +262,13 @@ class SessionController extends Controller
             $reached_count = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
                 ->where('is_visible', true)
                 ->count();
-            $responses_count = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
+            $responded_count = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
                 ->whereNotNull('responded_at')
                 ->count();
             $matches_count = $reached_count;
+            $responses_count = $responded_count;
 
+            // Default requirement summary (dealer/converter flows)
             $requirement_summary = [
                 'title' => $inquiry->title,
                 'material' => $inquiry->items->first()->material_category ?? null,
@@ -255,6 +284,20 @@ class SessionController extends Controller
                 })->values()->all(),
             ];
 
+            // Brand → Converter: use brand requirement fields instead of items
+            if ($posterType === 'brand') {
+                $requirement_summary = [
+                    'title' => $inquiry->title,
+                    'requirement_type' => $inquiry->requirement_type,
+                    'packaging_type' => $inquiry->packaging_type,
+                    'quantity_range' => $inquiry->quantity_range,
+                    'timeline' => $inquiry->timeline,
+                    'urgency' => $inquiry->urgency ?? 'normal',
+                    'description' => $inquiry->description,
+                    'special_needs' => $inquiry->special_needs,
+                ];
+            }
+
             $data = [
                 'poster_type' => $posterType,
                 'intent' => $intent,
@@ -265,6 +308,19 @@ class SessionController extends Controller
                 'matches_count' => $matches_count,
                 'responses_count' => $responses_count,
             ];
+
+            // Converter jobwork: expose jobwork_mode, jobwork details, and inquiry_type (jobwork_find | jobwork_give)
+            $jobwork = $this->jobworkDetails($inquiry);
+            if ($jobwork !== null) {
+                $data['jobwork_mode'] = $jobwork['mode'];
+                $data['jobwork'] = $jobwork;
+                $data['inquiry_type'] = $jobwork['mode'] === 'find' ? 'jobwork_find' : 'jobwork_give';
+                $jobworkSample = $this->jobworkSampleFields($inquiry);
+                if ($jobworkSample !== null) {
+                    $data['sample_available'] = $jobworkSample['sample_available'];
+                    $data['sample_image_url'] = $jobworkSample['sample_image_url'];
+                }
+            }
 
             return Response::success('Poster detail retrieved', $data);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -357,6 +413,7 @@ class SessionController extends Controller
                 default => 'Someone',
             };
 
+            // Default requirement summary (dealer/converter flows)
             $requirement_summary = [
                 'title' => $inquiry->title,
                 'material' => $inquiry->items->first()->material_category ?? null,
@@ -371,6 +428,20 @@ class SessionController extends Controller
                     ];
                 })->values()->all(),
             ];
+
+            // Brand → Converter: use brand requirement fields instead of items
+            if ($posterType === 'brand') {
+                $requirement_summary = [
+                    'title' => $inquiry->title,
+                    'requirement_type' => $inquiry->requirement_type,
+                    'packaging_type' => $inquiry->packaging_type,
+                    'quantity_range' => $inquiry->quantity_range,
+                    'timeline' => $inquiry->timeline,
+                    'urgency' => $inquiry->urgency ?? 'normal',
+                    'description' => $inquiry->description,
+                    'special_needs' => $inquiry->special_needs,
+                ];
+            }
 
             $data = [
                 'inquiry_id' => $inquiry->id,
@@ -387,6 +458,19 @@ class SessionController extends Controller
                 ],
             ];
 
+            // Converter jobwork: expose jobwork_mode, jobwork details, and inquiry_type (jobwork_find | jobwork_give)
+            $jobwork = $this->jobworkDetails($inquiry);
+            if ($jobwork !== null) {
+                $data['jobwork_mode'] = $jobwork['mode'];
+                $data['jobwork'] = $jobwork;
+                $data['inquiry_type'] = $jobwork['mode'] === 'find' ? 'jobwork_find' : 'jobwork_give';
+                $jobworkSample = $this->jobworkSampleFields($inquiry);
+                if ($jobworkSample !== null) {
+                    $data['sample_available'] = $jobworkSample['sample_available'];
+                    $data['sample_image_url'] = $jobworkSample['sample_image_url'];
+                }
+            }
+
             return Response::success('Responder detail retrieved', $data);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return Response::error('Session not found', null, HttpResponse::HTTP_NOT_FOUND);
@@ -397,6 +481,70 @@ class SessionController extends Controller
                 method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
             );
         }
+    }
+
+    /**
+     * For converter jobwork inquiries (JOB type, converter poster), return normalized jobwork details from specs + inquiry.
+     * Returns null for non-jobwork inquiries.
+     */
+    private function jobworkDetails(Inquiry $inquiry): ?array
+    {
+        if ($inquiry->inquiry_type !== InquiryType::JOB || $inquiry->poster_type !== 'converter') {
+            return null;
+        }
+        $intentVal = $inquiry->intent instanceof InquiryIntent ? $inquiry->intent->value : (string) ($inquiry->intent ?? 'buy');
+        $jobworkMode = $intentVal === 'sell' ? 'find' : 'give';
+        $specs = $inquiry->specs ?? [];
+
+        $jobworkType = $specs['jobwork_type'] ?? $inquiry->job_type ?? null;
+        $base = [
+            'mode' => $jobworkMode,
+            'jobwork_type' => $jobworkType ? (string) $jobworkType : null,
+            'quantity' => $inquiry->quantity,
+            'quantity_unit' => $inquiry->quantity_unit ?? null,
+            'timeline' => $inquiry->timeline ?? null,
+            'location' => $inquiry->location ?? null,
+        ];
+
+        if ($jobworkMode === 'find') {
+            $base['machinery_available'] = $specs['machinery_available'] ?? null;
+            $base['city'] = $specs['city'] ?? null;
+            $base['sample_available'] = (bool) ($specs['sample_available'] ?? false);
+            $base['special_instructions'] = $specs['special_instructions'] ?? null;
+        } else {
+            $base['raw_materials'] = $specs['raw_materials'] ?? null;
+            $base['size'] = $specs['size'] ?? null;
+            $base['size_unit'] = $specs['size_unit'] ?? null;
+            $base['thickness'] = $specs['thickness'] ?? null;
+            $base['thickness_unit'] = $specs['thickness_unit'] ?? null;
+            $base['grade_finish'] = $specs['grade_finish'] ?? null;
+            $base['quality_requirements'] = $specs['quality_requirements'] ?? null;
+            $base['other_instructions'] = $specs['other_instructions'] ?? null;
+        }
+
+        return $base;
+    }
+
+    /**
+     * For jobwork-find inquiries (JOB type, converter poster), return sample_available and sample_image_url.
+     * Returns null for other inquiry types so callers can omit the fields.
+     */
+    private function jobworkSampleFields(Inquiry $inquiry): ?array
+    {
+        if ($inquiry->inquiry_type !== InquiryType::JOB || $inquiry->poster_type !== 'converter') {
+            return null;
+        }
+        $specs = $inquiry->specs ?? [];
+        $sampleAvailable = (bool) ($specs['sample_available'] ?? false);
+        $sampleImage = $specs['sample_image'] ?? null;
+        $sampleImageUrl = null;
+        if ($sampleImage && is_string($sampleImage) && $sampleImage !== '') {
+            $sampleImageUrl = str_starts_with($sampleImage, 'http') ? $sampleImage : Storage::disk('public')->url($sampleImage);
+        }
+        return [
+            'sample_available' => $sampleAvailable,
+            'sample_image_url' => $sampleImageUrl,
+        ];
     }
 
     /**
@@ -455,16 +603,38 @@ class SessionController extends Controller
                     ->with('participant')
                     ->get()
                     ->map(function ($participant) {
-                        $dealer = $participant->participant;
-                        if (!$dealer || !($dealer instanceof \App\Models\Dealer)) {
+                        $entity = $participant->participant;
+                        if (!$entity) {
                             return null;
                         }
-                        $u = $dealer->user;
-                        return [
-                            'id' => $dealer->id,
-                            'company_name' => $u->company_name ?? $u->name ?? 'Unknown',
-                            'location' => $dealer->locations->first()?->city ?? $u->city ?? 'Unknown',
-                        ];
+
+                        if ($entity instanceof \App\Models\Dealer) {
+                            $u = $entity->user;
+                            return [
+                                'id' => $entity->id,
+                                'company_name' => $u->company_name ?? $u->name ?? 'Unknown',
+                                'location' => $entity->locations->first()?->city ?? $u->city ?? 'Unknown',
+                            ];
+                        }
+
+                        if ($entity instanceof \App\Models\Converter) {
+                            $u = $entity->user;
+                            return [
+                                'id' => $entity->id,
+                                'company_name' => $u->company_name ?? $u->name ?? 'Unknown',
+                                'location' => $entity->factory_city ?? $u->city ?? 'Unknown',
+                            ];
+                        }
+
+                        if ($entity instanceof \App\Models\Brand) {
+                            return [
+                                'id' => $entity->id,
+                                'company_name' => $entity->brand_name ?? $entity->company_name ?? 'Brand',
+                                'location' => $entity->city ?? 'Unknown',
+                            ];
+                        }
+
+                        return null;
                     })
                     ->filter()
                     ->values()
@@ -615,7 +785,7 @@ class SessionController extends Controller
     }
 
     /**
-     * Lock session and select dealers
+     * Lock session and select responders (dealers or converters depending on poster type)
      */
     public function lock(\App\Http\Requests\LockSessionRequest $request, \App\Models\MatchingSession $session)
     {
@@ -623,7 +793,20 @@ class SessionController extends Controller
             \Illuminate\Support\Facades\Gate::authorize('lock', $session);
             
             $user = $request->user();
-            $selectedDealerIds = $request->validated()['selected_dealer_ids'];
+            $validated = $request->validated();
+            $selectedDealerIds = $validated['selected_dealer_ids'] ?? [];
+            $selectedConverterIds = $validated['selected_converter_ids'] ?? [];
+            
+            $inquiry = $session->inquiry;
+            $posterType = $inquiry->poster_type;
+
+            // Determine responder pool based on poster type
+            $responderType = 'dealer';
+            $responderIds = $selectedDealerIds;
+            if ($posterType === 'brand') {
+                $responderType = 'converter';
+                $responderIds = $selectedConverterIds;
+            }
             
             \Illuminate\Support\Facades\DB::beginTransaction();
             
@@ -637,22 +820,29 @@ class SessionController extends Controller
             ]);
             
             // Update inquiry status
-            $inquiry = $session->inquiry;
-            $inquiry->update([
+            $inquiryUpdate = [
                 'status' => \App\Enums\InquiryStatus::LOCKED,
                 'locked_at' => now(),
-                'selected_dealers_count' => count($selectedDealerIds),
-            ]);
+            ];
+            if ($responderType === 'dealer') {
+                $inquiryUpdate['selected_dealers_count'] = count($responderIds);
+            }
+            $inquiry->update($inquiryUpdate);
             
-            // Hide from non-selected dealers
-            app(\App\Services\MatchmakingService::class)->hideFromNonSelectedDealers($inquiry, $selectedDealerIds);
+            // Hide from non-selected responders
+            $matchmakingService = app(\App\Services\MatchmakingService::class);
+            if ($responderType === 'dealer') {
+                $matchmakingService->hideFromNonSelectedDealers($inquiry, $responderIds);
+            } else {
+                $matchmakingService->hideFromNonSelectedConverters($inquiry, $responderIds);
+            }
             
-            // Create session participants for selected dealers
-            foreach ($selectedDealerIds as $dealerId) {
+            // Create session participants for selected responders
+            foreach ($responderIds as $responderId) {
                 \App\Models\SessionParticipant::create([
                     'session_id' => $session->id,
-                    'participant_type' => 'dealer',
-                    'participant_id' => $dealerId,
+                    'participant_type' => $responderType,
+                    'participant_id' => $responderId,
                     'role' => 'responder',
                     'can_see_full_specs' => true,
                     'can_see_exact_location' => true,
@@ -683,7 +873,7 @@ class SessionController extends Controller
             // Create chat thread
             \App\Models\ChatThread::create([
                 'session_id' => $session->id,
-                'thread_type' => count($selectedDealerIds) > 1 ? 'one_to_few' : 'one_to_one',
+                'thread_type' => count($responderIds) > 1 ? 'one_to_few' : 'one_to_one',
                 'is_active' => true,
             ]);
             
@@ -830,9 +1020,13 @@ class SessionController extends Controller
                     }
                 }
 
-                // Get response count
-                $responsesCount = $inquiry->responses_count ?? $inquiry->responses()->count();
-                $matchedDealersCount = $inquiry->matched_dealers_count ?? 0;
+                // Keep counts aligned with poster-detail endpoint by deriving from matchmaking logs.
+                $matchedDealersCount = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
+                    ->where('is_visible', true)
+                    ->count();
+                $responsesCount = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
+                    ->whereNotNull('responded_at')
+                    ->count();
 
                 // Determine status label based on session and inquiry status
                 $statusLabel = 'ACTIVE';
@@ -848,7 +1042,31 @@ class SessionController extends Controller
 
                 $intent = $inquiry->intent?->value ?? $inquiry->intent ?? 'buy';
 
-                return [
+                // Jobwork (converter JOB): attach jobwork_mode and inquiry_type for list card badge
+                $jobworkMode = null;
+                $inquiryType = null;
+                $jobworkType = null;
+                if ($inquiry->inquiry_type === InquiryType::JOB && $posterType === 'converter') {
+                    $jobworkMode = $intent === 'sell' ? 'find' : 'give';
+                    $inquiryType = $jobworkMode === 'find' ? 'jobwork_find' : 'jobwork_give';
+                    $specs = $inquiry->specs ?? [];
+                    $jobworkType = $specs['jobwork_type'] ?? $inquiry->job_type ?? null;
+                }
+
+                // Optional brand-specific requirement summary for brand-posted inquiries
+                $brandRequirement = null;
+                if ($posterType === 'brand') {
+                    $brandRequirement = [
+                        'requirement_type' => $inquiry->requirement_type,
+                        'packaging_type' => $inquiry->packaging_type,
+                        'quantity_range' => $inquiry->quantity_range,
+                        'timeline' => $inquiry->timeline,
+                        'description' => $inquiry->description,
+                        'special_needs' => $inquiry->special_needs,
+                    ];
+                }
+
+                $row = [
                     'id' => $session->id,
                     'inquiry_id' => $inquiry->id,
                     'title' => $inquiry->title,
@@ -864,6 +1082,7 @@ class SessionController extends Controller
                             'quantity_unit' => $item->quantity_unit,
                         ];
                     }),
+                    'brand_requirement' => $brandRequirement,
                     'countdown' => $countdown,
                     'responses_received' => $responsesCount,
                     'matched_dealers_count' => $matchedDealersCount,
@@ -875,6 +1094,14 @@ class SessionController extends Controller
                     'is_owner' => $isOwner,
                     'poster_label' => $posterLabel,
                 ];
+                if ($jobworkMode !== null) {
+                    $row['jobwork_mode'] = $jobworkMode;
+                    $row['inquiry_type'] = $inquiryType;
+                    if ($jobworkType !== null) {
+                        $row['jobwork_type'] = is_string($jobworkType) ? $jobworkType : (string) $jobworkType;
+                    }
+                }
+                return $row;
             });
             
             return Response::success('Active sessions retrieved successfully', $sessions);

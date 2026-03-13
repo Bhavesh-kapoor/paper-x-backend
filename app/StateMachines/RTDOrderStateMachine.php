@@ -16,7 +16,8 @@ class RTDOrderStateMachine
         'ACCEPTED'      => ['PAID', 'CANCELLED'],
         'PAID'          => ['IN_PRODUCTION'],
         'IN_PRODUCTION' => ['DISPATCHED'],
-        'DISPATCHED'    => ['COMPLETED', 'DISPUTED'],
+        'DISPATCHED'    => ['COMPLETED'],
+        'COMPLETED'     => ['DISPUTED'],
     ];
 
     public function canTransition(RTDOrderStatus $from, RTDOrderStatus $to): bool

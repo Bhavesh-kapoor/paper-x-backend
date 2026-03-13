@@ -32,10 +32,10 @@ enum RTDLeadTime: string
     public function label(): string
     {
         return match ($this) {
-            self::SAME_DAY => 'Same Day',
-            self::H24      => '24 Hours',
-            self::H48      => '48 Hours',
-            self::DAYS_3_5 => '3-5 Days',
+            self::SAME_DAY => 'Within 24 hours',
+            self::H24      => 'Within 24 hours',
+            self::H48      => '24-48 hours',
+            self::DAYS_3_5 => '48-72 hours',
         };
     }
 }

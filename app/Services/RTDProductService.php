@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Exceptions\RTDDomainException;
+use App\Models\Material;
+use App\Models\MaterialFinish;
 use App\Models\RtdProduct;
 use App\Models\RtdPriceSlab;
 use Illuminate\Support\Facades\DB;
@@ -10,30 +12,57 @@ use Illuminate\Validation\ValidationException;
 
 class RTDProductService
 {
+    public function __construct(
+        protected RtdListingPackService $listingPackService,
+    ) {
+    }
+
     public function createProduct(array $data, int $userId): RtdProduct
     {
-        $this->validatePriceSlabs($data['price_slabs'] ?? []);
+        if (!$this->listingPackService->canAddProduct($userId)) {
+            throw new RTDDomainException(
+                'Purchase a listing pack to add RTD products, or your current pack has no slots left or has expired.',
+                422
+            );
+        }
 
-        return DB::transaction(function () use ($data, $userId) {
+        $this->validatePriceSlabs($data['price_slabs'] ?? []);
+        $materialName = $this->resolveMaterialName($data);
+        $finishData = $this->resolveFinishData($data);
+        $brandingMethods = $this->resolveBrandingMethods($data);
+
+        return DB::transaction(function () use ($data, $userId, $materialName, $finishData, $brandingMethods) {
             $product = RtdProduct::create([
                 'converter_id'    => $userId,
                 'category'        => $data['category'],
-                'product_name'    => $data['product_name'],
+                'product_name'    => trim((string) ($data['product_name'] ?? '')),
                 'image_path'      => $data['image_path'] ?? null,
                 'size'            => $data['size'] ?? null,
-                'material'        => $data['material'] ?? null,
-                'gsm'             => $data['gsm'] ?? null,
-                'finish'          => $data['finish'] ?? null,
-                'branding_method' => $data['branding_method'] ?? null,
+                'size_unit'       => $data['size_unit'] ?? null,
+                'material_id'     => $data['material_id'] ?? null,
+                'material'        => $materialName,
+                'material_custom' => $data['material_custom'] ?? null,
+                'thickness'       => $data['thickness'] ?? null,
+                'thickness_unit'  => $data['thickness_unit'] ?? null,
+                'finish_ids'      => $finishData['ids'],
+                'finish'          => $finishData['text'],
+                'branding_methods'=> $brandingMethods,
+                'branding_method' => !empty($brandingMethods) ? implode(', ', $brandingMethods) : ($data['branding_method'] ?? null),
                 'lead_time'       => $data['lead_time'],
                 'moq'             => $data['moq'],
                 'max_capacity'    => $data['max_capacity'] ?? null,
                 'base_price'      => $data['base_price'],
                 'buy_now_enabled' => $data['buy_now_enabled'] ?? true,
                 'delivery_geography' => $data['delivery_geography'] ?? null,
+                'location_id'     => $data['location_id'] ?? null,
+                'location_source' => $data['location_source'] ?? null,
+                'latitude'        => $data['latitude'] ?? null,
+                'longitude'       => $data['longitude'] ?? null,
             ]);
 
             $this->syncPriceSlabs($product, $data['price_slabs'] ?? []);
+
+            $this->listingPackService->incrementUsedCount($userId);
 
             return $product->load('priceSlabs');
         });
@@ -48,24 +77,57 @@ class RTDProductService
         if (isset($data['price_slabs'])) {
             $this->validatePriceSlabs($data['price_slabs']);
         }
+        $materialName = $this->resolveMaterialName($data);
+        $finishData = $this->resolveFinishData($data);
+        $brandingMethods = $this->resolveBrandingMethods($data);
 
-        return DB::transaction(function () use ($product, $data) {
-            $product->update(array_filter([
-                'category'        => $data['category'] ?? null,
-                'product_name'    => $data['product_name'] ?? null,
-                'image_path'      => $data['image_path'] ?? null,
-                'size'            => $data['size'] ?? null,
-                'material'        => $data['material'] ?? null,
-                'gsm'             => $data['gsm'] ?? null,
-                'finish'          => $data['finish'] ?? null,
-                'branding_method' => $data['branding_method'] ?? null,
-                'lead_time'       => $data['lead_time'] ?? null,
-                'moq'             => $data['moq'] ?? null,
-                'max_capacity'    => $data['max_capacity'] ?? null,
-                'base_price'      => $data['base_price'] ?? null,
-                'buy_now_enabled' => $data['buy_now_enabled'] ?? null,
-                'delivery_geography' => $data['delivery_geography'] ?? null,
-            ], fn ($v) => $v !== null));
+        return DB::transaction(function () use ($product, $data, $materialName, $finishData, $brandingMethods) {
+            $updatePayload = [];
+            $directFields = [
+                'category',
+                'product_name',
+                'image_path',
+                'size',
+                'size_unit',
+                'material_id',
+                'material_custom',
+                'thickness',
+                'thickness_unit',
+                'lead_time',
+                'moq',
+                'max_capacity',
+                'base_price',
+                'buy_now_enabled',
+                'delivery_geography',
+                'location_id',
+                'location_source',
+                'latitude',
+                'longitude',
+            ];
+            foreach ($directFields as $field) {
+                if (array_key_exists($field, $data)) {
+                    $value = $data[$field];
+                    if ($field === 'product_name') {
+                        $value = trim((string) ($value ?? ''));
+                    }
+                    $updatePayload[$field] = $value;
+                }
+            }
+            if (array_key_exists('material', $data) || array_key_exists('material_custom', $data) || array_key_exists('material_id', $data)) {
+                $updatePayload['material'] = $materialName;
+            }
+            if (array_key_exists('finish_ids', $data) || array_key_exists('finish', $data)) {
+                $updatePayload['finish_ids'] = $finishData['ids'];
+                $updatePayload['finish'] = $finishData['text'];
+            }
+            if (array_key_exists('branding_methods', $data) || array_key_exists('branding_method', $data)) {
+                $updatePayload['branding_methods'] = $brandingMethods;
+                $updatePayload['branding_method'] = !empty($brandingMethods)
+                    ? implode(', ', $brandingMethods)
+                    : null;
+            }
+
+            $product->update($updatePayload);
 
             if (isset($data['price_slabs'])) {
                 $this->syncPriceSlabs($product, $data['price_slabs']);
@@ -149,7 +211,7 @@ class RTDProductService
 
     public function browseCatalog(array $filters): \Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
-        $query = RtdProduct::visible()->with('priceSlabs');
+        $query = RtdProduct::visible()->with('priceSlabs', 'converter');
 
         if (!empty($filters['category'])) {
             $query->where('category', $filters['category']);
@@ -161,6 +223,38 @@ class RTDProductService
 
         if (!empty($filters['delivery_geography'])) {
             $query->where('delivery_geography', 'LIKE', '%' . $filters['delivery_geography'] . '%');
+        }
+
+        if (!empty($filters['min_price'])) {
+            $query->where('base_price', '>=', (float) $filters['min_price']);
+        }
+        if (!empty($filters['max_price'])) {
+            $query->where('base_price', '<=', (float) $filters['max_price']);
+        }
+
+        if (!empty($filters['min_moq'])) {
+            $query->where('moq', '>=', (int) $filters['min_moq']);
+        }
+        if (!empty($filters['max_moq'])) {
+            $quantity = (int) $filters['max_moq'];
+            $query->where('moq', '<=', $quantity);
+            // Only show products that can fulfill this quantity (max_capacity >= quantity or unlimited)
+            $query->where(function ($q) use ($quantity) {
+                $q->whereNull('max_capacity')
+                  ->orWhere('max_capacity', '>=', $quantity);
+            });
+        }
+
+        if (isset($filters['has_branding'])) {
+            if ($filters['has_branding'] === 'yes' || $filters['has_branding'] === '1') {
+                $query->whereNotNull('branding_methods')
+                      ->where('branding_methods', '!=', '[]');
+            } elseif ($filters['has_branding'] === 'no' || $filters['has_branding'] === '0') {
+                $query->where(function ($q) {
+                    $q->whereNull('branding_methods')
+                      ->orWhere('branding_methods', '[]');
+                });
+            }
         }
 
         $sortField = $filters['sort_by'] ?? 'created_at';
@@ -212,5 +306,66 @@ class RTDProductService
                 'price_per_unit' => $slab['price_per_unit'],
             ]);
         }
+    }
+
+    private function resolveMaterialName(array $data): ?string
+    {
+        if (!empty($data['material'])) {
+            return trim((string) $data['material']);
+        }
+
+        if (!empty($data['material_custom'])) {
+            return trim((string) $data['material_custom']);
+        }
+
+        if (!empty($data['material_id'])) {
+            $material = Material::find((int) $data['material_id']);
+            return $material?->name;
+        }
+
+        return null;
+    }
+
+    private function resolveFinishData(array $data): array
+    {
+        if (!empty($data['finish_ids']) && is_array($data['finish_ids'])) {
+            $ids = array_values(array_map('intval', $data['finish_ids']));
+            $names = MaterialFinish::whereIn('id', $ids)->pluck('name')->toArray();
+            return [
+                'ids' => $ids,
+                'text' => !empty($names) ? implode(', ', $names) : ($data['finish'] ?? null),
+            ];
+        }
+
+        if (!empty($data['finish'])) {
+            return [
+                'ids' => null,
+                'text' => trim((string) $data['finish']),
+            ];
+        }
+
+        return [
+            'ids' => null,
+            'text' => null,
+        ];
+    }
+
+    private function resolveBrandingMethods(array $data): ?array
+    {
+        if (!empty($data['branding_methods']) && is_array($data['branding_methods'])) {
+            return array_values(array_slice($data['branding_methods'], 0, 2));
+        }
+
+        if (!empty($data['branding_method'])) {
+            return array_values(
+                array_slice(
+                    array_filter(array_map('trim', explode(',', (string) $data['branding_method']))),
+                    0,
+                    2
+                )
+            );
+        }
+
+        return null;
     }
 }

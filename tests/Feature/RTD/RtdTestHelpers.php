@@ -111,10 +111,4 @@ trait RtdTestHelpers
             ->assertStatus(200);
     }
 
-    protected function confirmDeliveryAsBrand(User $brand, int $orderId): void
-    {
-        $this->withHeaders($this->authHeaders($brand))
-            ->postJson("/api/v1/rtd/orders/{$orderId}/confirm-delivery")
-            ->assertStatus(200);
-    }
 }

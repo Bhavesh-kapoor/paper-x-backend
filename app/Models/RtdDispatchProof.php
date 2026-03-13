@@ -16,6 +16,13 @@ class RtdDispatchProof extends Model
         'order_id',
         'proof_type',
         'file_path',
+        'courier_name',
+        'tracking_number',
+        'dispatch_date',
+    ];
+
+    protected $casts = [
+        'dispatch_date' => 'date',
     ];
 
     public function order(): BelongsTo

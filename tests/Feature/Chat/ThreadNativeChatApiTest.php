@@ -4,6 +4,8 @@ namespace Tests\Feature\Chat;
 
 use App\Domain\MatchEngine\Models\InquiryResponse;
 use App\Domain\MatchEngine\Models\MatchHistory;
+use App\Enums\NavigationType;
+use App\Enums\NotificationType;
 use App\Enums\InquiryIntent;
 use App\Enums\InquiryStatus;
 use App\Enums\InquiryType;
@@ -11,8 +13,10 @@ use App\Enums\SessionStatus;
 use App\Models\ChatThread;
 use App\Models\Dealer;
 use App\Models\Inquiry;
+use App\Models\MatchmakingLog;
 use App\Models\MatchingSession;
 use App\Models\Message;
+use App\Models\Notification;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -201,6 +205,100 @@ class ThreadNativeChatApiTest extends TestCase
         $this->assertNotNull($thread->last_message_at);
     }
 
+    public function test_express_interest_creates_professional_first_message_and_notification(): void
+    {
+        config(['matchmaking.engine_version' => 'v1']);
+        [$posterUser, $responderUser, $inquiry] = $this->seedInquiryForExpressInterestFlow();
+
+        Sanctum::actingAs($responderUser);
+        $response = $this->postJson(
+            "/api/v1/inquiries/{$inquiry->id}/express-interest",
+            [
+                'approx_price' => 1234.5,
+                'description' => 'We can supply required paper with quick dispatch.',
+            ]
+        );
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.chat_message_created', true);
+
+        $thread = ChatThread::query()
+            ->where('inquiry_id', $inquiry->id)
+            ->where('responder_user_id', $responderUser->id)
+            ->first();
+
+        $this->assertNotNull($thread);
+
+        $message = Message::query()
+            ->where('thread_id', $thread->id)
+            ->where('sender_user_id', $responderUser->id)
+            ->first();
+
+        $this->assertNotNull($message);
+        $this->assertStringContainsString('Approximate Price: ₹1,234.50', (string) $message->body);
+        $this->assertStringContainsString('Details:', (string) $message->body);
+        $this->assertStringContainsString('We can supply required paper with quick dispatch.', (string) $message->body);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $posterUser->id,
+            'type' => NotificationType::FIRST_RESPONSE->value,
+            'navigation_type' => NavigationType::CHAT_THREAD->value,
+            'navigation_id' => (string) $thread->id,
+            'dedupe_key' => sprintf('first_response_%s', $thread->id),
+        ]);
+    }
+
+    public function test_express_interest_double_submit_keeps_single_message_and_single_first_response_notification(): void
+    {
+        config(['matchmaking.engine_version' => 'v1']);
+        [$posterUser, $responderUser, $inquiry] = $this->seedInquiryForExpressInterestFlow();
+
+        Sanctum::actingAs($responderUser);
+
+        $first = $this->postJson(
+            "/api/v1/inquiries/{$inquiry->id}/express-interest",
+            [
+                'approx_price' => 999.0,
+                'description' => 'Initial quote from responder.',
+            ]
+        );
+        $first->assertStatus(200)
+            ->assertJsonPath('data.chat_message_created', true);
+
+        $second = $this->postJson(
+            "/api/v1/inquiries/{$inquiry->id}/express-interest",
+            [
+                'approx_price' => 999.0,
+                'description' => 'Initial quote from responder.',
+            ]
+        );
+        $second->assertStatus(200)
+            ->assertJsonPath('data.chat_message_created', false);
+
+        $thread = ChatThread::query()
+            ->where('inquiry_id', $inquiry->id)
+            ->where('responder_user_id', $responderUser->id)
+            ->first();
+
+        $this->assertNotNull($thread);
+        $this->assertSame(
+            1,
+            Message::query()
+                ->where('thread_id', $thread->id)
+                ->where('sender_user_id', $responderUser->id)
+                ->count()
+        );
+
+        $this->assertSame(
+            1,
+            Notification::query()
+                ->where('user_id', $posterUser->id)
+                ->where('type', NotificationType::FIRST_RESPONSE->value)
+                ->where('dedupe_key', sprintf('first_response_%s', $thread->id))
+                ->count()
+        );
+    }
+
     /**
      * @return array{0: User, 1: User, 2: Inquiry, 3: MatchingSession}
      */
@@ -269,5 +367,31 @@ class ThreadNativeChatApiTest extends TestCase
         ]);
 
         return [$posterUser, $responderUser, $inquiry, $session];
+    }
+
+    /**
+     * @return array{0: User, 1: User, 2: Inquiry}
+     */
+    private function seedInquiryForExpressInterestFlow(): array
+    {
+        [$posterUser, $responderUser, $inquiry, $session] = $this->seedInquiryWithEligibleResponder();
+
+        $responderDealer = Dealer::query()->where('user_id', $responderUser->id)->first();
+        if (!$responderDealer) {
+            $responderDealer = Dealer::create([
+                'user_id' => $responderUser->id,
+                'status' => 'ACTIVE',
+                'profile_complete' => true,
+            ]);
+        }
+
+        MatchmakingLog::create([
+            'inquiry_id' => $inquiry->id,
+            'dealer_id' => $responderDealer->id,
+            'session_id' => $session->id,
+            'is_visible' => true,
+        ]);
+
+        return [$posterUser, $responderUser, $inquiry];
     }
 }

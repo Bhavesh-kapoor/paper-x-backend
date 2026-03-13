@@ -12,9 +12,14 @@ class PostRequirementRequest extends ApiRequest
         return [
             // Requirement Type
             'requirement_type' => [
-                'required', 
-                'string', 
-                Rule::in(['Packaging', 'Printing', 'Labels', 'Other'])
+                'required',
+                'string',
+                Rule::in([
+                    'Packaging',
+                    'Printing',
+                    'Packaging + Printing',
+                    'Corporate Gifting / Stationery',
+                ]),
             ],
             
             // Packaging Type (conditional - only if requirement_type is Packaging)

@@ -40,18 +40,22 @@ class CommissionCalculator
         return round($amount * $gstPercent / 100, 2);
     }
 
-    public function calculateTotal(int $quantity, float $unitPrice): array
+    /**
+     * @param bool $sellerGstRegistered When false, gst_percent and gst_amount are 0 (converter not GST registered).
+     */
+    public function calculateTotal(int $quantity, float $unitPrice, bool $sellerGstRegistered = true): array
     {
         $subtotal   = round($quantity * $unitPrice, 2);
         $commission = $this->calculateCommission($subtotal);
-        $gstAmount  = $this->calculateGST($subtotal + $commission['amount']);
+        $gstPercent = $sellerGstRegistered ? 18.0 : 0.0;
+        $gstAmount  = $sellerGstRegistered ? $this->calculateGST($subtotal + $commission['amount']) : 0.0;
         $total      = round($subtotal + $commission['amount'] + $gstAmount, 2);
 
         return [
             'subtotal'           => $subtotal,
             'commission_percent' => $commission['percent'],
             'commission_amount'  => $commission['amount'],
-            'gst_percent'        => 18.0,
+            'gst_percent'        => $gstPercent,
             'gst_amount'         => $gstAmount,
             'total_amount'       => $total,
         ];

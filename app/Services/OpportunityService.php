@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Enums\AcceptanceStatus;
 use App\Enums\InquiryStatus;
+use App\Enums\NavigationType;
+use App\Enums\NotificationType;
 use App\Enums\SessionStatus;
 use App\Models\Dealer;
 use App\Models\DealerAcceptance;
@@ -201,10 +203,18 @@ class OpportunityService
         foreach ($acceptances as $acceptance) {
             $this->notificationService->create(
                 $acceptance->dealer->user_id,
-                'SESSION_LOCKED',
+                NotificationType::MATCH_FOUND,
                 'Session Locked',
                 "Session for inquiry #{$inquiryId} has been locked. You can now view brand details and start chatting.",
-                $session
+                NavigationType::SESSION,
+                (string) $session->id,
+                [
+                    'inquiry_id' => $inquiryId,
+                    'material_name' => $inquiry->title ?? 'Requirement',
+                    'counterparty_name' => 'Brand',
+                    'view_target' => 'responder',
+                ],
+                sprintf('match_found_%s_%s', $inquiryId, $acceptance->dealer->user_id)
             );
         }
     }

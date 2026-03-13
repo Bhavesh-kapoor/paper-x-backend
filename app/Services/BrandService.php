@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Enums\BrandStatus;
 use App\Enums\InquiryStatus;
 use App\Enums\InquiryType;
+use App\Enums\NavigationType;
+use App\Enums\NotificationType;
 use App\Enums\SessionStatus;
 use App\Models\Brand;
 use App\Models\Converter;
@@ -206,14 +208,22 @@ class BrandService
             // Deduct credits
             $wallet->decrement('balance', $postingFeeAmount);
 
-            // Create wallet transaction
+            // Create wallet transaction with required fields
+            $transactionId = 'TXN-' . now()->format('YmdHis') . '-' . $wallet->id;
+
             WalletTransaction::create([
                 'wallet_id' => $wallet->id,
-                'type' => 'DEBIT',
+                'transaction_id' => $transactionId,
+                'type' => 'DEDUCTED',
                 'amount' => $postingFeeAmount,
+                'balance_after' => $wallet->fresh()->balance,
                 'description' => 'Post requirement fee',
+                'transaction_type' => 'REQUIREMENT_POSTED',
+                'reference_id' => null,
                 'reference_type' => 'inquiry',
-                'status' => 'COMPLETED',
+                'metadata' => [
+                    'source' => 'brand_requirement_post',
+                ],
             ]);
 
             // Determine urgency based on timeline
@@ -228,12 +238,20 @@ class BrandService
             $minQuantity = isset($quantityParts[0]) ? (float) trim($quantityParts[0]) : 0;
             $maxQuantity = isset($quantityParts[1]) ? (float) trim($quantityParts[1]) : $minQuantity;
 
+            // Auto-generate a simple title from requirement type and packaging type
+            $titleParts = [$data['requirement_type']];
+            if (!empty($data['packaging_type'])) {
+                $titleParts[] = $data['packaging_type'];
+            }
+            $generatedTitle = trim(implode(' - ', $titleParts) . ' Requirement');
+
             // Create inquiry
             $inquiry = Inquiry::create([
                 'brand_id' => $brand->id,
                 'poster_id' => $brand->id, // Store brand ID, not user ID
                 'poster_type' => 'brand',
-                'title' => $data['title'],
+                'visibility' => 'converters',
+                'title' => $generatedTitle,
                 'description' => $data['description'] ?? null,
                 'status' => InquiryStatus::MATCHING,
                 'urgency' => $urgency,
@@ -275,10 +293,40 @@ class BrandService
             foreach ($matchedConverters as $converter) {
                 $this->notificationService->create(
                     $converter->user_id,
-                    'NEW_OPPORTUNITY',
+                    NotificationType::MATCH_FOUND,
                     'New Brand Requirement',
-                    "A brand has posted a new requirement matching your profile.",
-                    $inquiry
+                    'A brand has posted a new requirement matching your profile.',
+                    NavigationType::SESSION,
+                    (string) $session->id,
+                    [
+                        'inquiry_id' => $inquiry->id,
+                        'material_name' => $inquiry->title ?? 'Requirement',
+                        'counterparty_name' => $brand->brand_name ?? $brand->company_name ?? 'Brand',
+                        'view_target' => 'responder',
+                    ],
+                    sprintf('match_found_%s_%s', $inquiry->id, $converter->user_id)
+                );
+            }
+
+            // Notify brand (poster) that matches were found, mirroring InquiryController::post()
+            $matchedCount = $matchedConverters->count();
+            $brandUserId = (int) ($brand->user_id ?? 0);
+            if ($matchedCount > 0 && $brandUserId > 0) {
+                $this->notificationService->create(
+                    $brandUserId,
+                    NotificationType::MATCH_FOUND,
+                    'New Match Found',
+                    'Your requirement has new matching converters.',
+                    NavigationType::SESSION,
+                    (string) $session->id,
+                    [
+                        'inquiry_id' => $inquiry->id,
+                        'material_name' => $inquiry->title ?? 'Requirement',
+                        'counterparty_name' => 'Responder',
+                        'view_target' => 'poster',
+                        'poster_user_id' => $brandUserId,
+                    ],
+                    sprintf('match_found_poster_%s_%s', $inquiry->id, $brandUserId)
                 );
             }
 

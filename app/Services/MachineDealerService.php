@@ -10,6 +10,7 @@ use App\Models\MachineDealer;
 use App\Models\MachineListing;
 use App\Models\Inquiry;
 use App\Models\MatchingSession;
+use App\Models\User;
 use App\Domain\MatchEngine\MatchEngineOrchestrator;
 use Illuminate\Support\Facades\DB;
 
@@ -17,6 +18,7 @@ class MachineDealerService
 {
     public function __construct(
         protected MatchEngineOrchestrator $matchEngineOrchestrator,
+        protected MatchmakingService $matchmakingService,
     ) {
     }
 
@@ -48,6 +50,10 @@ class MachineDealerService
             if ($machineDealer->wasRecentlyCreated === false) {
                 $machineDealer->update($createAttributes);
             }
+
+            // Trigger lazy matching immediately after profile activation so
+            // newly onboarded users receive notifications for existing inquiries.
+            $this->matchEngineOrchestrator->ensureMatchesForUser(User::findOrFail($userId));
 
             return $machineDealer;
         });
@@ -153,7 +159,13 @@ class MachineDealerService
 
             $inquiry->setRelation('session', $session);
 
-            $this->matchEngineOrchestrator->runMatchmaking($inquiry);
+            $result = $this->matchEngineOrchestrator->runMatchmaking($inquiry);
+            $this->matchmakingService->notifyMatchedRecipients(
+                $inquiry,
+                $result['dealer_ids'] ?? [],
+                $result['converter_ids'] ?? [],
+                $result['machine_dealer_ids'] ?? []
+            );
 
             return [
                 'id' => $listing->id,

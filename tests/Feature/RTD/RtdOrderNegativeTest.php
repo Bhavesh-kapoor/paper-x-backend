@@ -86,26 +86,6 @@ class RtdOrderNegativeTest extends TestCase
         $this->assertEquals(RTDOrderStatus::PAID, $order->status);
     }
 
-    /** TC-C2: Confirm delivery before dispatch → invalid transition */
-    public function test_confirm_delivery_before_dispatch_fails(): void
-    {
-        $converter = $this->createConverterUser();
-        $brand    = $this->createBrandUser();
-        $product  = $this->createProductAsConverter($converter);
-        $order    = $this->requestOrderAsBrand($brand, $product->id);
-        $this->acceptOrderAsConverter($converter, $order->id);
-        $this->confirmPaymentAsBrand($brand, $order->id);
-        $this->markInProductionAsConverter($converter, $order->id);
-        // Not dispatching
-
-        $response = $this->withHeaders($this->authHeaders($brand))
-            ->postJson("/api/v1/rtd/orders/{$order->id}/confirm-delivery");
-
-        $this->assertContains($response->status(), [400, 422]);
-        $order->refresh();
-        $this->assertEquals(RTDOrderStatus::IN_PRODUCTION, $order->status);
-    }
-
     /** Cancel after payment → invalid (only ACCEPTED can be cancelled) */
     public function test_cancel_after_payment_fails(): void
     {

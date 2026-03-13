@@ -314,7 +314,7 @@ class WalletController extends Controller
         $request->validate([
             'credits' => 'required|numeric|min:1',
             'description' => 'required|string|max:255',
-            'transaction_type' => 'nullable|string|in:REQUIREMENT_POSTED,DEAL_CLOSED,MACHINERY_INSPECTION,LISTING_FEE,PREMIUM_FEATURE,OTHER',
+            'transaction_type' => 'nullable|string|in:REQUIREMENT_POSTED,DEAL_CLOSED,MACHINERY_INSPECTION,LISTING_FEE,PREMIUM_FEATURE,RTD_LISTING_PACK,OTHER',
             'reference_id' => 'nullable|string',
             'reference_type' => 'nullable|string',
         ]);

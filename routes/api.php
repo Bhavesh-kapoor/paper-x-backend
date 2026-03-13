@@ -13,8 +13,11 @@ use App\Http\Controllers\api\QuotationController;
 use App\Http\Controllers\api\NotificationController;
 use App\Http\Controllers\api\RoleController;
 use App\Http\Controllers\api\DashboardController;
+use App\Http\Controllers\api\RegistrationDetailsController;
 use App\Http\Controllers\api\RTDProductController;
 use App\Http\Controllers\api\RTDOrderController;
+use App\Http\Controllers\api\RtdListingPackController;
+use App\Http\Controllers\api\JobworkController;
 use App\Http\Controllers\api\UploadController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -124,10 +127,6 @@ Route::prefix('v1')->group(function () {
         // Quotations
         Route::post('/quote/submit/{inquiry_id}', [QuotationController::class, 'submitQuote'])->name('dealer.quote.submit');
         
-        // Notifications
-        Route::get('/notifications', [NotificationController::class, 'getNotifications'])->name('dealer.notifications');
-        Route::post('/notification/{id}/read', [NotificationController::class, 'markAsRead'])->name('dealer.notification.read');
-        Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('dealer.notifications.read-all');
     });
 
     #structured chat routes (thread-native; additive to legacy session chat)
@@ -160,6 +159,10 @@ Route::prefix('v1')->group(function () {
         
         // Respond to requirement
         Route::post('/requirement/{inquiry_id}/respond', [\App\Http\Controllers\api\ConverterController::class, 'respondToRequirement'])->name('converter.requirement.respond');
+
+        // Jobwork: converter-to-converter flows
+        Route::post('/jobwork/find', [JobworkController::class, 'postFind'])->name('converter.jobwork.find');
+        Route::post('/jobwork/give', [JobworkController::class, 'postGive'])->name('converter.jobwork.give');
     });
 
     #inquiry routes (new matchmaking system)
@@ -232,8 +235,24 @@ Route::prefix('v1')->group(function () {
         Route::post('/switch-role', [RoleController::class, 'switchRole'])->name('user.switch-role');
     });
 
+    #notifications routes (canonical for all roles)
+    Route::middleware(['token.exists', 'auth:sanctum'])->prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'getNotifications'])->name('notifications.list');
+        Route::get('/unread-count', [NotificationController::class, 'getUnreadCount'])->name('notifications.unread-count');
+        Route::post('/{id}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+        Route::post('/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.read-all');
+    });
+
     #unified dashboard API for all roles
     Route::middleware(['token.exists', 'auth:sanctum'])->get('/dashboard', [DashboardController::class, 'getDashboard'])->name('dashboard');
+
+    #rtd listing packs (converter pays to list products)
+    Route::middleware(['token.exists', 'auth:sanctum'])->prefix('rtd/listing-packs')->group(function () {
+        Route::get('/', [RtdListingPackController::class, 'index'])->name('rtd.listing-packs.index');
+        Route::post('/purchase', [RtdListingPackController::class, 'purchase'])->name('rtd.listing-packs.purchase');
+    });
+    Route::middleware(['token.exists', 'auth:sanctum'])->get('rtd/entitlement', [RtdListingPackController::class, 'entitlement'])->name('rtd.entitlement');
+    Route::middleware(['token.exists', 'auth:sanctum'])->get('rtd/dispatch-options', [RTDOrderController::class, 'dispatchOptions'])->name('rtd.dispatch-options');
 
     #rtd product routes (ready-to-dispatch)
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('rtd/products')->group(function () {
@@ -254,7 +273,6 @@ Route::prefix('v1')->group(function () {
         Route::post('/{id}/confirm-payment', [RTDOrderController::class, 'confirmPayment'])->name('rtd.orders.confirm-payment');
         Route::post('/{id}/in-production', [RTDOrderController::class, 'markInProduction'])->name('rtd.orders.in-production');
         Route::post('/{id}/dispatch', [RTDOrderController::class, 'dispatch'])->name('rtd.orders.dispatch');
-        Route::post('/{id}/confirm-delivery', [RTDOrderController::class, 'confirmDelivery'])->name('rtd.orders.confirm-delivery');
         Route::post('/{id}/dispute', [RTDOrderController::class, 'raiseDispute'])->name('rtd.orders.dispute');
         Route::post('/{id}/cancel', [RTDOrderController::class, 'cancel'])->name('rtd.orders.cancel');
         Route::get('/my', [RTDOrderController::class, 'myOrders'])->name('rtd.orders.my');
@@ -287,4 +305,7 @@ Route::prefix('v1')->group(function () {
 
     #upload (single file for product image etc.)
     Route::middleware(['token.exists', 'auth:sanctum'])->post('upload/single', [UploadController::class, 'single'])->name('upload.single');
+
+    #registration details (unified for all roles)
+    Route::middleware(['token.exists', 'auth:sanctum'])->get('/registration-details', [RegistrationDetailsController::class, 'show'])->name('registration-details.show');
 });

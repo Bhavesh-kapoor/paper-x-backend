@@ -16,6 +16,7 @@ use App\Models\InquiryItem;
 use App\Models\Machine;
 use App\Models\MatchingSession;
 use App\Models\Response;
+use App\Models\User;
 use App\Domain\MatchEngine\MatchEngineOrchestrator;
 use App\Services\MatchmakingService;
 use Illuminate\Support\Facades\DB;
@@ -70,6 +71,10 @@ class ConverterService
                 $converter->rawMaterials()->sync($data['raw_material_ids']);
             }
 
+            // Trigger lazy matching immediately after profile activation so
+            // newly onboarded users receive notifications for existing inquiries.
+            $this->matchEngineOrchestrator->ensureMatchesForUser(User::findOrFail($userId));
+
             return $converter->load(['converterTypes', 'finishedProducts', 'machines', 'scrapTypes', 'rawMaterials']);
         });
     }
@@ -111,10 +116,10 @@ class ConverterService
             ->where('poster_type', 'converter')
             ->count();
 
-        $responsesReceived = \App\Models\Response::whereHas('inquiry', function ($query) use ($converterId) {
+        $responsesReceived = \App\Models\MatchmakingLog::whereHas('inquiry', function ($query) use ($converterId) {
             $query->where('poster_id', $converterId)
                 ->where('poster_type', 'converter');
-        })->count();
+        })->whereNotNull('responded_at')->count();
 
         $unreadNotifications = \App\Models\Notification::where('user_id', $userId)
             ->where('read_at', null)
@@ -151,9 +156,13 @@ class ConverterService
                     }
                 }
                 
-                // Get response count
-                $responsesCount = $inquiry->responses_count ?? $inquiry->responses->count() ?? 0;
-                $matchedDealersCount = $inquiry->matched_dealers_count ?? 0;
+                // Keep dashboard session counts aligned with poster-detail/session active logic.
+                $matchedDealersCount = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
+                    ->where('is_visible', true)
+                    ->count();
+                $responsesCount = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
+                    ->whereNotNull('responded_at')
+                    ->count();
                 
                 // Determine status label based on session and inquiry status
                 $statusLabel = 'ACTIVE';
@@ -269,7 +278,13 @@ class ConverterService
 
             $inquiry->setRelation('session', $session);
 
-            $this->matchEngineOrchestrator->runMatchmaking($inquiry);
+            $result = $this->matchEngineOrchestrator->runMatchmaking($inquiry);
+            $this->matchmakingService->notifyMatchedRecipients(
+                $inquiry,
+                $result['dealer_ids'] ?? [],
+                $result['converter_ids'] ?? [],
+                $result['machine_dealer_ids'] ?? []
+            );
 
             return [
                 'inquiry_id' => $inquiry->id,
@@ -501,9 +516,12 @@ class ConverterService
 
             // Trigger matchmaking via orchestrator (V1 or V2 based on config)
             $result = $this->matchEngineOrchestrator->runMatchmaking($inquiry);
-            if (in_array($visibility, ['dealers', 'all'], true)) {
-                $this->matchmakingService->notifyMatchedDealers($inquiry, $result['dealer_ids']);
-            }
+            $this->matchmakingService->notifyMatchedRecipients(
+                $inquiry,
+                $result['dealer_ids'] ?? [],
+                $result['converter_ids'] ?? [],
+                $result['machine_dealer_ids'] ?? []
+            );
 
             return $inquiry->load(['materials', 'finishes', 'items', 'session']);
         });

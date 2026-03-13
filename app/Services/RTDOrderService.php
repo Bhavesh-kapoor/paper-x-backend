@@ -10,7 +10,6 @@ use App\Events\RTD\OrderCompleted;
 use App\Events\RTD\OrderDispatched;
 use App\Events\RTD\OrderPaid;
 use App\Exceptions\RTDDomainException;
-use App\Jobs\HandleAutoOrderClosure;
 use App\Jobs\HandleOrderAcceptanceTimeout;
 use App\Models\RtdOrder;
 use App\Models\RtdPayout;
@@ -31,13 +30,18 @@ class RTDOrderService
 
     public function createOrderRequest(array $data, int $brandUserId): RtdOrder
     {
-        $product = RtdProduct::with('priceSlabs')->find($data['product_id']);
+        $product = RtdProduct::with('priceSlabs', 'converter')->find($data['product_id']);
 
         $this->validateOrderCreation($product, $data['quantity'], $brandUserId);
 
         $slab = $this->resolveMatchingPriceSlab($product, $data['quantity']);
 
-        $breakdown = $this->commissionCalculator->calculateTotal($data['quantity'], $slab->price_per_unit);
+        $sellerGstRegistered = !empty($product->converter?->gst_in);
+        $breakdown = $this->commissionCalculator->calculateTotal(
+            $data['quantity'],
+            $slab->price_per_unit,
+            $sellerGstRegistered
+        );
 
         $this->commissionCalculator->validateOrderCap($breakdown['subtotal']);
 
@@ -85,7 +89,7 @@ class RTDOrderService
             HandleOrderAcceptanceTimeout::dispatch($order->id)
                 ->delay($deadline);
 
-            return $order->fresh(['product', 'payout']);
+            return $order->fresh(['product', 'payout', 'converter']);
         });
     }
 
@@ -194,48 +198,55 @@ class RTDOrderService
         });
     }
 
-    // ── Dispatch (with delivery buffer) ──
+    // ── Dispatch + Auto-Complete ──
 
     public function markDispatched(int $orderId, array $proofData, int $converterUserId): RtdOrder
     {
         return DB::transaction(function () use ($orderId, $proofData, $converterUserId) {
             $order = RtdOrder::where('id', $orderId)
                 ->where('converter_id', $converterUserId)
-                ->with('product')
+                ->with(['product', 'payout'])
                 ->firstOrFail();
+
+            if (isset($proofData['tracking_number'], $proofData['dispatch_date'])) {
+                $tracking = trim((string) $proofData['tracking_number']);
+                $dispatchDate = \Carbon\Carbon::parse($proofData['dispatch_date'])->startOfDay();
+
+                $alreadyUsed = \App\Models\RtdDispatchProof::where('tracking_number', $tracking)
+                    ->where('order_id', '!=', $orderId)
+                    ->exists();
+                if ($alreadyUsed) {
+                    throw new RTDDomainException('This tracking/LR number has already been used for another dispatch. Please use a unique number.', 422);
+                }
+
+                if ($order->dispatch_deadline && $dispatchDate->isAfter($order->dispatch_deadline)) {
+                    throw new RTDDomainException('Dispatch date must be on or before the dispatch deadline.', 422);
+                }
+            }
 
             $this->stateMachine->transition($order, RTDOrderStatus::DISPATCHED);
 
-            $order->dispatchProofs()->create([
+            $createPayload = [
                 'proof_type' => $proofData['proof_type'],
                 'file_path'  => $proofData['file_path'],
-            ]);
+            ];
+            if (isset($proofData['courier_name'])) {
+                $createPayload['courier_name'] = $proofData['courier_name'];
+            }
+            if (isset($proofData['tracking_number'])) {
+                $createPayload['tracking_number'] = trim((string) $proofData['tracking_number']);
+            }
+            if (isset($proofData['dispatch_date'])) {
+                $createPayload['dispatch_date'] = $proofData['dispatch_date'];
+            }
 
-            $bufferDays = $order->product->lead_time->deliveryBufferDays();
+            $order->dispatchProofs()->create($createPayload);
 
             $order->update([
-                'dispatched_at'     => now(),
-                'delivery_deadline' => now()->addDays($bufferDays),
+                'dispatched_at' => now(),
             ]);
 
-            HandleAutoOrderClosure::dispatch($order->id)
-                ->delay(now()->addDays($bufferDays));
-
             OrderDispatched::dispatch($order);
-
-            return $order->fresh(['dispatchProofs']);
-        });
-    }
-
-    // ── Delivery Confirmation (with decline reset) ──
-
-    public function confirmDelivery(int $orderId, int $brandUserId): RtdOrder
-    {
-        return DB::transaction(function () use ($orderId, $brandUserId) {
-            $order = RtdOrder::where('id', $orderId)
-                ->where('brand_id', $brandUserId)
-                ->with(['product', 'payout'])
-                ->firstOrFail();
 
             $this->stateMachine->transition($order, RTDOrderStatus::COMPLETED);
 
@@ -252,7 +263,7 @@ class RTDOrderService
 
             OrderCompleted::dispatch($order);
 
-            return $order->fresh();
+            return $order->fresh(['dispatchProofs', 'brand', 'converter']);
         });
     }
 

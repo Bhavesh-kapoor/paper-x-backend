@@ -3,6 +3,7 @@
 namespace App\Domain\MatchEngine;
 
 use App\Enums\InquiryStatus;
+use App\Enums\InquiryType;
 use App\Models\Inquiry;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -32,11 +33,16 @@ class CandidateResolver
             return collect();
         }
 
-        $inquiryMaterialIds = $inquiry->materials()->pluck('materials.id')->toArray();
-
+        // Exclude the poster: poster_id is the role entity id (e.g. converter_id), not user_id
+        $inquiry->loadMissing('poster');
+        $posterUserId = $inquiry->poster?->user_id ?? null;
         $query = User::query()
-            ->where('id', '!=', $inquiry->poster_id)
             ->whereIn('primary_role', $eligibleRoles);
+        if ($posterUserId !== null) {
+            $query->where('id', '!=', $posterUserId);
+        } else {
+            $query->where('id', '!=', $inquiry->poster_id);
+        }
 
         // Eager-load role relations needed for location resolution to avoid N+1 queries
         $relations = [];
@@ -53,13 +59,33 @@ class CandidateResolver
             $query->with($relations);
         }
 
+        $inquiryMaterialIds = $inquiry->materials()->pluck('materials.id')->toArray();
         if (!empty($inquiryMaterialIds)) {
             $this->applyMaterialFilter($query, $eligibleRoles, $inquiryMaterialIds);
         }
 
+        // Brand → Converter: apply capability filter when there are no material-driven specs
+        if (empty($inquiryMaterialIds) && $inquiry->poster_type === 'brand' && in_array('converter', $eligibleRoles, true)) {
+            $this->applyBrandRequirementFilter($query, $inquiry);
+        }
+
+        // Converter → Converter jobwork: narrow to converters with relevant job-work capabilities.
+        if (
+            $inquiry->inquiry_type === InquiryType::JOB
+            && $inquiry->poster_type === 'converter'
+            && in_array('converter', $eligibleRoles, true)
+        ) {
+            $this->applyJobworkFilter($query, $inquiry);
+        }
+
         $candidates = $query->get();
 
-        if ($this->shouldApplyRadius()) {
+        // Skip radius filter for converter-to-converter JOB (jobwork) so converters without
+        // factory location or in different regions can still see find/give jobwork posts.
+        $isJobworkInquiry = $inquiry->inquiry_type === InquiryType::JOB
+            && $inquiry->poster_type === 'converter';
+
+        if ($this->shouldApplyRadius() && !$isJobworkInquiry) {
             $radiusKm = $this->radiusForUrgency($inquiry->urgency);
             $inquiryLat = $inquiry->latitude;
             $inquiryLng = $inquiry->longitude;
@@ -181,6 +207,118 @@ class CandidateResolver
             if (! in_array('dealer', $eligibleRoles) && ! in_array('converter', $eligibleRoles)) {
                 $q->whereRaw('1 = 0');
             }
+        });
+    }
+
+    /**
+     * Brand inquiries: narrow converters by their capabilities when no material specs exist.
+     *
+     * Uses converter_types.category and finished_products.category to approximate
+     * whether a converter is relevant for the brand's requirement_type/packaging_type.
+     */
+    private function applyBrandRequirementFilter(Builder $query, Inquiry $inquiry): void
+    {
+        $requirementType = (string) $inquiry->requirement_type;
+        $packagingType = (string) ($inquiry->packaging_type ?? '');
+
+        $converterCategories = $this->mapRequirementTypeToConverterCategories($requirementType);
+        $productCategories = $this->mapPackagingTypeToFinishedProductCategories($packagingType);
+
+        // If we have no mapping at all, do not restrict converters.
+        if (empty($converterCategories) && empty($productCategories)) {
+            return;
+        }
+
+        $query->where(function (Builder $q) use ($converterCategories, $productCategories) {
+            $q->where('primary_role', 'converter')
+                ->whereHas('converter', function (Builder $sub) use ($converterCategories, $productCategories) {
+                    $sub->where(function (Builder $inner) use ($converterCategories, $productCategories) {
+                        // Match on converter_types.category
+                        if (!empty($converterCategories)) {
+                            $inner->orWhereHas('converterTypes', function (Builder $ct) use ($converterCategories) {
+                                $ct->whereIn('category', $converterCategories);
+                            });
+                        }
+
+                        // Match on finished_products.category
+                        if (!empty($productCategories)) {
+                            $inner->orWhereHas('finishedProducts', function (Builder $fp) use ($productCategories) {
+                                $fp->whereIn('category', $productCategories);
+                            });
+                        }
+                    });
+                });
+        });
+    }
+
+    private function mapRequirementTypeToConverterCategories(string $requirementType): array
+    {
+        $normalized = trim(strtolower($requirementType));
+
+        return match ($normalized) {
+            'packaging' => [
+                'corrugated',
+                'rigid',
+                'folding_carton',
+                'paper_bags',
+                'food_service',
+                'industrial',
+                'tubes_cores',
+            ],
+            'printing' => [
+                'printing',
+                'books_stationery',
+            ],
+            'packaging + printing', 'packaging+printing' => [
+                'corrugated',
+                'rigid',
+                'folding_carton',
+                'paper_bags',
+                'food_service',
+                'printing',
+            ],
+            'corporate gifting / stationery',
+            'corporate gifting/stationery',
+            'corporate gifting & stationery' => [
+                'rigid',
+                'books_stationery',
+                'labels',
+                'premium',
+            ],
+            default => [],
+        };
+    }
+
+    private function mapPackagingTypeToFinishedProductCategories(string $packagingType): array
+    {
+        $normalized = trim(strtolower($packagingType));
+
+        return match ($normalized) {
+            'boxes' => ['packaging', 'premium', 'food_beverage'],
+            'bags', 'paper bags' => ['paper_bags', 'food_beverage'],
+            'pouches' => ['paper_bags', 'food_beverage'],
+            'cartons', 'mono cartons', 'folding cartons' => ['packaging', 'food_beverage'],
+            'containers' => ['food_beverage', 'industrial'],
+            default => [],
+        };
+    }
+
+    /**
+     * Converter → Converter jobwork matching.
+     *
+     * Any active converter with a complete profile is a valid candidate for
+     * jobwork find/give posts. The frontend now sends the actual converter
+     * type name as job_type (not a fixed enum), so hard-filtering by category
+     * would exclude valid candidates. Scoring handles relevance ranking.
+     */
+    private function applyJobworkFilter(Builder $query, Inquiry $inquiry): void
+    {
+        $query->where(function (Builder $q) {
+            $q->where('primary_role', 'converter')
+                ->whereHas('converter', function (Builder $sub) {
+                    $sub->where('profile_complete', true)
+                        ->where('status', \App\Enums\ConverterStatus::ACTIVE);
+                });
         });
     }
 

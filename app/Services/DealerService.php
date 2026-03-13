@@ -13,6 +13,7 @@ use App\Models\DealerMaterialDetail;
 use App\Models\Inquiry;
 use App\Models\InquiryItem;
 use App\Models\MatchingSession;
+use App\Models\User;
 use App\Domain\MatchEngine\MatchEngineOrchestrator;
 use App\Services\MatchmakingService;
 use Illuminate\Support\Facades\DB;
@@ -110,6 +111,10 @@ class DealerService
                 }
             }
 
+            // Trigger lazy matching immediately after profile activation so
+            // newly onboarded users receive notifications for existing inquiries.
+            $this->matchEngineOrchestrator->ensureMatchesForUser(User::findOrFail($userId));
+
             return $dealer->load(['materials', 'machines', 'locations']);
         });
     }
@@ -163,7 +168,7 @@ class DealerService
             ->count();
 
         $unreadNotifications = \App\Models\Notification::where('user_id', $userId)
-            ->where('read', false)
+            ->whereNull('read_at')
             ->count();
 
         // Count dealer's posted requirements
@@ -296,9 +301,12 @@ class DealerService
 
             // Trigger matchmaking via orchestrator (V1 or V2 based on config)
             $result = $this->matchEngineOrchestrator->runMatchmaking($inquiry);
-            if (in_array($visibility, ['dealers', 'all'], true)) {
-                $this->matchmakingService->notifyMatchedDealers($inquiry, $result['dealer_ids']);
-            }
+            $this->matchmakingService->notifyMatchedRecipients(
+                $inquiry,
+                $result['dealer_ids'] ?? [],
+                $result['converter_ids'] ?? [],
+                $result['machine_dealer_ids'] ?? []
+            );
 
             return $inquiry->load(['materials', 'finishes', 'dealerLocation', 'items', 'session']);
         });

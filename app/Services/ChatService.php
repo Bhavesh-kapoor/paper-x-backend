@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Domain\MatchEngine\Models\InquiryResponse;
 use App\Domain\MatchEngine\Models\MatchHistory;
+use App\Enums\NavigationType;
+use App\Enums\NotificationType;
 use App\Enums\SessionStatus;
 use App\Models\Brand;
 use App\Models\ChatMessage;
@@ -16,6 +18,7 @@ use App\Models\Message;
 use App\Models\MachineDealer;
 use App\Models\SessionParticipant;
 use App\Models\User;
+use App\Support\Chat\ChatMessageFormatter;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +28,11 @@ use Illuminate\Support\Facades\Storage;
 
 class ChatService
 {
+    public function __construct(
+        protected NotificationService $notificationService
+    ) {
+    }
+
     /**
      * Deterministically open or create a chat thread for one inquiry+responder pair.
      *
@@ -235,6 +243,8 @@ class ChatService
         }
 
         return DB::transaction(function () use ($thread, $actor, $body, $attachment) {
+            $isFirstResponderMessage = $this->isFirstResponderMessage($thread, $actor);
+
             $attachmentPath = null;
             if ($attachment instanceof UploadedFile) {
                 $filename = time() . '_' . $attachment->getClientOriginalName();
@@ -242,22 +252,51 @@ class ChatService
                 $attachmentPath = 'chat_attachments/' . $filename;
             }
 
-            $message = Message::query()->create([
-                'thread_id' => $thread->id,
-                'sender_user_id' => $actor->id,
-                'sender_role' => $this->normalizeSenderRole($actor->primary_role),
-                'body' => $body !== '' ? $body : null,
-                'attachment' => $attachmentPath,
-                'status' => 'SENT',
-            ]);
-
-            $thread->update([
-                'last_message_id' => $message->id,
-                'last_message_at' => $message->created_at,
-            ]);
-
+            $message = $this->persistThreadMessage(
+                $thread,
+                $actor,
+                $body !== '' ? $body : null,
+                $attachmentPath,
+                $isFirstResponderMessage
+            );
             return $message;
         });
+    }
+
+    public function responderHasSentMessage(ChatThread $thread, User $responder): bool
+    {
+        return Message::query()
+            ->where('thread_id', $thread->id)
+            ->where('sender_user_id', $responder->id)
+            ->exists();
+    }
+
+    /**
+     * Transaction-aware helper:
+     * - Re-check responder message existence just before write.
+     * - Insert only if absent.
+     * - Return true when created, false when skipped.
+     */
+    public function sendAutoInitialMessageIfAbsent(ChatThread $thread, User $responder, string $body): bool
+    {
+        $body = trim($body);
+        if ($body === '') {
+            return false;
+        }
+
+        $alreadySent = Message::query()
+            ->where('thread_id', $thread->id)
+            ->where('sender_user_id', $responder->id)
+            ->lockForUpdate()
+            ->exists();
+
+        if ($alreadySent) {
+            return false;
+        }
+
+        $this->persistThreadMessage($thread, $responder, $body, null, true);
+
+        return true;
     }
 
     /**
@@ -783,6 +822,66 @@ class ChatService
         }
 
         return true;
+    }
+
+    private function isFirstResponderMessage(ChatThread $thread, User $actor): bool
+    {
+        if ((int) $thread->responder_user_id !== (int) $actor->id) {
+            return false;
+        }
+
+        return Message::query()
+            ->where('thread_id', $thread->id)
+            ->where('sender_user_id', $actor->id)
+            ->lockForUpdate()
+            ->doesntExist();
+    }
+
+    private function persistThreadMessage(
+        ChatThread $thread,
+        User $actor,
+        ?string $body,
+        ?string $attachmentPath,
+        bool $isFirstResponderMessage
+    ): Message {
+        $message = Message::query()->create([
+            'thread_id' => $thread->id,
+            'sender_user_id' => $actor->id,
+            'sender_role' => $this->normalizeSenderRole($actor->primary_role),
+            'body' => $body,
+            'attachment' => $attachmentPath,
+            'status' => 'SENT',
+        ]);
+
+        $thread->update([
+            'last_message_id' => $message->id,
+            'last_message_at' => $message->created_at,
+        ]);
+
+        if ($isFirstResponderMessage) {
+            $this->notifyPosterAboutFirstResponse($thread, $actor);
+        }
+
+        return $message;
+    }
+
+    private function notifyPosterAboutFirstResponse(ChatThread $thread, User $responder): void
+    {
+        $responderName = ChatMessageFormatter::resolveResponderDisplayName($responder);
+
+        $this->notificationService->create(
+            (int) $thread->poster_user_id,
+            NotificationType::FIRST_RESPONSE,
+            'New Match Response',
+            'Your post has started receiving responses from matched responders.',
+            NavigationType::CHAT_THREAD,
+            (string) $thread->id,
+            [
+                'inquiry_id' => (int) $thread->inquiry_id,
+                'responder_name' => $responderName,
+            ],
+            sprintf('first_response_%s', $thread->id)
+        );
     }
 }
 
