@@ -281,6 +281,8 @@ Route::prefix('admin')->group(function () {
         Route::delete('/brands/{brand}', [\App\Http\Controllers\Admin\ManagementController::class, 'brandDelete'])->name('admin.brands.delete');
         Route::get('/converters', [\App\Http\Controllers\Admin\ManagementController::class, 'converters'])->name('admin.converters');
         Route::get('/machine-dealers', [\App\Http\Controllers\Admin\ManagementController::class, 'machineDealers'])->name('admin.machine-dealers');
+        Route::get('/pre-registrations', [\App\Http\Controllers\Admin\PreRegistrationController::class, 'index'])->name('admin.pre-registrations');
+        Route::post('/pre-registrations/{preRegistration}/ignore', [\App\Http\Controllers\Admin\PreRegistrationController::class, 'ignore'])->name('admin.pre-registrations.ignore');
         
         // Inquiry Routes
         Route::get('/inquiries', [\App\Http\Controllers\Admin\ManagementController::class, 'inquiries'])->name('admin.inquiries');

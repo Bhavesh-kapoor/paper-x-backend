@@ -153,12 +153,17 @@
                             </a>
                         </li>
 
-                        <li class="menu-item {{ request()->routeIs('admin.users') || request()->routeIs('admin.users.detail') || request()->routeIs('admin.dealers') || request()->routeIs('admin.dealers.detail') || request()->routeIs('admin.brands') || request()->routeIs('admin.converters') || request()->routeIs('admin.machine-dealers') ? 'open' : '' }}">
+                        <li class="menu-item {{ request()->routeIs('admin.users') || request()->routeIs('admin.users.detail') || request()->routeIs('admin.dealers') || request()->routeIs('admin.dealers.detail') || request()->routeIs('admin.brands') || request()->routeIs('admin.converters') || request()->routeIs('admin.machine-dealers') || request()->routeIs('admin.pre-registrations') ? 'open' : '' }}">
                             <a href="javascript:void(0);" class="menu-link menu-toggle">
                                 <i class="menu-icon icon-base ti tabler-users"></i>
                                 <div>User Management</div>
                             </a>
                             <ul class="menu-sub">
+                                <li class="menu-item {{ request()->routeIs('admin.pre-registrations') ? 'active' : '' }}">
+                                    <a href="{{ route('admin.pre-registrations') }}" class="menu-link">
+                                        <div>Pre-Registered Users</div>
+                                    </a>
+                                </li>
                                 <li class="menu-item {{ request()->routeIs('admin.users') || request()->routeIs('admin.users.detail') ? 'active' : '' }}">
                                     <a href="{{ route('admin.users') }}" class="menu-link">
                                         <div>All Users</div>

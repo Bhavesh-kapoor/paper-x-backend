@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\api\AuthController;
+use App\Http\Controllers\api\PreRegistrationController;
 use App\Http\Controllers\api\UserController;
 use App\Http\Controllers\api\MaterialController;
 use App\Http\Controllers\api\DealerController;
@@ -33,6 +34,9 @@ Route::prefix('v1')->group(function () {
     #auth routes
     Route::post('auth/otp/request', [AuthController::class, 'loginWithOtp'])->name('auth.otp.request');
     Route::post('auth/otp/verify', [AuthController::class, 'loginWithOtp'])->name('auth.otp.verify');
+
+    #public pre-registration route
+    Route::post('pre-registrations', [PreRegistrationController::class, 'store'])->name('pre-registrations.store');
 
     #user  -  get and update profile
     Route::middleware(['token.exists', 'auth:sanctum'])->group(function () {

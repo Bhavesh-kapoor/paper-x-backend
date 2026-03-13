@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\User;
 use App\Services\OtpService;
 use Illuminate\Support\Facades\DB;
+use App\Models\PreRegistration;
 
 class AuthService
 {
@@ -32,6 +33,41 @@ class AuthService
 
             if (!$this->otpService->verifyOtp($user, $otp)) {
                 throw new \Exception('Invalid OTP', 422);
+            }
+
+            // Seed profile from pending pre-registration lead if applicable
+            if (!$user->primary_role || !$user->company_name) {
+                $normalizedMobile = preg_replace('/\D+/', '', $user->mobile ?? '');
+                if (strlen($normalizedMobile) === 10) {
+                    $mobileForLookup = $normalizedMobile;
+                } else {
+                    $mobileForLookup = $user->mobile;
+                }
+
+                $lead = PreRegistration::where('mobile', $mobileForLookup)
+                    ->whereNull('consumed_at')
+                    ->whereNull('ignored_at')
+                    ->latest('created_at')
+                    ->first();
+
+                if ($lead) {
+                    $dirty = false;
+                    if (!$user->primary_role && $lead->primary_role) {
+                        $user->primary_role = $lead->primary_role;
+                        $dirty = true;
+                    }
+                    if (!$user->company_name && $lead->company_name) {
+                        $user->company_name = $lead->company_name;
+                        $dirty = true;
+                    }
+                    if ($dirty) {
+                        $user->save();
+                    }
+
+                    $lead->user_id = $user->id;
+                    $lead->consumed_at = now();
+                    $lead->save();
+                }
             }
             
             // Get user ID before any token operations
