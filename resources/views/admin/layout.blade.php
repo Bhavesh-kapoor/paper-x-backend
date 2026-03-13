@@ -48,7 +48,7 @@
                 <div class="app-brand demo " style="padding-inline:2rem 1rem !important; background: white; border-radius: 12px; margin: 15px 10px; border: none;">
                     <a href="{{ route('admin.dashboard') }}" style="display: flex; align-items: center; justify-content: center; padding: 10px 0;">
                         <span class="app-brand-logo">
-                            <img src="{{ asset('assets/img/logo.png') }}" style="width:120px; height:auto; max-height: 60px; object-fit: contain; filter: brightness(1) drop-shadow(0 2px 4px rgba(0,0,0,0.3));" />
+                            <img src="{{ asset('assets/img/ZupplyLogo.svg') }}" style="width:120px; height:auto; max-height: 60px; object-fit: contain; filter: brightness(1) drop-shadow(0 2px 4px rgba(0,0,0,0.3));" />
                         </span>
                     </a>
                     <a href="javascript:void(0);" class="layout-menu-toggle menu-link text-large" style="position: absolute; top: 45px; right: 15px; color: #000000 !important; background: #000000; width: 12px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
