@@ -15,6 +15,7 @@ use App\Models\RtdOrder;
 use App\Models\RtdPayout;
 use App\Models\RtdProduct;
 use App\StateMachines\RTDOrderStateMachine;
+use App\Support\RtdPublicUpload;
 use Illuminate\Support\Facades\DB;
 
 class RTDOrderService
@@ -202,6 +203,12 @@ class RTDOrderService
 
     public function markDispatched(int $orderId, array $proofData, int $converterUserId): RtdOrder
     {
+        $normalizedFile = RtdPublicUpload::normalizeDispatchFilePathForDb($proofData['file_path'] ?? '');
+        if ($normalizedFile === null) {
+            throw new RTDDomainException('Invalid dispatch proof file path.', 422);
+        }
+        $proofData['file_path'] = $normalizedFile;
+
         return DB::transaction(function () use ($orderId, $proofData, $converterUserId) {
             $order = RtdOrder::where('id', $orderId)
                 ->where('converter_id', $converterUserId)

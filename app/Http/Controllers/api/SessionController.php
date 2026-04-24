@@ -9,7 +9,6 @@ use App\Models\Inquiry;
 use App\Services\SessionService;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Response;
-use Illuminate\Support\Facades\Storage;
 
 class SessionController extends Controller
 {
@@ -539,7 +538,9 @@ class SessionController extends Controller
         $sampleImage = $specs['sample_image'] ?? null;
         $sampleImageUrl = null;
         if ($sampleImage && is_string($sampleImage) && $sampleImage !== '') {
-            $sampleImageUrl = str_starts_with($sampleImage, 'http') ? $sampleImage : Storage::disk('public')->url($sampleImage);
+            $sampleImageUrl = str_starts_with($sampleImage, 'http')
+                ? $sampleImage
+                : asset(ltrim(str_replace('\\', '/', $sampleImage), '/'));
         }
         return [
             'sample_available' => $sampleAvailable,

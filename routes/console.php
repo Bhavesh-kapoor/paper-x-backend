@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 use App\Domain\MatchEngine\Models\MatchHistory;
 use App\Models\MatchmakingLog;
 use App\Models\Inquiry;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Schedule::command('insights:generate')->dailyAt('07:00');
 
 Artisan::command('matchmaking:backfill-machine-dealer-logs {--dry-run : Preview only, do not write}', function () {
     $dryRun = (bool) $this->option('dry-run');

@@ -282,6 +282,7 @@ Route::prefix('admin')->group(function () {
         Route::get('/converters', [\App\Http\Controllers\Admin\ManagementController::class, 'converters'])->name('admin.converters');
         Route::get('/machine-dealers', [\App\Http\Controllers\Admin\ManagementController::class, 'machineDealers'])->name('admin.machine-dealers');
         Route::get('/pre-registrations', [\App\Http\Controllers\Admin\PreRegistrationController::class, 'index'])->name('admin.pre-registrations');
+        Route::get('/pre-registrations/export', [\App\Http\Controllers\Admin\PreRegistrationController::class, 'export'])->name('admin.pre-registrations.export');
         Route::post('/pre-registrations/{preRegistration}/ignore', [\App\Http\Controllers\Admin\PreRegistrationController::class, 'ignore'])->name('admin.pre-registrations.ignore');
         
         // Inquiry Routes

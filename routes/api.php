@@ -18,6 +18,7 @@ use App\Http\Controllers\api\RegistrationDetailsController;
 use App\Http\Controllers\api\RTDProductController;
 use App\Http\Controllers\api\RTDOrderController;
 use App\Http\Controllers\api\RtdListingPackController;
+use App\Http\Controllers\api\MarketInsightController;
 use App\Http\Controllers\api\JobworkController;
 use App\Http\Controllers\api\UploadController;
 use Illuminate\Http\Request;
@@ -30,6 +31,15 @@ use Illuminate\Support\Facades\Route;
 
 
 Route::prefix('v1')->group(function () {
+
+    // Public market insights routes
+    Route::prefix('insights')->group(function () {
+        Route::get('/today', [MarketInsightController::class, 'today'])->name('insights.today');
+        Route::get('/history', [MarketInsightController::class, 'history'])->name('insights.history');
+        Route::get('/{date}', [MarketInsightController::class, 'showByDate'])
+            ->where('date', '\d{4}-\d{2}-\d{2}')
+            ->name('insights.by-date');
+    });
 
     #auth routes
     Route::post('auth/otp/request', [AuthController::class, 'loginWithOtp'])->name('auth.otp.request');

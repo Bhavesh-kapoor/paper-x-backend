@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\RTDDomainException;
 use App\Models\Material;
+use App\Support\RtdPublicUpload;
 use App\Models\MaterialFinish;
 use App\Models\RtdProduct;
 use App\Models\RtdPriceSlab;
@@ -31,12 +32,14 @@ class RTDProductService
         $finishData = $this->resolveFinishData($data);
         $brandingMethods = $this->resolveBrandingMethods($data);
 
-        return DB::transaction(function () use ($data, $userId, $materialName, $finishData, $brandingMethods) {
+        $imagePath = $this->resolveProductImagePathForStorage($data['image_path'] ?? null);
+
+        return DB::transaction(function () use ($data, $userId, $materialName, $finishData, $brandingMethods, $imagePath) {
             $product = RtdProduct::create([
                 'converter_id'    => $userId,
                 'category'        => $data['category'],
                 'product_name'    => trim((string) ($data['product_name'] ?? '')),
-                'image_path'      => $data['image_path'] ?? null,
+                'image_path'      => $imagePath,
                 'size'            => $data['size'] ?? null,
                 'size_unit'       => $data['size_unit'] ?? null,
                 'material_id'     => $data['material_id'] ?? null,
@@ -109,6 +112,11 @@ class RTDProductService
                     $value = $data[$field];
                     if ($field === 'product_name') {
                         $value = trim((string) ($value ?? ''));
+                    }
+                    if ($field === 'image_path') {
+                        $value = $this->resolveProductImagePathForStorage(
+                            is_string($value) || $value === null ? $value : null
+                        );
                     }
                     $updatePayload[$field] = $value;
                 }
@@ -367,5 +375,19 @@ class RTDProductService
         }
 
         return null;
+    }
+
+    private function resolveProductImagePathForStorage(?string $raw): ?string
+    {
+        if ($raw === null || trim($raw) === '') {
+            return null;
+        }
+
+        $normalized = RtdPublicUpload::normalizeProductImagePathForDb(trim($raw));
+        if ($normalized === null) {
+            throw ValidationException::withMessages(['image_path' => ['Invalid image path.']]);
+        }
+
+        return $normalized;
     }
 }

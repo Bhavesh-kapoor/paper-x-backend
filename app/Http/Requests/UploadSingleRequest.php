@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Validation\Rule;
+
 class UploadSingleRequest extends ApiRequest
 {
     public function authorize(): bool
@@ -12,7 +14,8 @@ class UploadSingleRequest extends ApiRequest
     public function rules(): array
     {
         return [
-            'file' => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:10240'],
+            'file'    => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:10240'],
+            'purpose' => ['sometimes', 'string', Rule::in(['product', 'dispatch'])],
         ];
     }
 }

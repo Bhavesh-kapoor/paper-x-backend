@@ -11,6 +11,7 @@ use App\Models\MatchingSession;
 use App\Models\Brand;
 use App\Models\Converter;
 use App\Models\MachineDealer;
+use App\Models\PreRegistration;
 
 class DashboardController extends Controller
 {
@@ -28,6 +29,7 @@ class DashboardController extends Controller
             'total_inquiries' => Inquiry::count(),
             'active_sessions' => MatchingSession::where('status', 'ACTIVE')->count(),
             'completed_sessions' => MatchingSession::where('status', 'COMPLETED')->count(),
+            'total_pre_registrations' => PreRegistration::count(),
         ];
 
         // Chart data - User registrations over last 7 days

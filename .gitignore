@@ -1,3 +1,6 @@
+# Large local archives — exceeds GitHub 100MB limit if committed
+/Archive.zip
+
 *.log
 .DS_Store
 .env
@@ -16,6 +19,12 @@
 /public/build
 /public/hot
 /public/storage
+/public/uploads/rtd/products/*
+!/public/uploads/rtd/products/.gitkeep
+/public/uploads/rtd/logos/*
+!/public/uploads/rtd/logos/.gitkeep
+/public/uploads/rtd/dispatch/*
+!/public/uploads/rtd/dispatch/.gitkeep
 /storage/*.key
 /storage/pail
 /vendor

@@ -46,6 +46,10 @@
     .stat-card.purple {
         border-left-color: #9c27b0;
     }
+
+    .stat-card.orange {
+        border-left-color: #ff9800;
+    }
     
     .stat-card-body {
         padding: 1.25rem;
@@ -413,6 +417,27 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Pre-registrations -->
+        <div class="col-lg-3 col-md-6 col-12">
+            <a href="{{ route('admin.pre-registrations') }}" class="text-decoration-none text-reset d-block h-100">
+                <div class="card stat-card orange">
+                    <div class="stat-card-body">
+                        <div class="stat-header">
+                            <h5 class="stat-title">Pre-registrations</h5>
+                            <div class="stat-icon-wrapper orange">
+                                <i class="icon-base ti tabler-clipboard-list"></i>
+                            </div>
+                        </div>
+                        <div class="stat-value">{{ number_format($stats['total_pre_registrations']) }}</div>
+                        <p class="stat-subtitle">Web / early access signups</p>
+                        <div class="stat-footer">
+                            <span class="stat-link">View list</span>
+                        </div>
+                    </div>
+                </div>
+            </a>
         </div>
     </div>
 

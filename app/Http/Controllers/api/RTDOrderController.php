@@ -9,6 +9,7 @@ use App\Http\Requests\RTD\DispatchOrderRequest;
 use App\Http\Resources\RTD\RtdOrderResource;
 use App\Exceptions\RTDDomainException;
 use App\Services\RTDOrderService;
+use App\Support\RtdPublicUpload;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Response;
@@ -26,7 +27,10 @@ class RTDOrderController extends Controller
             $data = $request->validated();
 
             if ($request->hasFile('logo')) {
-                $data['logo_path'] = $request->file('logo')->store('rtd/logos', 'public');
+                $data['logo_path'] = RtdPublicUpload::store(
+                    $request->file('logo'),
+                    RtdPublicUpload::DIR_LOGOS
+                );
             }
 
             $order = $this->orderService->createOrderRequest($data, $request->user()->id);

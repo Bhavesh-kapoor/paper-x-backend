@@ -8,6 +8,8 @@
             box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
             background: #ffffff;
             margin-bottom: 1.5rem;
+            min-width: 0;
+            max-width: 100%;
         }
 
         .pr-filters-header {
@@ -18,10 +20,48 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.5rem;
         }
 
         .pr-filters-body {
             padding: 1.25rem 1.5rem 1.5rem 1.5rem;
+            min-width: 0;
+            overflow-x: auto;
+        }
+
+        .pr-filters-body .row {
+            min-width: 0;
+        }
+
+        .pr-date-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: stretch;
+        }
+
+        .pr-date-row .pr-date-input {
+            flex: 1 1 140px;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        @media (max-width: 575.98px) {
+            .pr-filters-body {
+                padding: 1rem 1rem 1.25rem;
+            }
+
+            .pr-filter-actions {
+                flex-direction: column;
+                align-items: stretch !important;
+            }
+
+            .pr-filter-actions .pr-btn-filter,
+            .pr-filter-actions .pr-btn-reset {
+                width: 100%;
+                justify-content: center;
+            }
         }
 
         .pr-filter-label {
@@ -94,6 +134,8 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            flex-wrap: wrap;
+            min-width: 0;
         }
 
         .pr-table thead th {
@@ -166,18 +208,109 @@
             font-size: 0.78rem;
             padding: 0.35rem 0.9rem;
         }
+
+        .pagination-wrapper {
+            padding: 1.25rem 1.5rem;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .pagination {
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .pagination .page-link {
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #667eea;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 44px;
+            height: 44px;
+        }
+
+        .pagination .page-link:hover {
+            background: #667eea;
+            color: #ffffff;
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .pagination .page-item.active .page-link {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #667eea;
+            color: #ffffff;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .pagination .page-item.disabled .page-link {
+            color: #adb5bd;
+            background: #f8f9fa;
+            border-color: #e9ecef;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .pagination .page-item.disabled .page-link:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .pagination .page-link i {
+            font-size: 1.4rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .pr-page-root {
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .pagination-wrapper .d-flex {
+            min-width: 0;
+        }
+
+        @media (max-width: 767.98px) {
+            .pagination-wrapper .d-flex {
+                flex-direction: column;
+                align-items: flex-start !important;
+            }
+
+            .pagination-wrapper .pagination {
+                flex-wrap: wrap;
+                justify-content: center;
+                width: 100%;
+            }
+        }
     </style>
 
-    <div class="container-xxl flex-grow-1 container-p-y">
-        <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="container-xxl flex-grow-1 container-p-y pr-page-root">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
             <div>
                 <h4 class="mb-1 text-black">Pre-Registered Users</h4>
                 <p class="text-muted mb-0" style="font-size: 0.9rem;">
                     Leads collected from the public pre-registration form before they complete app onboarding.
                 </p>
             </div>
-            <div class="badge bg-primary" style="font-size: 0.85rem;">
-                Total Leads: {{ $preRegistrations->total() }}
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <a href="{{ route('admin.pre-registrations.export', request()->query()) }}"
+                   class="btn btn-outline-primary btn-sm"
+                   style="font-weight: 600; border-radius: 10px;">
+                    <i class="icon-base ti tabler-download me-1"></i>Export CSV
+                </a>
+                <div class="badge bg-primary" style="font-size: 0.85rem;">
+                    Total Leads: {{ $preRegistrations->total() }}
+                </div>
             </div>
         </div>
 
@@ -190,12 +323,12 @@
             </div>
             <div class="pr-filters-body">
                 <form method="GET" class="row g-3">
-                    <div class="col-md-3">
+                    <div class="col-12 col-md-6 col-xl-4">
                         <label class="pr-filter-label">Search</label>
                         <input type="text" name="search" value="{{ request('search') }}" class="pr-filter-input"
                                placeholder="Name, email, mobile, company">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-12 col-sm-6 col-md-6 col-xl-2">
                         <label class="pr-filter-label">Role</label>
                         <select name="role" class="pr-filter-input">
                             <option value="">All roles</option>
@@ -206,7 +339,7 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-12 col-sm-6 col-md-6 col-xl-2">
                         <label class="pr-filter-label">Status</label>
                         <select name="status" class="pr-filter-input">
                             <option value="">All statuses</option>
@@ -215,7 +348,7 @@
                             <option value="ignored" @selected(request('status') === 'ignored')>Ignored</option>
                         </select>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-12 col-sm-6 col-md-6 col-xl-2">
                         <label class="pr-filter-label">Linked user</label>
                         <select name="has_user" class="pr-filter-input">
                             <option value="">All</option>
@@ -223,14 +356,14 @@
                             <option value="no" @selected(request('has_user') === 'no')>No user</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-12 col-lg-6 col-xl-4">
                         <label class="pr-filter-label">Date range</label>
-                        <div class="d-flex gap-2">
-                            <input type="date" name="date_from" value="{{ request('date_from') }}" class="pr-filter-input">
-                            <input type="date" name="date_to" value="{{ request('date_to') }}" class="pr-filter-input">
+                        <div class="pr-date-row">
+                            <input type="date" name="date_from" value="{{ request('date_from') }}" class="pr-filter-input pr-date-input" aria-label="From date">
+                            <input type="date" name="date_to" value="{{ request('date_to') }}" class="pr-filter-input pr-date-input" aria-label="To date">
                         </div>
                     </div>
-                    <div class="col-12 d-flex justify-content-end gap-2 mt-1">
+                    <div class="col-12 d-flex justify-content-end gap-2 mt-1 pr-filter-actions flex-wrap">
                         <button type="submit" class="pr-btn-filter">
                             <i class="icon-base ti tabler-filter"></i>Apply
                         </button>
@@ -317,7 +450,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="text-center py-4 text-muted">
+                            <td colspan="7" class="text-center py-4 text-muted">
                                 No pre-registrations found.
                             </td>
                         </tr>
@@ -326,9 +459,23 @@
                 </table>
             </div>
 
-            @if ($preRegistrations->hasPages())
-                <div class="card-footer">
-                    {{ $preRegistrations->links() }}
+            @if ($preRegistrations->total() > 0)
+                <div class="pagination-wrapper">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                        <div>
+                            <p class="mb-0 text-muted" style="font-size: 0.9rem; font-weight: 500;">
+                                <i class="icon-base ti tabler-info-circle me-1"></i>
+                                Showing <strong>{{ $preRegistrations->firstItem() ?? 0 }}</strong> to
+                                <strong>{{ $preRegistrations->lastItem() ?? 0 }}</strong> of
+                                <strong>{{ $preRegistrations->total() }}</strong> results
+                            </p>
+                        </div>
+                        @if ($preRegistrations->hasPages())
+                            <div>
+                                {{ $preRegistrations->links('pagination::bootstrap-4') }}
+                            </div>
+                        @endif
+                    </div>
                 </div>
             @endif
         </div>

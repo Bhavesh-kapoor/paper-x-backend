@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\RTD;
 
+use App\Support\RtdPublicUpload;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,7 +23,7 @@ class RtdProductResource extends JsonResource
             'category'               => $this->category,
             'product_name'      => $this->product_name,
             'display_name'      => $productName !== '' ? $productName : $this->category,
-            'image_path'        => $this->image_path,
+            'image_path'        => RtdPublicUpload::publicUrl($this->image_path),
             'size'              => $this->size,
             'size_unit'         => $this->size_unit,
             'material_id'       => $this->material_id,

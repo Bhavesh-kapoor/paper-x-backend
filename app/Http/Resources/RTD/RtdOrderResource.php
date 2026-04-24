@@ -3,9 +3,9 @@
 namespace App\Http\Resources\RTD;
 
 use App\Enums\RTDOrderStatus;
+use App\Support\RtdPublicUpload;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
 class RtdOrderResource extends JsonResource
 {
@@ -33,9 +33,7 @@ class RtdOrderResource extends JsonResource
             'product_id'             => $this->product_id,
             'product'                => new RtdProductResource($this->whenLoaded('product')),
             'quantity'               => $this->quantity,
-            'logo_path'              => $this->logo_path
-                ? Storage::disk('public')->url($this->logo_path)
-                : null,
+            'logo_path'              => RtdPublicUpload::publicUrl($this->logo_path),
             'unit_price'             => $this->unit_price,
             'subtotal'               => $this->subtotal,
             'commission_percent'     => $this->commission_percent,
@@ -84,7 +82,7 @@ class RtdOrderResource extends JsonResource
                 $this->dispatchProofs->map(fn ($p) => [
                     'id'              => $p->id,
                     'proof_type'      => $p->proof_type,
-                    'file_path'       => $p->file_path,
+                    'file_path'       => RtdPublicUpload::publicUrl($p->file_path),
                     'courier_name'    => $p->courier_name,
                     'tracking_number' => $p->tracking_number,
                     'dispatch_date'   => $p->dispatch_date?->toDateString(),

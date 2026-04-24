@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\ChatThread;
 use App\Policies\ChatThreadPolicy;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -22,6 +23,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if ($this->app->environment('production')) {
+            URL::forceScheme('https');
+        }
+
         Gate::policy(ChatThread::class, ChatThreadPolicy::class);
 
         // Map polymorphic types for inquiries poster relationship, notifications, and Sanctum tokens
