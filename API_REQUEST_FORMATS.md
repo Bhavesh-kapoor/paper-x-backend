@@ -695,6 +695,102 @@ POST /api/v1/dealer/profile/complete
 
 ---
 
+## 7. Wallet - Razorpay Create Order
+
+### Endpoint
+```
+POST /api/v1/wallet/payments/razorpay/order
+```
+
+### Headers
+```
+Authorization: Bearer {token}
+Accept: application/json
+Content-Type: application/json
+```
+
+### Request Body
+```json
+{
+    "credit_pack_id": 2
+}
+```
+
+### Field Descriptions
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `credit_pack_id` | integer | yes | Must exist in `credit_packs.id`. Server reads `total_price` from the pack; request-supplied amounts are ignored. |
+
+### Response (Success - 201 Created)
+```json
+{
+    "success": true,
+    "message": "Order created",
+    "data": {
+        "key_id": "rzp_test_xxxx",
+        "razorpay_order_id": "order_LxYzABC",
+        "amount": 11800,
+        "currency": "INR",
+        "receipt": "WPO-42-9f0d5d2c",
+        "pack": {"id": 2, "name": "Starter Pack", "credits": 100, "total_price": 118.00}
+    }
+}
+```
+
+---
+
+## 8. Wallet - Razorpay Verify Payment
+
+### Endpoint
+```
+POST /api/v1/wallet/payments/razorpay/verify
+```
+
+### Headers
+```
+Authorization: Bearer {token}
+Accept: application/json
+Content-Type: application/json
+```
+
+### Request Body
+```json
+{
+    "razorpay_order_id": "order_LxYzABC",
+    "razorpay_payment_id": "pay_LxYzABC",
+    "razorpay_signature": "0a1b2c... (HMAC-SHA256 of order_id|payment_id with key secret)"
+}
+```
+
+### Field Descriptions
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `razorpay_order_id` | string (≤64) | yes | Order id returned by `/payments/razorpay/order`. |
+| `razorpay_payment_id` | string (≤64) | yes | Payment id from the Razorpay checkout success callback. |
+| `razorpay_signature` | string (≤256) | yes | HMAC-SHA256 from the Razorpay checkout success callback. |
+
+### Response (Success - 200 OK)
+```json
+{
+    "success": true,
+    "message": "Payment verified",
+    "data": {
+        "transaction_id": "TXN-00001",
+        "credits_added": 100,
+        "new_balance": 100.00,
+        "amount_paid": 118.00
+    }
+}
+```
+
+### Notes
+- **Idempotent.** A duplicate `/verify` call for an already-paid order returns `200`
+  with the same payload; credits are not added a second time.
+- Failure modes: `403` (signature invalid), `404` (order not for this user),
+  `409` (order in non-fulfillable state), `422` (`payments.fetch` mismatch).
+
+---
+
 ## Notes
 
 1. **Relationship Field**: Use `relationship` field with values "authorized-agent" or "independent-dealer" - it will automatically map to `agent_type` ("AUTHORIZED_AGENT" or "DEALER")

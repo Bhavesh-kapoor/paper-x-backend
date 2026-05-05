@@ -395,27 +395,101 @@ POST /api/v1/wallet/calculate
 }
 ```
 
-### Purchase Credits
+### Purchase Credits (Deprecated)
 ```
 POST /api/v1/wallet/purchase
 ```
 **Auth:** Required  
-**Description:** Purchase credits from pack or custom amount  
-**Request Body (Pack):**
+**Status:** Deprecated. Returns `410 Gone` in production. Only available locally when
+`APP_FAKE_PAYMENTS=true`. New clients must use the Razorpay flow below.
+
+### Razorpay - Create Order
+```
+POST /api/v1/wallet/payments/razorpay/order
+```
+**Auth:** Required (Bearer token)  
+**Throttle:** 10 requests / minute / user  
+**Description:** Creates a Razorpay order for a `CreditPack`. The server is the source of
+truth for `amount_paise` (derived from `pack->total_price`). A `wallet_payment_orders` row
+is inserted with `status = 'created'` keyed by `razorpay_order_id`.
+
+**Request Body:**
 ```json
 {
-    "credit_pack_id": 2,
-    "payment_method": "UPI"
+    "credit_pack_id": 2
 }
 ```
-**Request Body (Custom):**
+
+**Success 201:**
 ```json
 {
-    "amount": 1000,
-    "gst_percentage": 18,
-    "payment_method": "NET_BANKING"
+    "success": true,
+    "message": "Order created",
+    "data": {
+        "key_id": "rzp_test_xxxx",
+        "razorpay_order_id": "order_LxYz...",
+        "amount": 11800,
+        "currency": "INR",
+        "receipt": "WPO-42-<uuid>",
+        "pack": {
+            "id": 2,
+            "name": "Starter Pack",
+            "credits": 100,
+            "total_price": 118.00
+        }
+    }
 }
 ```
+
+### Razorpay - Verify Payment
+```
+POST /api/v1/wallet/payments/razorpay/verify
+```
+**Auth:** Required (Bearer token)  
+**Throttle:** 30 requests / minute / user  
+**Description:** Verifies the checkout HMAC signature, cross-checks the payment via
+`payments.fetch`, then credits the wallet exactly once inside a DB transaction with
+`SELECT ... FOR UPDATE` on both the payment order and the wallet rows. Idempotent: a
+second call for an already-paid order returns `200` without re-crediting.
+
+**Request Body:**
+```json
+{
+    "razorpay_order_id": "order_LxYz...",
+    "razorpay_payment_id": "pay_LxYz...",
+    "razorpay_signature": "<hmac-sha256>"
+}
+```
+
+**Success 200:**
+```json
+{
+    "success": true,
+    "message": "Payment verified",
+    "data": {
+        "transaction_id": "TXN-00001",
+        "credits_added": 100,
+        "new_balance": 100,
+        "amount_paid": 118.00
+    }
+}
+```
+
+**Errors:** `401` (no/bad token), `403` (signature invalid), `404` (order not found for
+this user), `409` (order in non-fulfillable state), `422` (`payment.fetch` cross-check
+failed: amount/status/currency/order_id mismatch).
+
+### Razorpay - Webhook (public)
+```
+POST /api/v1/webhooks/razorpay
+```
+**Auth:** None (signature verified inside controller).  
+**Description:** Razorpay-to-server reconciliation. Handles `payment.captured` and
+`payment.failed`. The captured path runs the same idempotent fulfillment as `/verify`,
+so credits are granted even if the app was killed before calling `/verify`. Configure
+the webhook URL and `RAZORPAY_WEBHOOK_SECRET` in the Razorpay dashboard.
+
+**Headers:** `X-Razorpay-Signature: <hmac-sha256(rawBody, RAZORPAY_WEBHOOK_SECRET)>`
 
 ### Add Credits (Admin/System)
 ```
@@ -517,7 +591,10 @@ GET /api/v1/dashboard
 | GET | `/wallet` | Yes | Get wallet balance |
 | GET | `/wallet/credit-packs` | Yes | Get credit packs |
 | POST | `/wallet/calculate` | Yes | Calculate custom credits |
-| POST | `/wallet/purchase` | Yes | Purchase credits |
+| POST | `/wallet/purchase` | Yes | **Deprecated** - returns 410 unless `APP_FAKE_PAYMENTS=true` |
+| POST | `/wallet/payments/razorpay/order` | Yes | Razorpay - create order for a credit pack |
+| POST | `/wallet/payments/razorpay/verify` | Yes | Razorpay - verify checkout signature and credit wallet (idempotent) |
+| POST | `/webhooks/razorpay` | No | Razorpay - reconciliation webhook (HMAC verified) |
 | POST | `/wallet/add` | Yes | Add credits (admin) |
 | GET | `/wallet/transactions` | Yes | Get transaction history |
 | POST | `/wallet/deduct` | Yes | Deduct credits |

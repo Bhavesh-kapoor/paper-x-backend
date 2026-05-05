@@ -105,6 +105,13 @@ class WalletController extends Controller
      */
     public function purchaseCredits(PurchaseCreditsRequest $request)
     {
+        if (! config('app.fake_payments', false)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This endpoint is deprecated. Use POST /api/v1/wallet/payments/razorpay/order then POST /api/v1/wallet/payments/razorpay/verify.',
+            ], 410);
+        }
+
         try {
             DB::beginTransaction();
 

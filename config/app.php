@@ -123,4 +123,16 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Fake wallet purchases (local / QA only)
+    |--------------------------------------------------------------------------
+    |
+    | When true, POST /api/v1/wallet/purchase grants credits without Razorpay.
+    | Must be false in production.
+    |
+    */
+
+    'fake_payments' => (bool) env('APP_FAKE_PAYMENTS', false),
+
 ];

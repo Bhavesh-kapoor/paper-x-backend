@@ -21,6 +21,7 @@ use App\Http\Controllers\api\RtdListingPackController;
 use App\Http\Controllers\api\MarketInsightController;
 use App\Http\Controllers\api\JobworkController;
 use App\Http\Controllers\api\UploadController;
+use App\Http\Controllers\api\WalletPaymentController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -47,6 +48,9 @@ Route::prefix('v1')->group(function () {
 
     #public pre-registration route
     Route::post('pre-registrations', [PreRegistrationController::class, 'store'])->name('pre-registrations.store');
+
+    # Razorpay webhooks (no auth; signature verified in controller)
+    Route::post('webhooks/razorpay', [WalletPaymentController::class, 'webhook'])->name('webhooks.razorpay');
 
     #user  -  get and update profile
     Route::middleware(['token.exists', 'auth:sanctum'])->group(function () {
@@ -315,6 +319,14 @@ Route::prefix('v1')->group(function () {
         
         // Deduct credits
         Route::post('/deduct', [\App\Http\Controllers\api\WalletController::class, 'deductCredits'])->name('wallet.deduct');
+
+        // Razorpay wallet payments
+        Route::post('/payments/razorpay/order', [WalletPaymentController::class, 'createOrder'])
+            ->middleware('throttle:10,1')
+            ->name('wallet.payments.razorpay.order');
+        Route::post('/payments/razorpay/verify', [WalletPaymentController::class, 'verify'])
+            ->middleware('throttle:30,1')
+            ->name('wallet.payments.razorpay.verify');
     });
 
     #upload (single file for product image etc.)

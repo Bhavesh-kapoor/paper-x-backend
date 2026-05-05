@@ -157,7 +157,11 @@ Content-Type: application/json
 
 ## 4. Purchase Credits
 
-Purchase credits from a pack or custom amount.
+> **Deprecated.** This endpoint returns `410 Gone` in production. Real money flows must
+> use the Razorpay endpoints documented in section 4a–4c below. The legacy endpoint is
+> kept only for local dev convenience and is enabled by `APP_FAKE_PAYMENTS=true`.
+
+Purchase credits from a pack or custom amount (legacy / dev-only).
 
 **Endpoint:** `POST /api/v1/wallet/purchase`
 
@@ -205,7 +209,160 @@ Content-Type: application/json
 }
 ```
 
-**Note:** Payment gateway integration will be added later. Currently, this records the purchase and adds credits to the wallet.
+**Note:** When `APP_FAKE_PAYMENTS=false` (production default) this endpoint returns
+`410 Gone` with a message pointing clients to the Razorpay flow.
+
+---
+
+## 4a. Razorpay - Create Order
+
+Creates a Razorpay order for a `CreditPack`. The server is the source of truth for
+`amount_paise` (derived from `pack->total_price`); request fields other than
+`credit_pack_id` are ignored.
+
+**Endpoint:** `POST /api/v1/wallet/payments/razorpay/order`
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Accept: application/json
+Content-Type: application/json
+```
+
+**Throttle:** 10 requests / minute / authenticated user.
+
+**Request Body:**
+```json
+{
+    "credit_pack_id": 2
+}
+```
+
+**Validation Rules:**
+- `credit_pack_id`: Required, must exist in `credit_packs` table.
+
+**Success Response (`201 Created`):**
+```json
+{
+    "success": true,
+    "message": "Order created",
+    "data": {
+        "key_id": "rzp_test_xxxx",
+        "razorpay_order_id": "order_LxYzABC",
+        "amount": 11800,
+        "currency": "INR",
+        "receipt": "WPO-42-9f0d5d2c-...",
+        "pack": {
+            "id": 2,
+            "name": "Starter Pack",
+            "credits": 100,
+            "total_price": 118.00
+        }
+    }
+}
+```
+
+**Errors:**
+- `400` — Invalid pack / inactive pack / amount too small.
+- `401` — Missing or invalid token.
+- `429` — Rate limited.
+- `503` — Razorpay keys not configured (`RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`).
+
+**Side effects:** Inserts a `wallet_payment_orders` row keyed by `razorpay_order_id`
+with `status = 'created'` and a metadata snapshot of pack pricing.
+
+**cURL:**
+```bash
+curl -X POST "$API_BASE/api/v1/wallet/payments/razorpay/order" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"credit_pack_id":2}'
+```
+
+---
+
+## 4b. Razorpay - Verify Payment
+
+Verifies the checkout HMAC signature returned by the Razorpay SDK, then cross-checks
+the payment with `payments.fetch` (amount, currency, status, order_id) before crediting
+the wallet exactly once. Wrapped in a DB transaction with `SELECT ... FOR UPDATE` on
+both the payment-order row and the wallet row, so concurrent verifies / a webhook
+arriving in parallel cannot double-credit.
+
+**Endpoint:** `POST /api/v1/wallet/payments/razorpay/verify`
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Accept: application/json
+Content-Type: application/json
+```
+
+**Throttle:** 30 requests / minute / authenticated user.
+
+**Request Body:**
+```json
+{
+    "razorpay_order_id": "order_LxYzABC",
+    "razorpay_payment_id": "pay_LxYzABC",
+    "razorpay_signature": "0a1b2c... (HMAC-SHA256 of order_id|payment_id)"
+}
+```
+
+**Success Response (`200 OK`):**
+```json
+{
+    "success": true,
+    "message": "Payment verified",
+    "data": {
+        "transaction_id": "TXN-00001",
+        "credits_added": 100,
+        "new_balance": 100.00,
+        "amount_paid": 118.00
+    }
+}
+```
+
+**Errors:**
+- `401` — Missing or invalid token.
+- `403` — Checkout signature invalid.
+- `404` — Order not found for this user.
+- `409` — Order already in a non-fulfillable terminal state.
+- `422` — `payment.fetch` cross-check failed (amount/status/currency/order_id mismatch).
+  The order row is moved to `status = 'failed'` and no credits are granted.
+
+**Idempotency:** Calling `/verify` again for an order already in `status = 'paid'`
+returns `200` with the existing transaction; credits are not added again.
+
+**cURL:**
+```bash
+curl -X POST "$API_BASE/api/v1/wallet/payments/razorpay/verify" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "razorpay_order_id": "order_LxYzABC",
+    "razorpay_payment_id": "pay_LxYzABC",
+    "razorpay_signature": "0a1b..."
+  }'
+```
+
+---
+
+## 4c. Razorpay - Webhook (server-to-server)
+
+Public endpoint Razorpay calls to reconcile payments. Required so that wallets are
+credited even if the app is killed between checkout success and `/verify`.
+
+**Endpoint:** `POST /api/v1/webhooks/razorpay`  
+**Auth:** None (HMAC verified inside the controller using `RAZORPAY_WEBHOOK_SECRET`).  
+**Headers Razorpay sends:** `X-Razorpay-Signature: <hmac-sha256(rawBody, secret)>`.
+
+Subscribed events (configured in the Razorpay dashboard):
+- `payment.captured` → runs the same idempotent fulfillment path as `/verify`.
+- `payment.failed` → marks the matching `wallet_payment_orders` row `status = 'failed'`.
+
+The controller responds `200 {"ok": true}` on success; `400 {"ok": false}` on signature
+or payload errors so Razorpay retries.
 
 ---
 
@@ -515,12 +672,14 @@ const getTransactions = async (type = 'ALL') => {
 
 ## Future Enhancements
 
-1. Payment Gateway Integration (Razorpay, Stripe, etc.)
-2. Payment Status Tracking
-3. Refund Processing
-4. Credit Expiry Management
-5. Promotional Codes/Discounts
-6. Bulk Purchase Discounts
-7. Subscription Plans
+1. Stripe / additional gateways alongside Razorpay
+2. Refund processing (Razorpay refund API)
+3. Credit expiry management
+4. Promotional codes / discounts
+5. Bulk purchase discounts
+6. Subscription plans
+
+> Razorpay (Phase 1) is implemented above. See [`docs/RAZORPAY_INTEGRATION.md`](docs/RAZORPAY_INTEGRATION.md)
+> for environment, dashboard webhook, and test-card setup.
 
 

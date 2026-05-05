@@ -28,6 +28,8 @@
 /storage/*.key
 /storage/pail
 /vendor
+rzp-key.csv
+rzp-key*.csv
 Homestead.json
 Homestead.yaml
 Thumbs.db

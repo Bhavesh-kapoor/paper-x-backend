@@ -4,9 +4,12 @@ namespace App\Providers;
 
 use App\Models\ChatThread;
 use App\Policies\ChatThreadPolicy;
+use App\Services\Payments\Contracts\RazorpayClient;
+use App\Services\Payments\RazorpayGatewayClient;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
+use Razorpay\Api\Api;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -15,7 +18,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(RazorpayClient::class, function () {
+            $keyId = (string) config('services.razorpay.key_id', '');
+            $secret = (string) config('services.razorpay.key_secret', '');
+
+            return new RazorpayGatewayClient(new Api($keyId, $secret));
+        });
     }
 
     /**

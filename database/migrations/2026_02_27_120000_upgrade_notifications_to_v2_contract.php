@@ -21,8 +21,10 @@ return new class extends Migration
             'body' => DB::raw('message'),
         ]);
 
-        // Move type off enum to avoid runtime drift during contract evolution.
-        DB::statement('ALTER TABLE notifications MODIFY COLUMN type VARCHAR(50) NOT NULL');
+        // Move type off enum to avoid runtime drift during contract evolution (MySQL/MariaDB only).
+        if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE notifications MODIFY COLUMN type VARCHAR(50) NOT NULL');
+        }
 
         DB::table('notifications')->where('type', 'NEW_OPPORTUNITY')->update(['type' => 'MATCH_FOUND']);
         DB::table('notifications')->where('type', 'SESSION_LOCKED')->update(['type' => 'MATCH_FOUND']);
@@ -30,11 +32,15 @@ return new class extends Migration
         DB::table('notifications')->where('type', 'DEAL_RESULT')->update(['type' => 'OFFER_ACCEPTED']);
         DB::table('notifications')->where('type', 'SESSION_EXPIRED')->update(['type' => 'OFFER_REJECTED']);
 
+        $idCast = Schema::getConnection()->getDriverName() === 'sqlite'
+            ? 'COALESCE(CAST(notifiable_id AS TEXT), CAST(id AS TEXT))'
+            : 'COALESCE(CAST(notifiable_id AS CHAR), CAST(id AS CHAR))';
+
         DB::table('notifications')
             ->whereNull('navigation_id')
             ->update([
                 'navigation_type' => 'SESSION',
-                'navigation_id' => DB::raw('COALESCE(CAST(notifiable_id AS CHAR), CAST(id AS CHAR))'),
+                'navigation_id' => DB::raw($idCast),
             ]);
 
         DB::table('notifications')
@@ -49,14 +55,16 @@ return new class extends Migration
 
         $this->dropIndexIfExists('notifications', 'notifications_notifiable_type_notifiable_id_index');
 
+        // Drop legacy indexes that reference columns we remove (SQLite requires indexes gone before DROP COLUMN).
+        $this->dropIndexIfExists('notifications', 'notifications_user_id_index');
+        $this->dropIndexIfExists('notifications', 'notifications_read_index');
+        $this->dropIndexIfExists('notifications', 'notifications_type_index');
+
         Schema::table('notifications', function (Blueprint $table) {
             $table->dropColumn(['message', 'notifiable_type', 'notifiable_id', 'read']);
         });
 
         // Rebuild indexes for cursor feed, unread filtering, and dedupe.
-        $this->dropIndexIfExists('notifications', 'notifications_user_id_index');
-        $this->dropIndexIfExists('notifications', 'notifications_read_index');
-        $this->dropIndexIfExists('notifications', 'notifications_type_index');
 
         Schema::table('notifications', function (Blueprint $table) {
             $table->index(['user_id', 'created_at', 'id'], 'notifications_user_created_id_index');
@@ -98,7 +106,11 @@ return new class extends Migration
     private function dropIndexIfExists(string $table, string $indexName): void
     {
         try {
-            DB::statement(sprintf('DROP INDEX %s ON %s', $indexName, $table));
+            if (Schema::getConnection()->getDriverName() === 'sqlite') {
+                DB::statement(sprintf('DROP INDEX IF EXISTS %s', $indexName));
+            } else {
+                DB::statement(sprintf('DROP INDEX %s ON %s', $indexName, $table));
+            }
         } catch (\Throwable) {
             // Ignore missing indexes so migration remains idempotent across environments.
         }
