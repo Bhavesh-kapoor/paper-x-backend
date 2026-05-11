@@ -13,6 +13,7 @@ class ScrapType extends Model
     protected $fillable = [
         'name',
         'category',
+        'description',
         'sort_order',
     ];
 

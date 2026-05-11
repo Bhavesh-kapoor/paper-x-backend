@@ -105,6 +105,104 @@ class RazorpayPaymentService
         ];
     }
 
+    /**
+     * Razorpay order for a variable credit amount (e.g. pay posting fee in INR at inr_per_credit).
+     *
+     * @return array{key_id: string, razorpay_order_id: string, amount: int, currency: string, receipt: string, pack: array{id: int, name: string, credits: int, total_price: float}}
+     */
+    public function createOrderForExactCredits(int $userId, int $credits): array
+    {
+        $keyId = config('services.razorpay.key_id');
+        $keySecret = config('services.razorpay.key_secret');
+        if (empty($keyId) || empty($keySecret)) {
+            throw new RazorpayDomainException('Razorpay is not configured', 503);
+        }
+
+        $max = (int) config('wallet_razorpay.exact_credits_max', 500);
+        if ($credits < 1 || $credits > $max) {
+            throw new RazorpayDomainException('Invalid credits amount', 400);
+        }
+
+        $inrPerCredit = (float) config('wallet_razorpay.inr_per_credit', 1.0);
+        if ($inrPerCredit <= 0) {
+            throw new RazorpayDomainException('Invalid pricing configuration', 500);
+        }
+
+        $totalInr = round($credits * $inrPerCredit, 2);
+        $amountPaise = (int) round($totalInr * 100);
+        if ($amountPaise < 100) {
+            $amountPaise = 100;
+        }
+
+        $currency = strtoupper((string) config('services.razorpay.currency', 'INR'));
+        $receipt = 'WEC-'.Str::ulid()->toString();
+
+        $metadata = [
+            'order_kind' => 'exact_credits',
+            'inr_per_credit' => $inrPerCredit,
+            'total_price_inr' => $totalInr,
+            'price_inr' => $totalInr,
+            'gst_amount_inr' => 0.0,
+            'credits' => $credits,
+        ];
+
+        try {
+            $rzOrder = $this->razorpayClient->createOrder([
+                'amount' => $amountPaise,
+                'currency' => $currency,
+                'receipt' => $receipt,
+                'payment_capture' => 1,
+                'notes' => [
+                    'user_id' => (string) $userId,
+                    'order_kind' => 'exact_credits',
+                    'credits' => (string) $credits,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('rzp.exact_credits_create_order_api_failed', ['err' => $e->getMessage()]);
+
+            throw new RazorpayDomainException(
+                'Razorpay could not create the order: '.$e->getMessage(),
+                502,
+                $e
+            );
+        }
+
+        $razorpayOrderId = (string) ($rzOrder['id'] ?? '');
+        if ($razorpayOrderId === '') {
+            throw new RazorpayDomainException('Failed to create Razorpay order', 502);
+        }
+
+        WalletPaymentOrder::query()->create([
+            'user_id' => $userId,
+            'credit_pack_id' => null,
+            'razorpay_order_id' => $razorpayOrderId,
+            'razorpay_payment_id' => null,
+            'receipt' => $receipt,
+            'amount_paise' => $amountPaise,
+            'currency' => $currency,
+            'credits' => $credits,
+            'status' => WalletPaymentOrder::STATUS_CREATED,
+            'wallet_transaction_id' => null,
+            'metadata' => $metadata,
+            'paid_at' => null,
+        ]);
+
+        return [
+            'key_id' => $keyId,
+            'razorpay_order_id' => $razorpayOrderId,
+            'amount' => $amountPaise,
+            'currency' => $currency,
+            'receipt' => $receipt,
+            'pack' => [
+                'id' => 0,
+                'name' => 'Posting payment',
+                'credits' => $credits,
+                'total_price' => $totalInr,
+            ],
+        ];
+    }
+
     public function verifyAndFulfill(int $userId, string $orderId, string $paymentId, string $signature): WalletPaymentOrder
     {
         try {
@@ -297,9 +395,13 @@ class RazorpayPaymentService
         $gstAmount = (float) ($meta['gst_amount_inr'] ?? 0);
         $totalInr = (float) ($meta['total_price_inr'] ?? ($wpo->amount_paise / 100));
 
+        $description = $wpo->credit_pack_id !== null
+            ? (($pack?->name ?? 'Pack').' - '.$wpo->credits.' Credits')
+            : ('Posting payment - '.$wpo->credits.' credits');
+
         $transaction = $wallet->addCredits(
             (float) $wpo->credits,
-            ($pack?->name ?? 'Pack').' - '.$wpo->credits.' Credits',
+            $description,
             'PURCHASE',
             $wpo->razorpay_order_id,
             'razorpay_order',

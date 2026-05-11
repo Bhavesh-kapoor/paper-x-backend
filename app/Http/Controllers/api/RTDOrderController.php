@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\RTD\ConfirmPaymentRequest;
 use App\Http\Requests\RTD\CreateOrderRequest;
 use App\Http\Requests\RTD\DispatchOrderRequest;
+use App\Http\Requests\RTD\VerifyRtdRazorpayPaymentRequest;
 use App\Http\Resources\RTD\RtdOrderResource;
+use App\Exceptions\RazorpayDomainException;
 use App\Exceptions\RTDDomainException;
+use App\Services\RTDOrderRazorpayPaymentService;
 use App\Services\RTDOrderService;
 use App\Support\RtdPublicUpload;
 use Illuminate\Http\Request;
@@ -18,6 +21,7 @@ class RTDOrderController extends Controller
 {
     public function __construct(
         protected RTDOrderService $orderService,
+        protected RtdOrderRazorpayPaymentService $rtdRazorpayPaymentService,
     ) {
     }
 
@@ -76,6 +80,14 @@ class RTDOrderController extends Controller
 
     public function confirmPayment(ConfirmPaymentRequest $request)
     {
+        if (! config('rtd.allow_direct_confirm_payment', false)) {
+            return Response::error(
+                'Direct payment confirmation is disabled. Complete payment through Razorpay checkout.',
+                null,
+                HttpResponse::HTTP_FORBIDDEN
+            );
+        }
+
         try {
             $order = $this->orderService->confirmPayment(
                 $request->validated()['order_id'],
@@ -86,6 +98,46 @@ class RTDOrderController extends Controller
         } catch (RTDDomainException $e) {
             return Response::error($e->getMessage(), null, $e->getStatusCode());
         } catch (\Exception $e) {
+            return Response::error($e->getMessage(), null, HttpResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    public function createRazorpayOrder(int $id)
+    {
+        try {
+            $payload = $this->rtdRazorpayPaymentService->createOrderForRtdOrder(
+                (int) request()->user()->id,
+                $id
+            );
+
+            return Response::success('Order created', $payload, null, HttpResponse::HTTP_CREATED);
+        } catch (RazorpayDomainException $e) {
+            return Response::error($e->getMessage(), null, $e->getStatusCode());
+        } catch (RTDDomainException $e) {
+            return Response::error($e->getMessage(), null, $e->getStatusCode());
+        } catch (\Throwable $e) {
+            return Response::error($e->getMessage(), null, HttpResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    public function verifyRazorpayPayment(VerifyRtdRazorpayPaymentRequest $request, int $id)
+    {
+        try {
+            $data = $request->validated();
+            $order = $this->rtdRazorpayPaymentService->verifyAndFulfill(
+                (int) $request->user()->id,
+                $id,
+                $data['razorpay_order_id'],
+                $data['razorpay_payment_id'],
+                $data['razorpay_signature'],
+            );
+
+            return Response::success('Payment verified', new RtdOrderResource($order));
+        } catch (RazorpayDomainException $e) {
+            return Response::error($e->getMessage(), null, $e->getStatusCode());
+        } catch (RTDDomainException $e) {
+            return Response::error($e->getMessage(), null, $e->getStatusCode());
+        } catch (\Throwable $e) {
             return Response::error($e->getMessage(), null, HttpResponse::HTTP_BAD_REQUEST);
         }
     }

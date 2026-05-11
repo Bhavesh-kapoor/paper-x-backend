@@ -4,9 +4,11 @@ namespace App\Http\Controllers\api;
 
 use App\Exceptions\RazorpayDomainException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Wallet\CreateRazorpayExactCreditsOrderRequest;
 use App\Http\Requests\Wallet\CreateRazorpayOrderRequest;
 use App\Http\Requests\Wallet\VerifyRazorpayPaymentRequest;
 use App\Services\Payments\RazorpayPaymentService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Log;
@@ -31,6 +33,41 @@ class WalletPaymentController extends Controller
             return Response::error($e->getMessage(), null, $e->getStatusCode());
         } catch (\Throwable $e) {
             Log::error('rzp.create_order_failed', ['err' => $e->getMessage()]);
+
+            return Response::error('Failed to create payment order', null, 500);
+        }
+    }
+
+    public function createExactCreditsOrder(CreateRazorpayExactCreditsOrderRequest $request)
+    {
+        try {
+            $payload = $this->service->createOrderForExactCredits(
+                (int) $request->user()->id,
+                (int) $request->validated()['credits'],
+            );
+
+            return Response::success('Order created', $payload, null, HttpResponse::HTTP_CREATED);
+        } catch (RazorpayDomainException $e) {
+            return Response::error($e->getMessage(), null, $e->getStatusCode());
+        } catch (QueryException $e) {
+            Log::error('rzp.create_exact_credits_order_db', [
+                'err' => $e->getMessage(),
+            ]);
+            $sql = strtolower($e->getMessage());
+            if (str_contains($sql, 'credit_pack_id') || str_contains($sql, 'null') || str_contains($sql, 'not null')) {
+                return Response::error(
+                    'Exact-credit payments require database migration 2026_05_11_000001. Run: php artisan migrate',
+                    ['code' => 'EXACT_CREDITS_MIGRATION_REQUIRED'],
+                    HttpResponse::HTTP_FAILED_DEPENDENCY
+                );
+            }
+
+            return Response::error('Failed to create payment order', null, 500);
+        } catch (\Throwable $e) {
+            Log::error('rzp.create_exact_credits_order_failed', [
+                'err' => $e->getMessage(),
+                'class' => $e::class,
+            ]);
 
             return Response::error('Failed to create payment order', null, 500);
         }

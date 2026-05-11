@@ -632,6 +632,8 @@ class ReferenceDataController extends Controller
                 return [
                     'id' => $product->id,
                     'name' => $product->name,
+                    'category' => $product->category,
+                    'description' => $product->description ?? null,
                 ];
             })->toArray();
 
@@ -647,6 +649,8 @@ class ReferenceDataController extends Controller
                 return [
                     'id' => $type->id,
                     'name' => $type->name,
+                    'category' => $type->category,
+                    'description' => $type->description ?? null,
                 ];
             })->toArray();
 
@@ -663,6 +667,8 @@ class ReferenceDataController extends Controller
                 return [
                     'id' => $machine->id,
                     'name' => $machine->name,
+                    'type' => $machine->type,
+                    'description' => $machine->description,
                 ];
             })->toArray();
 
@@ -672,6 +678,144 @@ class ReferenceDataController extends Controller
                 'scrap_types' => $scrapTypesData,
                 'machines' => $machinesData,
             ]);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
+     * Create a custom machine (when user can't find theirs in the list).
+     * POST /api/v1/machines
+     * Requires auth. Uses firstOrCreate to avoid duplicates by name.
+     */
+    public function storeMachine(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'type' => ['nullable', 'string', 'max:255'],
+                'description' => ['nullable', 'string', 'max:1000'],
+            ]);
+
+            $type = isset($validated['type']) ? trim($validated['type']) : null;
+            $description = isset($validated['description']) ? trim($validated['description']) : null;
+
+            $machine = Machine::firstOrCreate(
+                ['name' => trim($validated['name'])],
+                [
+                    'type' => $type !== '' ? $type : null,
+                    'description' => $description !== '' ? $description : null,
+                ]
+            );
+
+            return Response::success('machine.created', [
+                'id' => $machine->id,
+                'name' => $machine->name,
+                'type' => $machine->type,
+                'description' => $machine->description,
+            ], null, HttpResponse::HTTP_CREATED);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return Response::error(
+                'Validation failed',
+                $e->errors(),
+                HttpResponse::HTTP_UNPROCESSABLE_ENTITY
+            );
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
+     * Create a custom finished product (when user can't find theirs in the list).
+     * POST /api/v1/finished-products
+     * Requires auth. Uses firstOrCreate to avoid duplicates by name.
+     */
+    public function storeFinishedProduct(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'category' => ['nullable', 'string', 'max:255'],
+                'description' => ['nullable', 'string', 'max:1000'],
+            ]);
+
+            $category = isset($validated['category']) ? trim($validated['category']) : null;
+            $description = isset($validated['description']) ? trim($validated['description']) : null;
+
+            $product = FinishedProduct::firstOrCreate(
+                ['name' => trim($validated['name'])],
+                [
+                    'category' => $category !== '' ? $category : null,
+                    'description' => $description !== '' ? $description : null,
+                ]
+            );
+
+            return Response::success('finished_product.created', [
+                'id' => $product->id,
+                'name' => $product->name,
+                'category' => $product->category,
+                'description' => $product->description,
+            ], null, HttpResponse::HTTP_CREATED);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return Response::error(
+                'Validation failed',
+                $e->errors(),
+                HttpResponse::HTTP_UNPROCESSABLE_ENTITY
+            );
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
+     * Create a custom scrap type (when user can't find theirs in the list).
+     * POST /api/v1/scrap-types
+     * Requires auth. Uses firstOrCreate to avoid duplicates by name.
+     */
+    public function storeScrapType(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'category' => ['nullable', 'string', 'max:255'],
+                'description' => ['nullable', 'string', 'max:1000'],
+            ]);
+
+            $category = isset($validated['category']) ? trim($validated['category']) : null;
+            $description = isset($validated['description']) ? trim($validated['description']) : null;
+
+            $scrapType = ScrapType::firstOrCreate(
+                ['name' => trim($validated['name'])],
+                [
+                    'category' => $category !== '' ? $category : null,
+                    'description' => $description !== '' ? $description : null,
+                ]
+            );
+
+            return Response::success('scrap_type.created', [
+                'id' => $scrapType->id,
+                'name' => $scrapType->name,
+                'category' => $scrapType->category,
+                'description' => $scrapType->description,
+            ], null, HttpResponse::HTTP_CREATED);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return Response::error(
+                'Validation failed',
+                $e->errors(),
+                HttpResponse::HTTP_UNPROCESSABLE_ENTITY
+            );
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),

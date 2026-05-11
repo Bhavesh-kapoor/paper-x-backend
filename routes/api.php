@@ -81,6 +81,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/dealer/mill/add', [\App\Http\Controllers\api\ReferenceDataController::class, 'addMillBrand'])->name('dealer.mill.add');
         Route::post('/dealer/finish/add', [\App\Http\Controllers\api\ReferenceDataController::class, 'addFinish'])->name('dealer.finish.add');
         Route::post('/materials', [MaterialController::class, 'store'])->name('materials.store');
+
+        Route::post('/machines', [\App\Http\Controllers\api\ReferenceDataController::class, 'storeMachine'])->name('machines.store');
+        Route::post('/finished-products', [\App\Http\Controllers\api\ReferenceDataController::class, 'storeFinishedProduct'])->name('finished-products.store');
+        Route::post('/scrap-types', [\App\Http\Controllers\api\ReferenceDataController::class, 'storeScrapType'])->name('scrap-types.store');
     });
 
     #dealer routes
@@ -289,6 +293,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/{id}/accept', [RTDOrderController::class, 'accept'])->name('rtd.orders.accept');
         Route::post('/{id}/decline', [RTDOrderController::class, 'decline'])->name('rtd.orders.decline');
         Route::post('/{id}/confirm-payment', [RTDOrderController::class, 'confirmPayment'])->name('rtd.orders.confirm-payment');
+        Route::post('/{id}/payments/razorpay/order', [RTDOrderController::class, 'createRazorpayOrder'])->name('rtd.orders.payments.razorpay.order');
+        Route::post('/{id}/payments/razorpay/verify', [RTDOrderController::class, 'verifyRazorpayPayment'])->name('rtd.orders.payments.razorpay.verify');
         Route::post('/{id}/in-production', [RTDOrderController::class, 'markInProduction'])->name('rtd.orders.in-production');
         Route::post('/{id}/dispatch', [RTDOrderController::class, 'dispatch'])->name('rtd.orders.dispatch');
         Route::post('/{id}/dispute', [RTDOrderController::class, 'raiseDispute'])->name('rtd.orders.dispute');
@@ -324,6 +330,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/payments/razorpay/order', [WalletPaymentController::class, 'createOrder'])
             ->middleware('throttle:10,1')
             ->name('wallet.payments.razorpay.order');
+        Route::post('/payments/razorpay/exact-credits-order', [WalletPaymentController::class, 'createExactCreditsOrder'])
+            ->middleware('throttle:10,1')
+            ->name('wallet.payments.razorpay.exact_credits_order');
         Route::post('/payments/razorpay/verify', [WalletPaymentController::class, 'verify'])
             ->middleware('throttle:30,1')
             ->name('wallet.payments.razorpay.verify');

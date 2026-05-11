@@ -84,6 +84,11 @@ class RtdOrder extends Model
         return $this->hasOne(RtdPayout::class, 'order_id');
     }
 
+    public function rtdOrderPaymentOrders(): HasMany
+    {
+        return $this->hasMany(RtdOrderPaymentOrder::class, 'rtd_order_id');
+    }
+
     // ── Scopes ──
 
     public function scopeRequested(Builder $query): Builder

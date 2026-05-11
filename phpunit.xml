@@ -31,5 +31,6 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="RTD_ALLOW_DIRECT_CONFIRM_PAYMENT" value="true"/>
     </php>
 </phpunit>
