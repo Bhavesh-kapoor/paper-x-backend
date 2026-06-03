@@ -121,7 +121,9 @@ class DealerService
 
     public function getDashboard(int $userId): array
     {
-        $dealer = Dealer::where('user_id', $userId)->first();
+        $dealer = Dealer::where('user_id', $userId)
+            ->withCount(['materials', 'locations'])
+            ->first();
 
         // If dealer doesn't exist, return empty dashboard
         if (!$dealer) {
@@ -191,8 +193,8 @@ class DealerService
     private function calculateProfileCompletion(Dealer $dealer): int
     {
         $fields = [
-            $dealer->materials()->count() > 0,
-            $dealer->locations()->count() > 0,
+            ($dealer->materials_count ?? $dealer->materials()->count()) > 0,
+            ($dealer->locations_count ?? $dealer->locations()->count()) > 0,
             !is_null($dealer->capacity_daily),
             !is_null($dealer->capacity_monthly),
             !is_null($dealer->capacity_unit),

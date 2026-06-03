@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\EnsuresUserMatches;
 use App\Http\Requests\CompleteMachineDealerProfileRequest;
 use App\Http\Requests\PostMachineRequest;
 use App\Services\MachineDealerService;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Response;
 
 class MachineDealerController extends Controller
 {
+    use EnsuresUserMatches;
+
     public function __construct(
         protected MachineDealerService $machineDealerService
     ) {
@@ -36,6 +39,10 @@ class MachineDealerController extends Controller
     {
         try {
             $user = request()->user();
+
+            // Backfill matches for users who registered after inquiries were posted.
+            $this->ensureUserMatches($user);
+
             $dashboard = $this->machineDealerService->getDashboard($user->id);
 
             return Response::success('Dashboard data retrieved successfully', $dashboard);
@@ -84,6 +91,9 @@ class MachineDealerController extends Controller
     public function getActiveRequirements()
     {
         try {
+            // Backfill matches for users who registered after inquiries were posted.
+            $this->ensureUserMatches(request()->user());
+
             $filters = request()->only(['intent', 'urgency', 'machine_id', 'per_page']);
             $requirements = $this->machineDealerService->getActiveRequirements($filters);
 

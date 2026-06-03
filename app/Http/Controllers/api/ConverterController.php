@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\EnsuresUserMatches;
 use App\Http\Requests\CompleteConverterProfileRequest;
 use App\Http\Requests\Converter\PostRequirementRequest;
 use App\Http\Requests\PostMachineRequest;
@@ -15,6 +16,8 @@ use Illuminate\Support\Facades\Response;
 
 class ConverterController extends Controller
 {
+    use EnsuresUserMatches;
+
     public function __construct(
         protected ConverterService $converterService
     ) {
@@ -40,6 +43,10 @@ class ConverterController extends Controller
     {
         try {
             $user = request()->user();
+
+            // Backfill matches for users who registered after inquiries were posted.
+            $this->ensureUserMatches($user);
+
             $dashboard = $this->converterService->getDashboard($user->id);
 
             return Response::success('Dashboard data retrieved successfully', $dashboard);
@@ -56,6 +63,10 @@ class ConverterController extends Controller
     {
         try {
             $user = $request->user();
+
+            // Backfill matches for users who registered after inquiries were posted.
+            $this->ensureUserMatches($user);
+
             $filters = $request->only(['city', 'requirement_type', 'urgency', 'per_page', 'page']);
             $result = $this->converterService->getRequirements($user->id, $filters);
 

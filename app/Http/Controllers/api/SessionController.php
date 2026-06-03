@@ -971,8 +971,21 @@ class SessionController extends Controller
 
             $currentUser = $user;
 
+            // Batch matchmaking-log counts for all sessions' inquiries in ONE query
+            // (avoids 2 queries per session N+1 inside the transform below).
+            $sessionInquiryIds = $sessions->getCollection()->pluck('inquiry.id')->filter()->values();
+            $logCounts = $sessionInquiryIds->isEmpty()
+                ? collect()
+                : \App\Models\MatchmakingLog::whereIn('inquiry_id', $sessionInquiryIds)
+                    ->selectRaw('inquiry_id,
+                        SUM(CASE WHEN is_visible = 1 THEN 1 ELSE 0 END) as matched_count,
+                        SUM(CASE WHEN responded_at IS NOT NULL THEN 1 ELSE 0 END) as responded_count')
+                    ->groupBy('inquiry_id')
+                    ->get()
+                    ->keyBy('inquiry_id');
+
             // Transform sessions for frontend
-            $sessions->getCollection()->transform(function ($session) use ($currentUser) {
+            $sessions->getCollection()->transform(function ($session) use ($currentUser, $logCounts) {
                 $inquiry = $session->inquiry;
                 $posterType = $inquiry->poster_type;
                 $posterId = $inquiry->poster_id;
@@ -1021,13 +1034,10 @@ class SessionController extends Controller
                     }
                 }
 
-                // Keep counts aligned with poster-detail endpoint by deriving from matchmaking logs.
-                $matchedDealersCount = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
-                    ->where('is_visible', true)
-                    ->count();
-                $responsesCount = \App\Models\MatchmakingLog::where('inquiry_id', $inquiry->id)
-                    ->whereNotNull('responded_at')
-                    ->count();
+                // Counts come from the single batched aggregate above (no per-session query).
+                $counts = $logCounts->get($inquiry->id);
+                $matchedDealersCount = (int) ($counts->matched_count ?? 0);
+                $responsesCount = (int) ($counts->responded_count ?? 0);
 
                 // Determine status label based on session and inquiry status
                 $statusLabel = 'ACTIVE';

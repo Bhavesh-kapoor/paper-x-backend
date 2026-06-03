@@ -23,7 +23,10 @@ class OpportunityService
 
     public function getOpportunities(int $userId, array $filters = []): array
     {
-        $dealer = Dealer::where('user_id', $userId)->with(['materials', 'machines'])->firstOrFail();
+        $dealer = Dealer::where('user_id', $userId)
+            ->with(['materials', 'machines'])
+            ->withCount('locations')
+            ->firstOrFail();
 
         if (!$dealer->profile_complete || $dealer->status->value !== 'ACTIVE') {
             return [
@@ -40,7 +43,17 @@ class OpportunityService
         $perPage = $filters['per_page'] ?? 15;
         $page = $filters['page'] ?? 1;
 
+        // Pre-filter in SQL so we only load inquiries the dealer can actually match,
+        // instead of loading ALL matching inquiries and filtering in PHP.
+        // whereDoesntHave(... whereNotIn dealerIds) keeps only inquiries whose materials/
+        // machines are a subset of the dealer's — exactly mirroring matchesDealer()'s
+        // array_intersect check. Capacity/locations stay in matchesDealer() as a safety net.
+        $dealerMaterialIds = $dealer->materials->pluck('id')->all();
+        $dealerMachineIds = $dealer->machines->pluck('id')->all();
+
         $inquiries = Inquiry::where('status', InquiryStatus::MATCHING)
+            ->whereDoesntHave('materials', fn($q) => $q->whereNotIn('materials.id', $dealerMaterialIds))
+            ->whereDoesntHave('machines', fn($q) => $q->whereNotIn('machines.id', $dealerMachineIds))
             ->with(['materials', 'machines', 'brand'])
             ->get();
 
@@ -241,8 +254,9 @@ class OpportunityService
         }
 
         // Check geography (simplified - can be enhanced with distance calculation)
-        // For now, we'll just check if dealer has locations
-        if ($dealer->locations()->count() === 0) {
+        // For now, we'll just check if dealer has locations.
+        // Use the eager-loaded count to avoid a per-inquiry query (N+1).
+        if (($dealer->locations_count ?? $dealer->locations()->count()) === 0) {
             return false;
         }
 

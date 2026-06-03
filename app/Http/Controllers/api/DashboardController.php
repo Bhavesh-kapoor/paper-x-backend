@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\EnsuresUserMatches;
 use App\Services\DashboardService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -10,6 +11,8 @@ use Illuminate\Support\Facades\Response;
 
 class DashboardController extends Controller
 {
+    use EnsuresUserMatches;
+
     public function __construct(
         protected DashboardService $dashboardService
     ) {
@@ -19,6 +22,10 @@ class DashboardController extends Controller
     {
         try {
             $user = $request->user();
+
+            // Backfill matches for users who registered after inquiries were posted.
+            $this->ensureUserMatches($user);
+
             $role = $request->input('role', $user->primary_role); // Default to user's primary role
             
             // Validate role parameter

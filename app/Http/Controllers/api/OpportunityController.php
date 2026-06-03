@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\EnsuresUserMatches;
 use App\Http\Requests\Dealer\AcceptOpportunityRequest;
 use App\Http\Requests\Dealer\DeclineOpportunityRequest;
 use App\Services\OpportunityService;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Response;
 
 class OpportunityController extends Controller
 {
+    use EnsuresUserMatches;
+
     public function __construct(
         protected OpportunityService $opportunityService
     ) {
@@ -20,6 +23,10 @@ class OpportunityController extends Controller
     {
         try {
             $user = request()->user();
+
+            // Backfill matches for users who registered after inquiries were posted.
+            $this->ensureUserMatches($user);
+
             $filters = request()->only(['page', 'per_page']);
             $opportunities = $this->opportunityService->getOpportunities($user->id, $filters);
 

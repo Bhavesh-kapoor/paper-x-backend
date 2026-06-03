@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\EnsuresUserMatches;
 use App\Http\Requests\Dealer\ProfileCompleteRequest;
 use App\Http\Requests\Dealer\PostRequirementRequest;
 use App\Services\DealerService;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Response;
 
 class DealerController extends Controller
 {
+    use EnsuresUserMatches;
+
     public function __construct(
         protected DealerService $dealerService
     ) {
@@ -36,6 +39,10 @@ class DealerController extends Controller
     {
         try {
             $user = request()->user();
+
+            // Backfill matches for users who registered after inquiries were posted.
+            $this->ensureUserMatches($user);
+
             $dashboard = $this->dealerService->getDashboard($user->id);
 
             return Response::success('dealer.dashboard', $dashboard);
