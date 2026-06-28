@@ -217,7 +217,7 @@ class RTDProductService
         return $query->latest()->paginate($filters['per_page'] ?? 15);
     }
 
-    public function browseCatalog(array $filters): \Illuminate\Contracts\Pagination\LengthAwarePaginator
+    public function browseCatalog(array $filters, ?\App\Models\User $user = null): \Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
         $query = RtdProduct::visible()->with('priceSlabs', 'converter');
 
@@ -231,6 +231,31 @@ class RTDProductService
 
         if (!empty($filters['delivery_geography'])) {
             $query->where('delivery_geography', 'LIKE', '%' . $filters['delivery_geography'] . '%');
+        }
+
+        if (!empty($filters['location_scope']) && $user) {
+            $brand = $user->brand;
+            $scope = $filters['location_scope'];
+
+            if ($scope === 'pan_india') {
+                $query->where('delivery_geography', 'LIKE', '%Pan India%');
+            } elseif ($scope === 'state' && $brand?->state) {
+                $state = $brand->state;
+                $query->where(function ($q) use ($state) {
+                    $q->where('delivery_geography', 'LIKE', '%Pan India%')
+                      ->orWhere('delivery_geography', 'LIKE', '%' . $state . '%');
+                });
+            } elseif ($scope === 'city' && $brand?->city) {
+                $city  = $brand->city;
+                $state = $brand->state ?? '';
+                $query->where(function ($q) use ($city, $state) {
+                    $q->where('delivery_geography', 'LIKE', '%Pan India%')
+                      ->orWhere('delivery_geography', 'LIKE', '%' . $city . '%');
+                    if ($state) {
+                        $q->orWhere('delivery_geography', 'LIKE', '%' . $state . '%');
+                    }
+                });
+            }
         }
 
         if (!empty($filters['min_price'])) {

@@ -44,16 +44,13 @@ class RtdOrderRoleTest extends TestCase
         $this->assertGreaterThanOrEqual(400, $response->status());
     }
 
-    /** Brand cannot dispatch (converter-only) → must fail with 4xx. */
-    public function test_brand_cannot_dispatch(): void
+    /** Dispatch route removed in platform-fee-only model */
+    public function test_dispatch_route_removed(): void
     {
         $converter = $this->createConverterUser();
         $brand    = $this->createBrandUser();
         $product  = $this->createProductAsConverter($converter);
         $order    = $this->requestOrderAsBrand($brand, $product->id);
-        $this->acceptOrderAsConverter($converter, $order->id);
-        $this->confirmPaymentAsBrand($brand, $order->id);
-        $this->markInProductionAsConverter($converter, $order->id);
 
         $response = $this->withHeaders($this->authHeaders($brand))
             ->postJson("/api/v1/rtd/orders/{$order->id}/dispatch", [
@@ -61,7 +58,7 @@ class RtdOrderRoleTest extends TestCase
                 'tracking_number' => 'TRK',
             ]);
 
-        $this->assertGreaterThanOrEqual(400, $response->status());
+        $response->assertStatus(404);
     }
 
     /** TC-P4: Brand tries to create product. Expect 403 if role middleware added; currently may be 201. */

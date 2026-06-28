@@ -22,6 +22,8 @@ class RtdOrder extends Model
         'converter_id',
         'quantity',
         'logo_path',
+        'delivery_address',
+        'order_notes',
         'unit_price',
         'subtotal',
         'commission_percent',
@@ -99,25 +101,8 @@ class RtdOrder extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereIn('status', [
+            RTDOrderStatus::REQUESTED,
             RTDOrderStatus::ACCEPTED,
-            RTDOrderStatus::PAID,
-            RTDOrderStatus::IN_PRODUCTION,
-            RTDOrderStatus::DISPATCHED,
         ]);
-    }
-
-    public function scopePaid(Builder $query): Builder
-    {
-        return $query->where('status', RTDOrderStatus::PAID);
-    }
-
-    public function scopeDispatched(Builder $query): Builder
-    {
-        return $query->where('status', RTDOrderStatus::DISPATCHED);
-    }
-
-    public function scopeCompleted(Builder $query): Builder
-    {
-        return $query->where('status', RTDOrderStatus::COMPLETED);
     }
 }

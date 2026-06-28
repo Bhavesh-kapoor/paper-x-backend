@@ -108,9 +108,10 @@ class RTDProductController extends Controller
                     'category', 'lead_time', 'delivery_geography',
                     'min_price', 'max_price',
                     'min_moq', 'max_moq',
-                    'has_branding',
+                    'has_branding', 'location_scope',
                     'sort_by', 'sort_dir', 'per_page',
-                ])
+                ]),
+                $request->user()
             );
 
             return Response::success('RTD Catalog', RtdProductResource::collection($products));

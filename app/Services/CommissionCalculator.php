@@ -48,8 +48,8 @@ class CommissionCalculator
         $subtotal   = round($quantity * $unitPrice, 2);
         $commission = $this->calculateCommission($subtotal);
         $gstPercent = $sellerGstRegistered ? 18.0 : 0.0;
-        $gstAmount  = $sellerGstRegistered ? $this->calculateGST($subtotal + $commission['amount']) : 0.0;
-        $total      = round($subtotal + $commission['amount'] + $gstAmount, 2);
+        $gstAmount  = $sellerGstRegistered ? $this->calculateGST($commission['amount']) : 0.0;
+        $total      = round($commission['amount'] + $gstAmount, 2);
 
         return [
             'subtotal'           => $subtotal,

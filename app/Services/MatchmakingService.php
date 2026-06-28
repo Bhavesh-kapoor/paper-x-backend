@@ -1135,10 +1135,11 @@ class MatchmakingService
 
         foreach ($recipientUserIds as $userId) {
             $viewTarget = $posterUserId > 0 && $userId === $posterUserId ? 'poster' : 'responder';
-            $title = $viewTarget === 'poster' ? 'New Match Found' : 'Matching Post Available';
-            $body = $viewTarget === 'poster'
-                ? 'Your requirement has new matching responders.'
-                : sprintf('A post matching your profile is available: %s.', $materialName);
+            $copy = $viewTarget === 'poster'
+                ? \App\Support\Notifications\InquiryNotificationCopy::forPoster($inquiry)
+                : \App\Support\Notifications\InquiryNotificationCopy::forResponder($inquiry);
+            $title = $copy['title'];
+            $body = $copy['body'];
             $counterpartyForMeta = $viewTarget === 'poster' ? $counterpartyName : 'Poster';
             $this->notificationService->create(
                 $userId,

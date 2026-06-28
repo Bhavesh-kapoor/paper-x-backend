@@ -138,7 +138,7 @@ class RtdOrderRazorpayPaymentService
                 if ($po->status === RtdOrderPaymentOrder::STATUS_PAID) {
                     return RtdOrder::query()
                         ->whereKey($rtdOrderId)
-                        ->with(['product', 'payout', 'brand', 'converter'])
+                        ->with(['product', 'brand', 'converter'])
                         ->firstOrFail();
                 }
 
@@ -162,7 +162,7 @@ class RtdOrderRazorpayPaymentService
                 $po->paid_at = now();
                 $po->save();
 
-                return $paidOrder->fresh(['product', 'payout', 'brand', 'converter']);
+                return $paidOrder->fresh(['product', 'brand', 'converter']);
             });
         } catch (RazorpayDomainException $e) {
             throw $e;

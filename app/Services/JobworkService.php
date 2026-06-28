@@ -14,10 +14,13 @@ use App\Models\Converter;
 use App\Models\Inquiry;
 use App\Models\MatchingSession;
 use App\Models\Wallet;
+use App\Services\Concerns\ChargesPostingFee;
 use Illuminate\Support\Facades\DB;
 
 class JobworkService
 {
+    use ChargesPostingFee;
+
     public function __construct(
         protected MatchEngineOrchestrator $matchEngineOrchestrator,
         protected MatchmakingService $matchmakingService,
@@ -40,27 +43,13 @@ class JobworkService
             $timeline = (string) ($data['timeline'] ?? 'Normal');
             $urgency = strtolower($timeline) === 'urgent' ? 'urgent' : 'normal';
 
-            $postingFeeBase = 50;
-            $urgencyAddon = $urgency === 'urgent' ? 20 : 0;
-            $postingFeeAmount = $postingFeeBase + $urgencyAddon;
-
-            $wallet = Wallet::firstOrCreate(
-                ['user_id' => $userId],
-                ['balance' => 0, 'status' => 'ACTIVE']
-            );
-
-            $tx = $wallet->deductCredits(
-                $postingFeeAmount,
-                'Post jobwork (find) requirement fee',
-                'REQUIREMENT_POSTED',
-                null,
-                'inquiry',
-                ['source' => 'converter_jobwork_find']
-            );
-
-            if ($tx === null) {
-                throw new \Exception('Insufficient wallet balance. Please purchase credits first.', 400);
-            }
+            // Server-authoritative jobwork posting fee (flat, +GST). Deducts once.
+            $quote = $this->chargePostingFee($userId, [
+                'role' => 'converter',
+                'inquiry_type' => 'job',
+                'urgency' => $urgency,
+            ], null, ['source' => 'converter_jobwork_find']);
+            $postingFeeAmount = $quote['total'];
 
             $minOrderQty = isset($data['minimum_order_quantity'])
                 ? (float) $data['minimum_order_quantity']
@@ -135,11 +124,12 @@ class JobworkService
 
             if ($matchedRecipientsCount > 0 && $converter->user_id) {
                 $posterUserId = (int) $converter->user_id;
+                $posterCopy = \App\Support\Notifications\InquiryNotificationCopy::forPoster($inquiry);
                 $this->notificationService->create(
                     $posterUserId,
                     NotificationType::MATCH_FOUND,
-                    'New Match Found',
-                    'Your jobwork post has new matching converters.',
+                    $posterCopy['title'],
+                    $posterCopy['body'],
                     NavigationType::SESSION,
                     (string) $session->id,
                     [
@@ -183,27 +173,13 @@ class JobworkService
             $timeline = (string) ($data['timeline'] ?? 'Normal');
             $urgency = strtolower($timeline) === 'urgent' ? 'urgent' : 'normal';
 
-            $postingFeeBase = 50;
-            $urgencyAddon = $urgency === 'urgent' ? 20 : 0;
-            $postingFeeAmount = $postingFeeBase + $urgencyAddon;
-
-            $wallet = Wallet::firstOrCreate(
-                ['user_id' => $userId],
-                ['balance' => 0, 'status' => 'ACTIVE']
-            );
-
-            $tx = $wallet->deductCredits(
-                $postingFeeAmount,
-                'Post jobwork (give) requirement fee',
-                'REQUIREMENT_POSTED',
-                null,
-                'inquiry',
-                ['source' => 'converter_jobwork_give']
-            );
-
-            if ($tx === null) {
-                throw new \Exception('Insufficient wallet balance. Please purchase credits first.', 400);
-            }
+            // Server-authoritative jobwork posting fee (flat, +GST). Deducts once.
+            $quote = $this->chargePostingFee($userId, [
+                'role' => 'converter',
+                'inquiry_type' => 'job',
+                'urgency' => $urgency,
+            ], null, ['source' => 'converter_jobwork_give']);
+            $postingFeeAmount = $quote['total'];
 
             $quantity = isset($data['quantity']) ? (float) $data['quantity'] : 0.0;
 
@@ -284,11 +260,12 @@ class JobworkService
 
             if ($matchedRecipientsCount > 0 && $converter->user_id) {
                 $posterUserId = (int) $converter->user_id;
+                $posterCopy = \App\Support\Notifications\InquiryNotificationCopy::forPoster($inquiry);
                 $this->notificationService->create(
                     $posterUserId,
                     NotificationType::MATCH_FOUND,
-                    'New Match Found',
-                    'Your jobwork requirement has new matching converters.',
+                    $posterCopy['title'],
+                    $posterCopy['body'],
                     NavigationType::SESSION,
                     (string) $session->id,
                     [

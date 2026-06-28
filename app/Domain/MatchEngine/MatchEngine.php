@@ -48,12 +48,24 @@ class MatchEngine
      */
     public function evaluateForUser(Inquiry $inquiry, User $user): ?array
     {
-        $candidates = $this->candidateResolver->resolve($inquiry);
-
-        if (!$candidates->contains('id', $user->id)) {
+        // Per-user eligibility check (scoped query) instead of resolving the entire
+        // candidate universe just to test membership.
+        if (!$this->candidateResolver->isEligible($inquiry, $user)) {
             return null;
         }
 
+        return $this->scoreFor($inquiry, $user);
+    }
+
+    /**
+     * Score a user already known to be an eligible candidate for the inquiry.
+     * Skips candidate resolution — callers that already resolved the candidate set
+     * (e.g. post-time scoring) use this directly to avoid O(n^2) re-resolution.
+     *
+     * @return array|null  null only when the spec hard-fails.
+     */
+    public function scoreFor(Inquiry $inquiry, User $user): ?array
+    {
         $buyerSpec  = $this->extractBuyerSpec($inquiry);
         $sellerSpec = $this->extractSellerSpec($user);
 

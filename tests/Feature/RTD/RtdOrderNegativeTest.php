@@ -46,26 +46,23 @@ class RtdOrderNegativeTest extends TestCase
         $this->assertEquals(RTDOrderStatus::REQUESTED, $order->status);
     }
 
-    /** TC-D2: Mark in production before payment → invalid transition */
-    public function test_mark_in_production_before_payment_fails(): void
+    /** In-production route removed in platform-fee-only model */
+    public function test_in_production_route_removed(): void
     {
         $converter = $this->createConverterUser();
         $brand    = $this->createBrandUser();
         $product  = $this->createProductAsConverter($converter);
         $order    = $this->requestOrderAsBrand($brand, $product->id);
         $this->acceptOrderAsConverter($converter, $order->id);
-        // Not confirming payment
 
         $response = $this->withHeaders($this->authHeaders($converter))
             ->postJson("/api/v1/rtd/orders/{$order->id}/in-production");
 
-        $this->assertContains($response->status(), [400, 422]);
-        $order->refresh();
-        $this->assertEquals(RTDOrderStatus::ACCEPTED, $order->status);
+        $response->assertStatus(404);
     }
 
-    /** TC-D4: Dispatch before production → invalid transition */
-    public function test_dispatch_before_production_fails(): void
+    /** Dispatch route removed in platform-fee-only model */
+    public function test_dispatch_route_removed(): void
     {
         $converter = $this->createConverterUser();
         $brand    = $this->createBrandUser();
@@ -73,7 +70,6 @@ class RtdOrderNegativeTest extends TestCase
         $order    = $this->requestOrderAsBrand($brand, $product->id);
         $this->acceptOrderAsConverter($converter, $order->id);
         $this->confirmPaymentAsBrand($brand, $order->id);
-        // Not marking in production
 
         $response = $this->withHeaders($this->authHeaders($converter))
             ->postJson("/api/v1/rtd/orders/{$order->id}/dispatch", [
@@ -81,13 +77,11 @@ class RtdOrderNegativeTest extends TestCase
                 'tracking_number' => 'TRK',
             ]);
 
-        $this->assertContains($response->status(), [400, 422]);
-        $order->refresh();
-        $this->assertEquals(RTDOrderStatus::PAID, $order->status);
+        $response->assertStatus(404);
     }
 
-    /** Cancel after payment → invalid (only ACCEPTED can be cancelled) */
-    public function test_cancel_after_payment_fails(): void
+    /** Cancel after platform fee paid → invalid (only ACCEPTED can be cancelled) */
+    public function test_cancel_after_connected_fails(): void
     {
         $converter = $this->createConverterUser();
         $brand    = $this->createBrandUser();
@@ -101,7 +95,7 @@ class RtdOrderNegativeTest extends TestCase
 
         $this->assertContains($response->status(), [400, 422]);
         $order->refresh();
-        $this->assertEquals(RTDOrderStatus::PAID, $order->status);
+        $this->assertEquals(RTDOrderStatus::CONNECTED, $order->status);
     }
 
     /** TC-O2: Quantity < MOQ */

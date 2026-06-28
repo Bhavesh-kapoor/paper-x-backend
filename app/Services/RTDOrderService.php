@@ -2,20 +2,14 @@
 
 namespace App\Services;
 
-use App\Enums\RTDLeadTime;
 use App\Enums\RTDOrderStatus;
-use App\Enums\RTDPayoutStatus;
 use App\Events\RTD\OrderAccepted;
-use App\Events\RTD\OrderCompleted;
-use App\Events\RTD\OrderDispatched;
-use App\Events\RTD\OrderPaid;
+use App\Events\RTD\OrderConnected;
 use App\Exceptions\RTDDomainException;
 use App\Jobs\HandleOrderAcceptanceTimeout;
 use App\Models\RtdOrder;
-use App\Models\RtdPayout;
 use App\Models\RtdProduct;
 use App\StateMachines\RTDOrderStateMachine;
-use App\Support\RtdPublicUpload;
 use Illuminate\Support\Facades\DB;
 
 class RTDOrderService
@@ -80,17 +74,10 @@ class RTDOrderService
                 'confirmation_deadline'=> $deadline,
             ]);
 
-            RtdPayout::create([
-                'order_id'      => $order->id,
-                'converter_id'  => $product->converter_id,
-                'amount'        => $breakdown['subtotal'],
-                'payout_status' => RTDPayoutStatus::HELD,
-            ]);
-
             HandleOrderAcceptanceTimeout::dispatch($order->id)
                 ->delay($deadline);
 
-            return $order->fresh(['product', 'payout', 'converter']);
+            return $order->fresh(['product', 'converter']);
         });
     }
 
@@ -157,6 +144,7 @@ class RTDOrderService
         return DB::transaction(function () use ($orderId, $brandUserId) {
             /** @var RtdOrder $order */
             $order = RtdOrder::where('id', $orderId)
+                ->with('product')
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -164,135 +152,22 @@ class RTDOrderService
                 throw new RTDDomainException('You do not own this order');
             }
 
-            if ($order->status === RTDOrderStatus::PAID) {
+            if ($order->status === RTDOrderStatus::CONNECTED) {
                 return $order;
             }
 
-            $this->stateMachine->transition($order, RTDOrderStatus::PAID);
+            $this->stateMachine->transition($order, RTDOrderStatus::CONNECTED);
 
             $order->update([
                 'paid_at'        => now(),
                 'payment_status' => 'paid',
-                'dispatch_deadline' => now()->addHours(
-                    $this->resolveDispatchHours($order->product->lead_time)
-                ),
             ]);
-
-            OrderPaid::dispatch($order);
-
-            return $order->fresh();
-        });
-    }
-
-    // ── Production ──
-
-    public function markInProduction(int $orderId, int $converterUserId): RtdOrder
-    {
-        return DB::transaction(function () use ($orderId, $converterUserId) {
-            $order = RtdOrder::where('id', $orderId)
-                ->where('converter_id', $converterUserId)
-                ->firstOrFail();
-
-            $this->stateMachine->transition($order, RTDOrderStatus::IN_PRODUCTION);
-
-            return $order->fresh();
-        });
-    }
-
-    // ── Dispatch + Auto-Complete ──
-
-    public function markDispatched(int $orderId, array $proofData, int $converterUserId): RtdOrder
-    {
-        $normalizedFile = RtdPublicUpload::normalizeDispatchFilePathForDb($proofData['file_path'] ?? '');
-        if ($normalizedFile === null) {
-            throw new RTDDomainException('Invalid dispatch proof file path.', 422);
-        }
-        $proofData['file_path'] = $normalizedFile;
-
-        return DB::transaction(function () use ($orderId, $proofData, $converterUserId) {
-            $order = RtdOrder::where('id', $orderId)
-                ->where('converter_id', $converterUserId)
-                ->with(['product', 'payout'])
-                ->firstOrFail();
-
-            if (isset($proofData['tracking_number'], $proofData['dispatch_date'])) {
-                $tracking = trim((string) $proofData['tracking_number']);
-                $dispatchDate = \Carbon\Carbon::parse($proofData['dispatch_date'])->startOfDay();
-
-                $alreadyUsed = \App\Models\RtdDispatchProof::where('tracking_number', $tracking)
-                    ->where('order_id', '!=', $orderId)
-                    ->exists();
-                if ($alreadyUsed) {
-                    throw new RTDDomainException('This tracking/LR number has already been used for another dispatch. Please use a unique number.', 422);
-                }
-
-                if ($order->dispatch_deadline && $dispatchDate->isAfter($order->dispatch_deadline)) {
-                    throw new RTDDomainException('Dispatch date must be on or before the dispatch deadline.', 422);
-                }
-            }
-
-            $this->stateMachine->transition($order, RTDOrderStatus::DISPATCHED);
-
-            $createPayload = [
-                'proof_type' => $proofData['proof_type'],
-                'file_path'  => $proofData['file_path'],
-            ];
-            if (isset($proofData['courier_name'])) {
-                $createPayload['courier_name'] = $proofData['courier_name'];
-            }
-            if (isset($proofData['tracking_number'])) {
-                $createPayload['tracking_number'] = trim((string) $proofData['tracking_number']);
-            }
-            if (isset($proofData['dispatch_date'])) {
-                $createPayload['dispatch_date'] = $proofData['dispatch_date'];
-            }
-
-            $order->dispatchProofs()->create($createPayload);
-
-            $order->update([
-                'dispatched_at' => now(),
-            ]);
-
-            OrderDispatched::dispatch($order);
-
-            $this->stateMachine->transition($order, RTDOrderStatus::COMPLETED);
-
-            $order->update(['completed_at' => now()]);
-
-            if ($order->payout) {
-                $order->payout->update([
-                    'payout_status' => RTDPayoutStatus::RELEASED,
-                    'released_at'   => now(),
-                ]);
-            }
 
             $this->productService->rewardCompletion($order->product);
 
-            OrderCompleted::dispatch($order);
+            OrderConnected::dispatch($order);
 
-            return $order->fresh(['dispatchProofs', 'brand', 'converter']);
-        });
-    }
-
-    // ── Dispute ──
-
-    public function raiseDispute(int $orderId, int $brandUserId): RtdOrder
-    {
-        return DB::transaction(function () use ($orderId, $brandUserId) {
-            $order = RtdOrder::where('id', $orderId)
-                ->where('brand_id', $brandUserId)
-                ->with('payout')
-                ->firstOrFail();
-
-            $this->stateMachine->transition($order, RTDOrderStatus::DISPUTED);
-
-            if ($order->payout) {
-                $order->payout->update([
-                    'payout_status' => RTDPayoutStatus::HOLD_DISPUTE,
-                ]);
-            }
-
-            return $order->fresh();
+            return $order->fresh(['brand', 'converter']);
         });
     }
 
@@ -356,7 +231,7 @@ class RTDOrderService
                 $q->where('brand_id', $userId)
                   ->orWhere('converter_id', $userId);
             })
-            ->with(['product.priceSlabs', 'brand', 'converter', 'dispatchProofs', 'payout'])
+            ->with(['product.priceSlabs', 'brand', 'converter'])
             ->firstOrFail();
     }
 
@@ -413,15 +288,5 @@ class RTDOrderService
         }
 
         return $slab;
-    }
-
-    private function resolveDispatchHours(RTDLeadTime $leadTime): int
-    {
-        return match ($leadTime) {
-            RTDLeadTime::SAME_DAY => 12,
-            RTDLeadTime::H24      => 24,
-            RTDLeadTime::H48      => 48,
-            RTDLeadTime::DAYS_3_5 => 120,
-        };
     }
 }

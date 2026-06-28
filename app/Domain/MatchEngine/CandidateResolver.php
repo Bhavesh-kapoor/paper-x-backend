@@ -19,18 +19,57 @@ class CandidateResolver
      */
     public function resolve(Inquiry $inquiry): Collection
     {
-        if ($this->isExpired($inquiry)) {
+        $query = $this->buildCandidateQuery($inquiry);
+        if ($query === null) {
             return collect();
         }
 
+        $candidates = $query->get();
+
+        return $this->applyRadius($inquiry, $candidates)->values();
+    }
+
+    /**
+     * True if the single given user passes the same hard filters resolve() applies,
+     * WITHOUT loading the entire candidate set. Used for per-user evaluation so we
+     * don't resolve the whole universe just to test one user.
+     */
+    public function isEligible(Inquiry $inquiry, User $user): bool
+    {
+        $query = $this->buildCandidateQuery($inquiry);
+        if ($query === null) {
+            return false;
+        }
+
+        // Same SQL hard filters, scoped to this one user.
+        if (! (clone $query)->where('users.id', $user->id)->exists()) {
+            return false;
+        }
+
+        // Same radius rule as resolve(), scoped to this one user.
+        return $this->applyRadius($inquiry, collect([$user]))->isNotEmpty();
+    }
+
+    /**
+     * Build the candidate User query with all hard filters applied (visibility,
+     * poster-exclusion, material/brand/jobwork). Returns null when the inquiry is
+     * expired/locked or has no eligible roles. Radius is applied separately via
+     * applyRadius() so the query can be reused for single-user eligibility checks.
+     */
+    private function buildCandidateQuery(Inquiry $inquiry): ?Builder
+    {
+        if ($this->isExpired($inquiry)) {
+            return null;
+        }
+
         if ($this->isLocked($inquiry)) {
-            return collect();
+            return null;
         }
 
         $eligibleRoles = $this->rolesForVisibility($inquiry->visibility);
 
         if (empty($eligibleRoles)) {
-            return collect();
+            return null;
         }
 
         // Exclude the poster: poster_id is the role entity id (e.g. converter_id), not user_id
@@ -78,34 +117,45 @@ class CandidateResolver
             $this->applyJobworkFilter($query, $inquiry);
         }
 
-        $candidates = $query->get();
+        return $query;
+    }
 
+    /**
+     * Apply the radius (Haversine) filter to a candidate collection — identical
+     * semantics to the original resolve(): skipped for converter→converter jobwork,
+     * when location matching is disabled, or when the inquiry has no coordinates.
+     */
+    private function applyRadius(Inquiry $inquiry, Collection $candidates): Collection
+    {
         // Skip radius filter for converter-to-converter JOB (jobwork) so converters without
         // factory location or in different regions can still see find/give jobwork posts.
         $isJobworkInquiry = $inquiry->inquiry_type === InquiryType::JOB
             && $inquiry->poster_type === 'converter';
 
-        if ($this->shouldApplyRadius() && !$isJobworkInquiry) {
-            $radiusKm = $this->radiusForUrgency($inquiry->urgency);
-            $inquiryLat = $inquiry->latitude;
-            $inquiryLng = $inquiry->longitude;
-
-            if ($inquiryLat && $inquiryLng) {
-                $candidates = $candidates->filter(function (User $user) use ($inquiryLat, $inquiryLng, $radiusKm) {
-                    $location = $this->getOperationalLocation($user);
-                    if (!$location) {
-                        return false;
-                    }
-                    [$lat, $lng] = $location;
-                    if (!$lat || !$lng) {
-                        return false;
-                    }
-                    return $this->haversineKm($inquiryLat, $inquiryLng, $lat, $lng) <= $radiusKm;
-                });
-            }
+        if (!$this->shouldApplyRadius() || $isJobworkInquiry) {
+            return $candidates;
         }
 
-        return $candidates->values();
+        $inquiryLat = $inquiry->latitude;
+        $inquiryLng = $inquiry->longitude;
+
+        if (!$inquiryLat || !$inquiryLng) {
+            return $candidates;
+        }
+
+        $radiusKm = $this->radiusForUrgency($inquiry->urgency);
+
+        return $candidates->filter(function (User $user) use ($inquiryLat, $inquiryLng, $radiusKm) {
+            $location = $this->getOperationalLocation($user);
+            if (!$location) {
+                return false;
+            }
+            [$lat, $lng] = $location;
+            if (!$lat || !$lng) {
+                return false;
+            }
+            return $this->haversineKm($inquiryLat, $inquiryLng, $lat, $lng) <= $radiusKm;
+        });
     }
 
     /**

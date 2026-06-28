@@ -142,15 +142,49 @@ class InquiryController extends Controller
     /**
      * Post inquiry (trigger matchmaking)
      */
+    /** Map a persisted Inquiry to a PricingService spec payload. */
+    private function buildPricingSpecs(Inquiry $inquiry): array
+    {
+        $item = $inquiry->items->first();
+        $roleMap = [
+            'dealer' => 'dealer',
+            'converter' => 'converter',
+            'brand' => 'brand',
+            'machine_dealer' => 'machineDealer',
+        ];
+        $inquiryType = $inquiry->inquiry_type instanceof \BackedEnum
+            ? $inquiry->inquiry_type->value
+            : (string) $inquiry->inquiry_type;
+        $urgency = $inquiry->urgency instanceof \BackedEnum
+            ? $inquiry->urgency->value
+            : (string) $inquiry->urgency;
+
+        return [
+            'role' => $roleMap[$inquiry->poster_type] ?? (string) $inquiry->poster_type,
+            'inquiry_type' => $inquiryType ?: 'material',
+            'material_id' => $item->material_id ?? null,
+            'thickness' => $inquiry->thickness ?? $item->thickness_gsm ?? $item->thickness_mm ?? null,
+            'thickness_unit' => $inquiry->thickness_unit ?? $item->thickness_unit ?? null,
+            'size' => $inquiry->size ?? null,
+            'size_unit' => $inquiry->size_unit ?? 'inches',
+            'quantity' => $inquiry->quantity ?? $item->quantity ?? null,
+            'quantity_unit' => $inquiry->quantity_unit ?? $item->quantity_unit ?? null,
+            'urgency' => $urgency ?: 'normal',
+            'machine_price_range' => data_get($inquiry->specs, 'machine_price_range'),
+        ];
+    }
+
     public function post(Request $request, Inquiry $inquiry)
     {
         try {
             Gate::authorize('post', $inquiry);
-            
+
             $user = $request->user();
-            
-            // Check wallet balance (posting fee)
-            $postingFee = $inquiry->urgency === 'urgent' ? 70 : 50; // Credits
+
+            // Server-authoritative posting fee from the pricing model.
+            $inquiry->loadMissing('items');
+            $postingFee = (int) app(\App\Services\PricingService::class)
+                ->quote($this->buildPricingSpecs($inquiry))['total'];
             $wallet = $user->wallet;
             
             if (!$wallet) {
@@ -214,11 +248,12 @@ class InquiryController extends Controller
             if ($matchedRecipientsCount > 0) {
                 $posterUserId = (int) ($user->id ?? 0);
                 if ($posterUserId > 0) {
+                    $posterCopy = \App\Support\Notifications\InquiryNotificationCopy::forPoster($inquiry);
                     $this->notificationService->create(
                         $posterUserId,
                         NotificationType::MATCH_FOUND,
-                        'New Match Found',
-                        'Your requirement has new matching responders.',
+                        $posterCopy['title'],
+                        $posterCopy['body'],
                         NavigationType::SESSION,
                         (string) $session->id,
                         [
@@ -698,21 +733,23 @@ class InquiryController extends Controller
             $inquiry = Inquiry::findOrFail($request->inquiry_id);
             
             Gate::authorize('post', $inquiry);
-            
-            // Calculate fees
-            $standardFee = 50; // Credits
-            $urgencyAddon = $inquiry->urgency === 'urgent' ? 20 : 0;
-            $totalFee = $standardFee + $urgencyAddon;
-            
+
+            // Server-authoritative fee from the pricing model.
+            $inquiry->loadMissing('items');
+            $quote = app(\App\Services\PricingService::class)->quote($this->buildPricingSpecs($inquiry));
+            $totalFee = (int) $quote['total'];
+
             // Get wallet balance
             $wallet = $user->wallet;
             $availableBalance = $wallet ? $wallet->balance : 0;
             $sufficientCredits = $availableBalance >= $totalFee;
-            
+
             return Response::success('Posting fee calculated', [
-                'standard_fee' => $standardFee,
-                'urgency_addon' => $urgencyAddon,
+                'base_fee' => $quote['base_fee'],
+                'gst' => $quote['gst'],
+                'gst_percent' => $quote['gst_percent'],
                 'total_fee' => $totalFee,
+                'breakdown' => $quote['breakdown'],
                 'wallet_balance' => $availableBalance,
                 'sufficient_credits' => $sufficientCredits,
                 'inquiry' => [

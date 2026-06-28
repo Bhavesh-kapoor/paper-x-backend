@@ -12,12 +12,8 @@ class RTDOrderStateMachine
      * Allowed transitions: from => [to, ...]
      */
     private const TRANSITIONS = [
-        'REQUESTED'     => ['ACCEPTED', 'DECLINED', 'EXPIRED'],
-        'ACCEPTED'      => ['PAID', 'CANCELLED'],
-        'PAID'          => ['IN_PRODUCTION'],
-        'IN_PRODUCTION' => ['DISPATCHED'],
-        'DISPATCHED'    => ['COMPLETED'],
-        'COMPLETED'     => ['DISPUTED'],
+        'REQUESTED' => ['ACCEPTED', 'DECLINED', 'EXPIRED'],
+        'ACCEPTED'  => ['CONNECTED', 'CANCELLED'],
     ];
 
     public function canTransition(RTDOrderStatus $from, RTDOrderStatus $to): bool

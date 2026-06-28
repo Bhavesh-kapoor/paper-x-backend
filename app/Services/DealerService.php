@@ -15,11 +15,15 @@ use App\Models\InquiryItem;
 use App\Models\MatchingSession;
 use App\Models\User;
 use App\Domain\MatchEngine\MatchEngineOrchestrator;
+use App\Jobs\EnsureUserMatchesJob;
 use App\Services\MatchmakingService;
+use App\Services\Concerns\ChargesPostingFee;
 use Illuminate\Support\Facades\DB;
 
 class DealerService
 {
+    use ChargesPostingFee;
+
     public function __construct(
         protected MatchEngineOrchestrator $matchEngineOrchestrator,
         protected MatchmakingService $matchmakingService
@@ -28,7 +32,7 @@ class DealerService
 
     public function completeProfile(array $data, int $userId): Dealer
     {
-        return DB::transaction(function () use ($data, $userId) {
+        $dealer = DB::transaction(function () use ($data, $userId) {
             $dealer = Dealer::firstOrCreate(
                 ['user_id' => $userId],
                 ['status' => DealerStatus::PENDING]
@@ -111,12 +115,14 @@ class DealerService
                 }
             }
 
-            // Trigger lazy matching immediately after profile activation so
-            // newly onboarded users receive notifications for existing inquiries.
-            $this->matchEngineOrchestrator->ensureMatchesForUser(User::findOrFail($userId));
-
             return $dealer->load(['materials', 'machines', 'locations']);
         });
+
+        // Retroactive matching runs off the request path (after commit + after the
+        // HTTP response is flushed) so registration returns immediately.
+        EnsureUserMatchesJob::dispatchAfterResponse($userId);
+
+        return $dealer;
     }
 
     public function getDashboard(int $userId): array
@@ -239,8 +245,8 @@ class DealerService
                 'attachment_paths' => $data['attachment_paths'] ?? null,
                 'deadline' => isset($data['deadline']) ? $data['deadline'] : null,
                 'status' => InquiryStatus::MATCHING,
-                'posting_fee_paid' => $data['posting_fee_paid'] ?? false,
-                'posting_fee_amount' => $data['posting_fee_amount'] ?? null,
+                'posting_fee_paid' => false,
+                'posting_fee_amount' => null,
                 'visibility' => $visibility,
             ]);
 
@@ -285,6 +291,25 @@ class DealerService
                 'quantity' => $data['quantity'],
                 'quantity_unit' => $data['quantity_unit'],
                 'additional_specs' => null,
+            ]);
+
+            // Server-authoritative posting fee (config/pricing.php). Deducts once; rolls back the
+            // whole post on insufficient balance.
+            $quote = $this->chargePostingFee($userId, [
+                'role' => 'dealer',
+                'inquiry_type' => $data['inquiry_type'] ?? 'material',
+                'material_id' => $data['material_id'] ?? null,
+                'thickness' => $data['thickness'] ?? null,
+                'thickness_unit' => $data['thickness_unit'] ?? null,
+                'size' => $data['size'] ?? null,
+                'size_unit' => $data['size_unit'] ?? null,
+                'quantity' => $data['quantity'] ?? null,
+                'quantity_unit' => $data['quantity_unit'] ?? null,
+                'urgency' => $data['urgency'] ?? 'normal',
+            ], $inquiry->id, ['source' => 'dealer_requirement_post']);
+            $inquiry->update([
+                'posting_fee_paid' => true,
+                'posting_fee_amount' => $quote['total'],
             ]);
 
             // Create matching session (required for sessions to appear)

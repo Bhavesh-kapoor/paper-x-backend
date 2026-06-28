@@ -81,6 +81,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/dealer/mill/add', [\App\Http\Controllers\api\ReferenceDataController::class, 'addMillBrand'])->name('dealer.mill.add');
         Route::post('/dealer/finish/add', [\App\Http\Controllers\api\ReferenceDataController::class, 'addFinish'])->name('dealer.finish.add');
         Route::post('/materials', [MaterialController::class, 'store'])->name('materials.store');
+        Route::post('/brands', [\App\Http\Controllers\api\ReferenceDataController::class, 'storeBrand'])->name('brands.store');
+        Route::post('/pricing/quote', [\App\Http\Controllers\api\PricingController::class, 'quote'])->name('pricing.quote');
 
         Route::post('/machines', [\App\Http\Controllers\api\ReferenceDataController::class, 'storeMachine'])->name('machines.store');
         Route::post('/finished-products', [\App\Http\Controllers\api\ReferenceDataController::class, 'storeFinishedProduct'])->name('finished-products.store');
@@ -153,6 +155,7 @@ Route::prefix('v1')->group(function () {
 
     #structured chat routes (thread-native; additive to legacy session chat)
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('chat-threads')->group(function () {
+        Route::get('/', [ChatThreadController::class, 'listAll'])->name('chat-threads.all');
         Route::get('/{thread_id}/messages', [ChatThreadController::class, 'getMessages'])->name('chat-threads.messages');
         Route::post('/{thread_id}/messages', [ChatThreadController::class, 'sendMessage'])->name('chat-threads.send');
     });
@@ -274,8 +277,6 @@ Route::prefix('v1')->group(function () {
         Route::post('/purchase', [RtdListingPackController::class, 'purchase'])->name('rtd.listing-packs.purchase');
     });
     Route::middleware(['token.exists', 'auth:sanctum'])->get('rtd/entitlement', [RtdListingPackController::class, 'entitlement'])->name('rtd.entitlement');
-    Route::middleware(['token.exists', 'auth:sanctum'])->get('rtd/dispatch-options', [RTDOrderController::class, 'dispatchOptions'])->name('rtd.dispatch-options');
-
     #rtd product routes (ready-to-dispatch)
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('rtd/products')->group(function () {
         Route::post('/', [RTDProductController::class, 'store'])->name('rtd.products.store');
@@ -295,9 +296,6 @@ Route::prefix('v1')->group(function () {
         Route::post('/{id}/confirm-payment', [RTDOrderController::class, 'confirmPayment'])->name('rtd.orders.confirm-payment');
         Route::post('/{id}/payments/razorpay/order', [RTDOrderController::class, 'createRazorpayOrder'])->name('rtd.orders.payments.razorpay.order');
         Route::post('/{id}/payments/razorpay/verify', [RTDOrderController::class, 'verifyRazorpayPayment'])->name('rtd.orders.payments.razorpay.verify');
-        Route::post('/{id}/in-production', [RTDOrderController::class, 'markInProduction'])->name('rtd.orders.in-production');
-        Route::post('/{id}/dispatch', [RTDOrderController::class, 'dispatch'])->name('rtd.orders.dispatch');
-        Route::post('/{id}/dispute', [RTDOrderController::class, 'raiseDispute'])->name('rtd.orders.dispute');
         Route::post('/{id}/cancel', [RTDOrderController::class, 'cancel'])->name('rtd.orders.cancel');
         Route::get('/my', [RTDOrderController::class, 'myOrders'])->name('rtd.orders.my');
         Route::get('/{id}', [RTDOrderController::class, 'show'])->name('rtd.orders.show');

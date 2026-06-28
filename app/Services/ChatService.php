@@ -141,6 +141,51 @@ class ChatService
     }
 
     /**
+     * List ALL structured threads across ALL inquiries for the current user (poster scope).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getAllThreadsForUser(User $user): array
+    {
+        $threads = ChatThread::query()
+            ->where('poster_user_id', $user->id)
+            ->with([
+                'inquiry:id,title',
+                'responder:id,name,company_name,primary_role',
+                'lastStructuredMessage:id,thread_id,body,attachment,created_at',
+            ])
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return $threads->map(function (ChatThread $thread) {
+            $last = $thread->lastStructuredMessage;
+            $preview = '';
+            if ($last) {
+                $preview = $last->body ?: ($last->attachment ? '[Attachment]' : '');
+            }
+
+            return [
+                'id'                   => $thread->id,
+                'thread_id'            => $thread->id,
+                'inquiry_id'           => $thread->inquiry_id,
+                'inquiry_title'        => $thread->inquiry?->title ?? 'Inquiry',
+                'responder_user_id'    => $thread->responder_user_id,
+                'responder_role'       => $thread->responder_role,
+                'responder_user'       => [
+                    'id'           => $thread->responder?->id,
+                    'name'         => $thread->responder?->name,
+                    'company_name' => $thread->responder?->company_name,
+                    'role'         => $thread->responder_role ?: $thread->responder?->primary_role,
+                ],
+                'last_message_preview' => $preview,
+                'last_message_at'      => $thread->last_message_at?->toIso8601String(),
+                'unread_count'         => 0,
+            ];
+        })->values()->all();
+    }
+
+    /**
      * List structured threads for one inquiry (poster scope only).
      *
      * @return array<int, array<string, mixed>>

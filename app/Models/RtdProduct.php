@@ -36,6 +36,7 @@ class RtdProduct extends Model
         'moq',
         'max_capacity',
         'base_price',
+        'gst_rate',
         'buy_now_enabled',
         'decline_count',
         'visibility_score',

@@ -36,6 +36,7 @@ class CreateProductRequest extends ApiRequest
             'moq'               => ['required', 'integer', 'min:1'],
             'max_capacity'      => ['nullable', 'integer', 'min:1', 'gt:moq'],
             'base_price'        => ['required', 'numeric', 'min:0.01'],
+            'gst_rate'          => ['nullable', 'string', Rule::in(['0%', '5%', '12%', '18%', '28%'])],
             'buy_now_enabled'   => ['nullable', 'boolean'],
             'delivery_geography'=> ['nullable', 'string', 'max:255'],
             'location_id'       => ['nullable', 'integer'],

@@ -75,7 +75,7 @@ trait RtdTestHelpers
 
         $response->assertStatus(201);
         $id = $response->json('data.id');
-        return RtdOrder::with(['product', 'payout'])->findOrFail($id);
+        return RtdOrder::with(['product'])->findOrFail($id);
     }
 
     protected function acceptOrderAsConverter(User $converter, int $orderId): void
@@ -90,23 +90,6 @@ trait RtdTestHelpers
         $this->withHeaders($this->authHeaders($brand))
             ->postJson("/api/v1/rtd/orders/{$orderId}/confirm-payment", [
                 'order_id' => $orderId,
-            ])
-            ->assertStatus(200);
-    }
-
-    protected function markInProductionAsConverter(User $converter, int $orderId): void
-    {
-        $this->withHeaders($this->authHeaders($converter))
-            ->postJson("/api/v1/rtd/orders/{$orderId}/in-production")
-            ->assertStatus(200);
-    }
-
-    protected function dispatchOrderAsConverter(User $converter, int $orderId, string $tracking = 'TRK123'): void
-    {
-        $this->withHeaders($this->authHeaders($converter))
-            ->postJson("/api/v1/rtd/orders/{$orderId}/dispatch", [
-                'proof_type'      => 'tracking_number',
-                'tracking_number' => $tracking,
             ])
             ->assertStatus(200);
     }

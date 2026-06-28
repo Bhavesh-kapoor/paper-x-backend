@@ -70,6 +70,11 @@ class CommissionCalculatorTest extends TestCase
         $this->assertEqualsWithDelta(900, $result['commission_amount'], 0.02);
         $this->assertEqualsWithDelta(18.0, $result['gst_percent'], 0.01);
         $this->assertGreaterThan(0, $result['gst_amount']);
-        $this->assertGreaterThan($result['subtotal'], $result['total_amount']);
+        $this->assertEqualsWithDelta(
+            $result['commission_amount'] + $result['gst_amount'],
+            $result['total_amount'],
+            0.02
+        );
+        $this->assertLessThan($result['subtotal'], $result['total_amount']);
     }
 }

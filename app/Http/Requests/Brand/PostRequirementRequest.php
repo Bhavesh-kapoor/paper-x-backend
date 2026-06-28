@@ -45,9 +45,9 @@ class PostRequirementRequest extends ApiRequest
                 'max:100'
             ], // e.g., "100-500", "500-1000", "1000-5000", "5000-10000", "10000-50000", "50000+"
             
-            // Timeline
+            // Timeline (optional — defaults to Normal in service layer)
             'timeline' => [
-                'required',
+                'nullable',
                 'string',
                 Rule::in(['Urgent 1-2 Days', 'Normal 3-5 Days'])
             ],

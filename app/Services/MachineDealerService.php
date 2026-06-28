@@ -12,10 +12,14 @@ use App\Models\Inquiry;
 use App\Models\MatchingSession;
 use App\Models\User;
 use App\Domain\MatchEngine\MatchEngineOrchestrator;
+use App\Jobs\EnsureUserMatchesJob;
+use App\Services\Concerns\ChargesPostingFee;
 use Illuminate\Support\Facades\DB;
 
 class MachineDealerService
 {
+    use ChargesPostingFee;
+
     public function __construct(
         protected MatchEngineOrchestrator $matchEngineOrchestrator,
         protected MatchmakingService $matchmakingService,
@@ -24,7 +28,7 @@ class MachineDealerService
 
     public function completeProfile(array $data, int $userId): MachineDealer
     {
-        return DB::transaction(function () use ($data, $userId) {
+        $machineDealer = DB::transaction(function () use ($data, $userId) {
             $createAttributes = [
                 'company_name' => $data['company_name'],
                 'contact_person_name' => $data['contact_person_name'],
@@ -51,12 +55,14 @@ class MachineDealerService
                 $machineDealer->update($createAttributes);
             }
 
-            // Trigger lazy matching immediately after profile activation so
-            // newly onboarded users receive notifications for existing inquiries.
-            $this->matchEngineOrchestrator->ensureMatchesForUser(User::findOrFail($userId));
-
             return $machineDealer;
         });
+
+        // Retroactive matching runs off the request path (after commit + after the
+        // HTTP response is flushed) so registration returns immediately.
+        EnsureUserMatchesJob::dispatchAfterResponse($userId);
+
+        return $machineDealer;
     }
 
     public function getDashboard(int $userId): array
@@ -100,6 +106,15 @@ class MachineDealerService
             $machineDealer = MachineDealer::where('user_id', $userId)->firstOrFail();
             $visibility = $data['visibility'] ?? 'converters';
 
+            // Server-authoritative machine posting fee (price-range bracket, +GST). Deducts once.
+            $quote = $this->chargePostingFee($userId, [
+                'role' => 'machineDealer',
+                'inquiry_type' => 'machine',
+                'machine_price_range' => $data['machine_price_range'] ?? null,
+                'urgency' => $data['urgency'] ?? 'normal',
+            ], null, ['source' => 'machine_dealer_machine_post']);
+            $postingFeeTotal = $quote['total'];
+
             // Create machine listing
             $listing = MachineListing::create([
                 'machine_dealer_id' => $machineDealer->id,
@@ -117,8 +132,8 @@ class MachineDealerService
                 'latitude' => $data['latitude'] ?? null,
                 'longitude' => $data['longitude'] ?? null,
                 'status' => 'ACTIVE',
-                'posting_fee_paid' => $data['posting_fee_paid'] ?? false,
-                'posting_fee_amount' => $data['posting_fee_amount'] ?? null,
+                'posting_fee_paid' => true,
+                'posting_fee_amount' => $postingFeeTotal,
             ]);
 
             // Create inquiry for the listing (quantity/quantity_unit required by inquiries table; use 1 unit for machine)
@@ -138,8 +153,8 @@ class MachineDealerService
                 'latitude' => $data['latitude'] ?? null,
                 'longitude' => $data['longitude'] ?? null,
                 'status' => InquiryStatus::MATCHING,
-                'posting_fee_paid' => $data['posting_fee_paid'] ?? false,
-                'posting_fee_amount' => $data['posting_fee_amount'] ?? null,
+                'posting_fee_paid' => true,
+                'posting_fee_amount' => $postingFeeTotal,
                 'visibility' => $visibility,
             ]);
 

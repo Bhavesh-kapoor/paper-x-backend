@@ -25,6 +25,7 @@ class PostMachineRequest extends FormRequest
             'attachments' => ['nullable', 'array'],
             'attachments.*' => ['string'],
             'price' => ['nullable', 'numeric', 'min:0'],
+            'machine_price_range' => ['nullable', 'string', 'max:20'],
             'currency' => ['nullable', 'string', 'max:3'],
             'location' => ['nullable', 'string', 'max:255'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],

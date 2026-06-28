@@ -17,10 +17,13 @@ use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Domain\MatchEngine\MatchEngineOrchestrator;
 use App\Services\NotificationService;
+use App\Services\Concerns\ChargesPostingFee;
 use Illuminate\Support\Facades\DB;
 
 class BrandService
 {
+    use ChargesPostingFee;
+
     public function __construct(
         protected MatchEngineOrchestrator $matchEngineOrchestrator,
         protected NotificationService $notificationService
@@ -192,45 +195,15 @@ class BrandService
                 throw new \Exception('Brand profile must be complete and active to post requirements', 400);
             }
 
-            // Calculate posting fee (example: 50 credits per requirement)
-            $postingFeeAmount = 50; // Can be made configurable
-
-            // Check wallet balance and deduct credits
-            $wallet = Wallet::firstOrCreate(
-                ['user_id' => $userId],
-                ['balance' => 0, 'status' => 'ACTIVE']
-            );
-
-            if ($wallet->balance < $postingFeeAmount) {
-                throw new \Exception('Insufficient wallet balance. Please purchase credits first.', 400);
-            }
-
-            // Deduct credits
-            $wallet->decrement('balance', $postingFeeAmount);
-
-            // Create wallet transaction with required fields
-            $transactionId = 'TXN-' . now()->format('YmdHis') . '-' . $wallet->id;
-
-            WalletTransaction::create([
-                'wallet_id' => $wallet->id,
-                'transaction_id' => $transactionId,
-                'type' => 'DEDUCTED',
-                'amount' => $postingFeeAmount,
-                'balance_after' => $wallet->fresh()->balance,
-                'description' => 'Post requirement fee',
-                'transaction_type' => 'REQUIREMENT_POSTED',
-                'reference_id' => null,
-                'reference_type' => 'inquiry',
-                'metadata' => [
-                    'source' => 'brand_requirement_post',
-                ],
-            ]);
-
             // Determine urgency based on timeline
-            $urgency = 'normal';
-            if ($data['timeline'] === 'Emergency (Urgent)') {
-                $urgency = 'urgent';
-            }
+            $urgency = ($data['timeline'] ?? '') === 'Emergency (Urgent)' ? 'urgent' : 'normal';
+
+            // Server-authoritative brand posting fee (flat, +GST). Deducts once.
+            $quote = $this->chargePostingFee($userId, [
+                'role' => 'brand',
+                'urgency' => $urgency,
+            ], null, ['source' => 'brand_requirement_post']);
+            $postingFeeAmount = $quote['total'];
 
             // Parse quantity range to get min and max
             $quantityRange = $data['quantity_range'];
@@ -262,7 +235,7 @@ class BrandService
                 'quantity' => $maxQuantity, // Use max quantity for matching
                 'quantity_unit' => 'pieces',
                 'quantity_range' => $data['quantity_range'],
-                'timeline' => $data['timeline'],
+                'timeline' => $data['timeline'] ?? 'Normal 3-5 Days',
                 'special_needs' => $data['special_needs'] ?? null,
                 'design_attachments' => $data['design_attachments'] ?? null,
                 'location' => $data['location'] ?? $brand->location ?? $brand->city,
@@ -290,12 +263,13 @@ class BrandService
             $matchedConverters = $result['converter_ids']
                 ? Converter::whereIn('id', $result['converter_ids'])->get()
                 : collect();
+            $responderCopy = \App\Support\Notifications\InquiryNotificationCopy::forResponder($inquiry);
             foreach ($matchedConverters as $converter) {
                 $this->notificationService->create(
                     $converter->user_id,
                     NotificationType::MATCH_FOUND,
-                    'New Brand Requirement',
-                    'A brand has posted a new requirement matching your profile.',
+                    $responderCopy['title'],
+                    $responderCopy['body'],
                     NavigationType::SESSION,
                     (string) $session->id,
                     [
@@ -312,11 +286,12 @@ class BrandService
             $matchedCount = $matchedConverters->count();
             $brandUserId = (int) ($brand->user_id ?? 0);
             if ($matchedCount > 0 && $brandUserId > 0) {
+                $posterCopy = \App\Support\Notifications\InquiryNotificationCopy::forPoster($inquiry);
                 $this->notificationService->create(
                     $brandUserId,
                     NotificationType::MATCH_FOUND,
-                    'New Match Found',
-                    'Your requirement has new matching converters.',
+                    $posterCopy['title'],
+                    $posterCopy['body'],
                     NavigationType::SESSION,
                     (string) $session->id,
                     [

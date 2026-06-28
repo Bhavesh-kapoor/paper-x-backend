@@ -79,7 +79,7 @@ class RtdOrderFinancialTest extends TestCase
             $this->assertEqualsWithDelta($expectedCommission, (float) $order['commission_amount'], 0.02);
             $this->assertGreaterThan(0, (float) $order['gst_amount']);
             $this->assertEqualsWithDelta(
-                (float) $order['subtotal'] + (float) $order['commission_amount'] + (float) $order['gst_amount'],
+                (float) $order['commission_amount'] + (float) $order['gst_amount'],
                 (float) $order['total_amount'],
                 0.02
             );

@@ -6,6 +6,7 @@ enum RTDOrderStatus: string
 {
     case REQUESTED = 'REQUESTED';
     case ACCEPTED = 'ACCEPTED';
+    case CONNECTED = 'CONNECTED';
     case PAID = 'PAID';
     case IN_PRODUCTION = 'IN_PRODUCTION';
     case DISPATCHED = 'DISPATCHED';
@@ -20,6 +21,7 @@ enum RTDOrderStatus: string
         return match ($this) {
             self::REQUESTED     => 'Requested',
             self::ACCEPTED      => 'Accepted – Awaiting Payment',
+            self::CONNECTED     => 'Connected',
             self::PAID          => 'Paid',
             self::IN_PRODUCTION => 'In Production',
             self::DISPATCHED    => 'Dispatched',
@@ -34,6 +36,7 @@ enum RTDOrderStatus: string
     public function isTerminal(): bool
     {
         return in_array($this, [
+            self::CONNECTED,
             self::COMPLETED,
             self::DECLINED,
             self::EXPIRED,
@@ -52,10 +55,6 @@ enum RTDOrderStatus: string
         return [
             self::REQUESTED,
             self::ACCEPTED,
-            self::PAID,
-            self::IN_PRODUCTION,
-            self::DISPATCHED,
-            self::DISPUTED,
         ];
     }
 }

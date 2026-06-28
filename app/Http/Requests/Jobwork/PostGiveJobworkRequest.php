@@ -80,6 +80,40 @@ class PostGiveJobworkRequest extends ApiRequest
                 'string',
                 'max:2000',
             ],
+            'specifications' => [
+                'nullable',
+                'array',
+            ],
+            'specifications.*.material' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'specifications.*.size' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+            'specifications.*.size_unit' => [
+                'nullable',
+                'string',
+                'max:20',
+            ],
+            'specifications.*.thickness' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+            'specifications.*.thickness_unit' => [
+                'nullable',
+                'string',
+                'max:20',
+            ],
+            'specifications.*.finish' => [
+                'nullable',
+                'string',
+                'max:500',
+            ],
         ];
     }
 }

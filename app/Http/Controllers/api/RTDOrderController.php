@@ -5,12 +5,11 @@ namespace App\Http\Controllers\api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RTD\ConfirmPaymentRequest;
 use App\Http\Requests\RTD\CreateOrderRequest;
-use App\Http\Requests\RTD\DispatchOrderRequest;
 use App\Http\Requests\RTD\VerifyRtdRazorpayPaymentRequest;
 use App\Http\Resources\RTD\RtdOrderResource;
 use App\Exceptions\RazorpayDomainException;
 use App\Exceptions\RTDDomainException;
-use App\Services\RTDOrderRazorpayPaymentService;
+use App\Services\RtdOrderRazorpayPaymentService;
 use App\Services\RTDOrderService;
 use App\Support\RtdPublicUpload;
 use Illuminate\Http\Request;
@@ -142,47 +141,6 @@ class RTDOrderController extends Controller
         }
     }
 
-    public function markInProduction(int $id)
-    {
-        try {
-            $order = $this->orderService->markInProduction($id, request()->user()->id);
-
-            return Response::success('Marked as in production', new RtdOrderResource($order));
-        } catch (RTDDomainException $e) {
-            return Response::error($e->getMessage(), null, $e->getStatusCode());
-        } catch (\Exception $e) {
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_BAD_REQUEST);
-        }
-    }
-
-    public function dispatch(DispatchOrderRequest $request, int $id)
-    {
-        try {
-            $proofData = $request->validated();
-
-            $order = $this->orderService->markDispatched($id, $proofData, $request->user()->id);
-
-            return Response::success('Order dispatched', new RtdOrderResource($order));
-        } catch (RTDDomainException $e) {
-            return Response::error($e->getMessage(), null, $e->getStatusCode());
-        } catch (\Exception $e) {
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_BAD_REQUEST);
-        }
-    }
-
-    public function raiseDispute(int $id)
-    {
-        try {
-            $order = $this->orderService->raiseDispute($id, request()->user()->id);
-
-            return Response::success('Dispute raised', new RtdOrderResource($order));
-        } catch (RTDDomainException $e) {
-            return Response::error($e->getMessage(), null, $e->getStatusCode());
-        } catch (\Exception $e) {
-            return Response::error($e->getMessage(), null, HttpResponse::HTTP_BAD_REQUEST);
-        }
-    }
-
     public function cancel(int $id)
     {
         try {
@@ -223,12 +181,5 @@ class RTDOrderController extends Controller
         } catch (\Exception $e) {
             return Response::error($e->getMessage(), null, HttpResponse::HTTP_NOT_FOUND);
         }
-    }
-
-    public function dispatchOptions()
-    {
-        return Response::success('Dispatch options', [
-            'allowed_couriers' => config('rtd.allowed_couriers', []),
-        ]);
     }
 }

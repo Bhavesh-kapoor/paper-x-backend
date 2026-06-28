@@ -63,7 +63,14 @@ class ResponseService
 
     private function guardSelfResponse(Inquiry $inquiry, User $responder): void
     {
-        if ((int) $inquiry->poster_id === (int) $responder->id) {
+        $isPoster = match ($inquiry->poster_type) {
+            'dealer'         => $responder->dealer        && (int) $inquiry->poster_id === (int) $responder->dealer->id,
+            'converter'      => $responder->converter     && (int) $inquiry->poster_id === (int) $responder->converter->id,
+            'brand'          => $responder->brand         && (int) $inquiry->poster_id === (int) $responder->brand->id,
+            'machine_dealer' => $responder->machineDealer && (int) $inquiry->poster_id === (int) $responder->machineDealer->id,
+            default          => false,
+        };
+        if ($isPoster) {
             throw new \InvalidArgumentException('Cannot respond to your own inquiry.');
         }
     }

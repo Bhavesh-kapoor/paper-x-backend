@@ -108,12 +108,11 @@ class MatchEngineOrchestrator
             ->where(function ($q) use ($user) {
                 $this->excludeOwnInquiries($q, $user);
             })
+            ->with(['items', 'materials', 'session'])
             ->limit($maxEvaluations)
             ->get();
 
         foreach ($inquiries as $inquiry) {
-            $inquiry->load(['items', 'materials', 'session']);
-
             $effectiveVisibility = $inquiry->visibility ?? ($inquiry->poster_type === 'brand' ? 'converters' : 'dealers');
             $originalVisibility = $inquiry->visibility;
             $inquiry->visibility = $effectiveVisibility;
@@ -250,7 +249,9 @@ class MatchEngineOrchestrator
         $scored = collect();
 
         foreach ($candidates as $user) {
-            $result = $this->matchEngine->evaluateForUser($inquiry, $user);
+            // Candidates are already resolved here, so score directly and skip the
+            // per-user candidate re-resolution that evaluateForUser would do.
+            $result = $this->matchEngine->scoreFor($inquiry, $user);
             if ($result !== null) {
                 $scored->push($result);
             }

@@ -20,6 +20,21 @@ class ChatThreadController extends Controller
     ) {
     }
 
+    public function listAll()
+    {
+        try {
+            $user = request()->user();
+            $threads = $this->chatService->getAllThreadsForUser($user);
+            return Response::success('chat_threads.all', $threads);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                $this->resolveStatusCode($e, HttpResponse::HTTP_BAD_REQUEST)
+            );
+        }
+    }
+
     public function listByInquiry(int $inquiryId)
     {
         try {

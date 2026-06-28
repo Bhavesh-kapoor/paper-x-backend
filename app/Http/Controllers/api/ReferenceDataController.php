@@ -734,6 +734,42 @@ class ReferenceDataController extends Controller
     }
 
     /**
+     * Create a custom mill/brand (when user can't find theirs in the list).
+     * POST /api/v1/brands
+     * Requires auth. Uses firstOrCreate to avoid duplicates by name.
+     * Created as a mill brand (user_id null) so it appears in getBrands().
+     */
+    public function storeBrand(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+            ]);
+
+            $brand = Brand::firstOrCreate(
+                ['name' => trim($validated['name']), 'user_id' => null]
+            );
+
+            return Response::success('brand.created', [
+                'id' => $brand->id,
+                'name' => $brand->name,
+            ], null, HttpResponse::HTTP_CREATED);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return Response::error(
+                'Validation failed',
+                $e->errors(),
+                HttpResponse::HTTP_UNPROCESSABLE_ENTITY
+            );
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    /**
      * Create a custom finished product (when user can't find theirs in the list).
      * POST /api/v1/finished-products
      * Requires auth. Uses firstOrCreate to avoid duplicates by name.
