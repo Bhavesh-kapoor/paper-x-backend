@@ -158,7 +158,9 @@ class ChatService
             ->orderByDesc('id')
             ->get();
 
-        return $threads->map(function (ChatThread $thread) {
+        $labels = $this->buildResponderLabels($threads);
+
+        return $threads->map(function (ChatThread $thread) use ($labels) {
             $last = $thread->lastStructuredMessage;
             $preview = '';
             if ($last) {
@@ -172,10 +174,12 @@ class ChatService
                 'inquiry_title'        => $thread->inquiry?->title ?? 'Inquiry',
                 'responder_user_id'    => $thread->responder_user_id,
                 'responder_role'       => $thread->responder_role,
+                'responder_label'      => $labels[$thread->id] ?? 'Responder',
+                // Responder identity is hidden from posters — only the anonymous label and role are exposed.
                 'responder_user'       => [
                     'id'           => $thread->responder?->id,
-                    'name'         => $thread->responder?->name,
-                    'company_name' => $thread->responder?->company_name,
+                    'name'         => null,
+                    'company_name' => null,
                     'role'         => $thread->responder_role ?: $thread->responder?->primary_role,
                 ],
                 'last_message_preview' => $preview,
@@ -183,6 +187,26 @@ class ChatService
                 'unread_count'         => 0,
             ];
         })->values()->all();
+    }
+
+    /**
+     * Stable anonymous labels ("Responder 1", "Responder 2", …) numbered per
+     * inquiry by thread creation order, so a responder keeps the same number.
+     *
+     * @param \Illuminate\Support\Collection<int, ChatThread> $threads
+     * @return array<int, string> thread_id => label
+     */
+    private function buildResponderLabels($threads): array
+    {
+        $labels = [];
+        foreach ($threads->groupBy('inquiry_id') as $inquiryThreads) {
+            $ordered = $inquiryThreads->sortBy('id')->values();
+            foreach ($ordered as $index => $thread) {
+                $labels[$thread->id] = 'Responder ' . ($index + 1);
+            }
+        }
+
+        return $labels;
     }
 
     /**
@@ -203,7 +227,9 @@ class ChatService
             ->orderByDesc('id')
             ->get();
 
-        return $threads->map(function (ChatThread $thread) {
+        $labels = $this->buildResponderLabels($threads);
+
+        return $threads->map(function (ChatThread $thread) use ($labels) {
             $last = $thread->lastStructuredMessage;
             $preview = '';
 
@@ -217,10 +243,12 @@ class ChatService
                 'inquiry_id' => $thread->inquiry_id,
                 'responder_user_id' => $thread->responder_user_id,
                 'responder_role' => $thread->responder_role,
+                'responder_label' => $labels[$thread->id] ?? 'Responder',
+                // Responder identity is hidden from posters — only the anonymous label and role are exposed.
                 'responder_user' => [
                     'id' => $thread->responder?->id,
-                    'name' => $thread->responder?->name,
-                    'company_name' => $thread->responder?->company_name,
+                    'name' => null,
+                    'company_name' => null,
                     'role' => $thread->responder_role ?: $thread->responder?->primary_role,
                 ],
                 'last_message_preview' => $preview,

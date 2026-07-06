@@ -7,6 +7,7 @@ use App\Models\MarketInsight;
 use App\Services\MarketInsightGeneratorService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Response;
 
 class MarketInsightController extends Controller
@@ -31,6 +32,22 @@ class MarketInsightController extends Controller
                 $this->transformInsight($result['insight'])
             );
         } catch (\Throwable $exception) {
+            // Generation failed (e.g. Gemini overloaded / RSS unreachable) —
+            // serve the most recent insight instead of an empty error screen.
+            $fallback = MarketInsight::query()->orderByDesc('insight_date')->first();
+
+            if ($fallback) {
+                Log::warning('Today insight generation failed; serving latest available', [
+                    'error' => $exception->getMessage(),
+                    'fallback_date' => (string) $fallback->insight_date,
+                ]);
+
+                return Response::success(
+                    'Latest market insight retrieved successfully',
+                    $this->transformInsight($fallback)
+                );
+            }
+
             return Response::error(
                 'Failed to fetch today market insight: '.$exception->getMessage(),
                 null,

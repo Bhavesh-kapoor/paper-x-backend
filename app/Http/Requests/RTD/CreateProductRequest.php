@@ -44,7 +44,7 @@ class CreateProductRequest extends ApiRequest
             'latitude'          => ['nullable', 'numeric'],
             'longitude'         => ['nullable', 'numeric'],
 
-            'price_slabs'                  => ['required', 'array', 'min:1'],
+            'price_slabs'                  => ['nullable', 'array'],
             'price_slabs.*.min_qty'        => ['required', 'integer', 'min:1'],
             'price_slabs.*.max_qty'        => ['required', 'integer', 'min:1'],
             'price_slabs.*.price_per_unit' => ['required', 'numeric', 'min:0.01'],

@@ -22,6 +22,7 @@ use App\Http\Controllers\api\MarketInsightController;
 use App\Http\Controllers\api\JobworkController;
 use App\Http\Controllers\api\UploadController;
 use App\Http\Controllers\api\WalletPaymentController;
+use App\Http\Controllers\api\InvoiceController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -335,6 +336,15 @@ Route::prefix('v1')->group(function () {
             ->middleware('throttle:30,1')
             ->name('wallet.payments.razorpay.verify');
     });
+
+    #invoices (credit purchases, direct pay, RTD platform fees)
+    Route::middleware(['token.exists', 'auth:sanctum'])->prefix('invoices')->group(function () {
+        Route::get('/', [InvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('/{key}', [InvoiceController::class, 'show'])->name('invoices.show');
+    });
+
+    // PDF download via temporary signed URL (opened in the device browser — no bearer token available there).
+    Route::get('invoices/{key}/download', [InvoiceController::class, 'download'])->name('invoices.download');
 
     #upload (single file for product image etc.)
     Route::middleware(['token.exists', 'auth:sanctum'])->post('upload/single', [UploadController::class, 'single'])->name('upload.single');

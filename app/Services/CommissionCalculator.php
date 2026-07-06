@@ -8,16 +8,12 @@ class CommissionCalculator
 {
     private const ORDER_CAP = 300000;
 
-    private const SLABS = [
-        ['max' => 25000,  'percent' => 9],
-        ['max' => 75000,  'percent' => 8],
-        ['max' => 200000, 'percent' => 6],
-        ['max' => 300000, 'percent' => 5],
-    ];
+    /** Flat platform commission — always 9% of the order value. */
+    private const COMMISSION_PERCENT = 9.0;
 
     public function calculateCommission(float $subtotal): array
     {
-        $percent = $this->resolveCommissionPercent($subtotal);
+        $percent = self::COMMISSION_PERCENT;
         $amount  = round($subtotal * $percent / 100, 2);
 
         return [
@@ -59,16 +55,5 @@ class CommissionCalculator
             'gst_amount'         => $gstAmount,
             'total_amount'       => $total,
         ];
-    }
-
-    private function resolveCommissionPercent(float $subtotal): float
-    {
-        foreach (self::SLABS as $slab) {
-            if ($subtotal <= $slab['max']) {
-                return $slab['percent'];
-            }
-        }
-
-        return self::SLABS[array_key_last(self::SLABS)]['percent'];
     }
 }

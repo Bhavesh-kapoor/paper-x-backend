@@ -221,7 +221,14 @@ class RTDProductService
     {
         $query = RtdProduct::visible()->with('priceSlabs', 'converter');
 
-        if (!empty($filters['category'])) {
+        // Multi-select categories (array or comma-separated); single 'category' kept for backwards compat.
+        $categories = $filters['categories'] ?? null;
+        if (is_string($categories)) {
+            $categories = array_filter(array_map('trim', explode(',', $categories)));
+        }
+        if (!empty($categories) && is_array($categories)) {
+            $query->whereIn('category', array_values($categories));
+        } elseif (!empty($filters['category'])) {
             $query->where('category', $filters['category']);
         }
 
@@ -234,26 +241,30 @@ class RTDProductService
         }
 
         if (!empty($filters['location_scope']) && $user) {
-            $brand = $user->brand;
             $scope = $filters['location_scope'];
+            // Brand profile city/state are often empty — fall back to the user's own city/state.
+            $brandCity  = trim((string) ($user->brand?->city ?: $user->city ?: ''));
+            $brandState = trim((string) ($user->brand?->state ?: $user->state ?: ''));
 
             if ($scope === 'pan_india') {
-                $query->where('delivery_geography', 'LIKE', '%Pan India%');
-            } elseif ($scope === 'state' && $brand?->state) {
-                $state = $brand->state;
-                $query->where(function ($q) use ($state) {
+                // Pan India means no location restriction — show every product.
+            } elseif ($scope === 'state' && $brandState !== '') {
+                $query->where(function ($q) use ($brandState) {
                     $q->where('delivery_geography', 'LIKE', '%Pan India%')
-                      ->orWhere('delivery_geography', 'LIKE', '%' . $state . '%');
+                      ->orWhere('delivery_geography', 'LIKE', '%' . $brandState . '%')
+                      // Fallback: match the converter's factory state when delivery_geography
+                      // only names a city (free-text field).
+                      ->orWhereHas('converter.converter', function ($cq) use ($brandState) {
+                          $cq->whereRaw('LOWER(factory_state) = ?', [mb_strtolower($brandState)]);
+                      });
                 });
-            } elseif ($scope === 'city' && $brand?->city) {
-                $city  = $brand->city;
-                $state = $brand->state ?? '';
-                $query->where(function ($q) use ($city, $state) {
+            } elseif ($scope === 'city' && $brandCity !== '') {
+                $query->where(function ($q) use ($brandCity) {
                     $q->where('delivery_geography', 'LIKE', '%Pan India%')
-                      ->orWhere('delivery_geography', 'LIKE', '%' . $city . '%');
-                    if ($state) {
-                        $q->orWhere('delivery_geography', 'LIKE', '%' . $state . '%');
-                    }
+                      ->orWhere('delivery_geography', 'LIKE', '%' . $brandCity . '%')
+                      ->orWhereHas('converter.converter', function ($cq) use ($brandCity) {
+                          $cq->whereRaw('LOWER(factory_city) = ?', [mb_strtolower($brandCity)]);
+                      });
                 });
             }
         }

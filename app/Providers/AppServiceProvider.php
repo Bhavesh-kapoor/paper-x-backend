@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Models\ChatThread;
+use App\Models\MatchingSession;
 use App\Policies\ChatThreadPolicy;
+use App\Policies\SessionPolicy;
 use App\Services\Payments\Contracts\RazorpayClient;
 use App\Services\Payments\RazorpayGatewayClient;
 use Illuminate\Support\Facades\Gate;
@@ -36,6 +38,9 @@ class AppServiceProvider extends ServiceProvider
         }
 
         Gate::policy(ChatThread::class, ChatThreadPolicy::class);
+        // SessionPolicy doesn't follow the MatchingSessionPolicy naming convention,
+        // so auto-discovery misses it — without this line Gate::authorize denies everyone.
+        Gate::policy(MatchingSession::class, SessionPolicy::class);
 
         // Map polymorphic types for inquiries poster relationship, notifications, and Sanctum tokens
         // User must be in the map or OTP verify (createToken) throws "morph map" → 500

@@ -105,7 +105,7 @@ class RTDProductController extends Controller
         try {
             $products = $this->productService->browseCatalog(
                 $request->only([
-                    'category', 'lead_time', 'delivery_geography',
+                    'category', 'categories', 'lead_time', 'delivery_geography',
                     'min_price', 'max_price',
                     'min_moq', 'max_moq',
                     'has_branding', 'location_scope',
