@@ -2,12 +2,16 @@
 
 namespace App\Services;
 
+use App\Enums\NavigationType;
+use App\Enums\NotificationType;
 use App\Exceptions\RTDDomainException;
 use App\Models\Material;
+use App\Support\Notifications\RtdNotificationCopy;
 use App\Support\RtdPublicUpload;
 use App\Models\MaterialFinish;
 use App\Models\RtdProduct;
 use App\Models\RtdPriceSlab;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -15,6 +19,7 @@ class RTDProductService
 {
     public function __construct(
         protected RtdListingPackService $listingPackService,
+        protected NotificationService $notificationService,
     ) {
     }
 
@@ -34,7 +39,7 @@ class RTDProductService
 
         $imagePath = $this->resolveProductImagePathForStorage($data['image_path'] ?? null);
 
-        return DB::transaction(function () use ($data, $userId, $materialName, $finishData, $brandingMethods, $imagePath) {
+        $product = DB::transaction(function () use ($data, $userId, $materialName, $finishData, $brandingMethods, $imagePath) {
             $product = RtdProduct::create([
                 'converter_id'    => $userId,
                 'category'        => $data['category'],
@@ -69,6 +74,52 @@ class RTDProductService
 
             return $product->load('priceSlabs');
         });
+
+        // Announce the new listing to brands (after commit, so the push never
+        // fires for a rolled-back product).
+        $this->broadcastNewProductToBrands($product, $userId);
+
+        return $product;
+    }
+
+
+    /**
+     * Notify every brand that a converter listed a new RTD product. Chunked so a
+     * large brand base doesn't load into memory at once; each notification also
+     * delivers a push via NotificationService. Skips the posting user in case
+     * they also hold a brand role.
+     */
+    private function broadcastNewProductToBrands(RtdProduct $product, int $converterUserId): void
+    {
+        $converterName = RtdNotificationCopy::displayName(User::find($converterUserId));
+        $productName = RtdNotificationCopy::productName($product);
+        $copy = RtdNotificationCopy::productAvailable($converterName, $productName);
+
+        User::query()
+            ->where(function ($q) {
+                $q->where('primary_role', 'brand')
+                  ->orWhere('secondary_role', 'brand');
+            })
+            ->where('id', '!=', $converterUserId)
+            ->select('id')
+            ->chunkById(200, function ($brands) use ($product, $productName, $copy) {
+                foreach ($brands as $brand) {
+                    $this->notificationService->create(
+                        $brand->id,
+                        NotificationType::RTD_PRODUCT_AVAILABLE,
+                        $copy['title'],
+                        $copy['body'],
+                        NavigationType::RTD_PRODUCT,
+                        $product->id,
+                        [
+                            'rtd_product_id' => $product->id,
+                            'product_name' => $productName,
+                            'view_target' => 'brand',
+                        ],
+                        sprintf('rtd_product_available_%s_%s', $product->id, $brand->id),
+                    );
+                }
+            });
     }
 
     public function updateProduct(int $productId, array $data, int $userId): RtdProduct
@@ -185,10 +236,46 @@ class RTDProductService
 
         if ($product->decline_count >= 5) {
             $product->update(['status' => 'inactive']);
+            $this->notifyProductModeration($product, deactivated: true);
             return;
         }
 
         $product->update(['status' => 'paused']);
+        $this->notifyProductModeration($product, deactivated: false);
+    }
+
+    /**
+     * Tell the converter their product was auto-paused/-deactivated after a
+     * declined or expired order. Runs inside the caller's DB transaction; the
+     * push is delivered after commit (SendPushNotificationJob is after-commit).
+     */
+    private function notifyProductModeration(RtdProduct $product, bool $deactivated): void
+    {
+        $productName = RtdNotificationCopy::productName($product);
+
+        if ($deactivated) {
+            $copy = RtdNotificationCopy::productDeactivated($productName);
+            $type = NotificationType::RTD_PRODUCT_DEACTIVATED;
+            $dedupeKey = sprintf('rtd_product_deactivated_%s', $product->id);
+        } else {
+            $copy = RtdNotificationCopy::productPaused($productName);
+            $type = NotificationType::RTD_PRODUCT_PAUSED;
+            $dedupeKey = sprintf('rtd_product_paused_%s_%s', $product->id, $product->decline_count);
+        }
+
+        $this->notificationService->create(
+            $product->converter_id,
+            $type,
+            $copy['title'],
+            $copy['body'],
+            NavigationType::RTD_PRODUCT,
+            $product->id,
+            [
+                'rtd_product_id' => $product->id,
+                'product_name' => $productName,
+            ],
+            $dedupeKey,
+        );
     }
 
     public function rewardCompletion(RtdProduct $product): void

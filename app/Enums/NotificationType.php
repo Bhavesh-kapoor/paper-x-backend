@@ -10,6 +10,21 @@ enum NotificationType: string
     case OFFER_REJECTED = 'OFFER_REJECTED';
     case RTD_STARTED = 'RTD_STARTED';
     case PAYMENT_STATUS_CHANGED = 'PAYMENT_STATUS_CHANGED';
+
+    // RTD (Ready-to-Dispatch) order lifecycle
+    case RTD_ORDER_REQUESTED = 'RTD_ORDER_REQUESTED';
+    case RTD_ORDER_ACCEPTED = 'RTD_ORDER_ACCEPTED';
+    case RTD_ORDER_DECLINED = 'RTD_ORDER_DECLINED';
+    case RTD_ORDER_CONNECTED = 'RTD_ORDER_CONNECTED';
+    case RTD_ORDER_CANCELLED = 'RTD_ORDER_CANCELLED';
+    case RTD_ORDER_EXPIRED = 'RTD_ORDER_EXPIRED';
+
+    // RTD product auto-moderation
+    case RTD_PRODUCT_PAUSED = 'RTD_PRODUCT_PAUSED';
+    case RTD_PRODUCT_DEACTIVATED = 'RTD_PRODUCT_DEACTIVATED';
+
+    // RTD new-listing broadcast to brands
+    case RTD_PRODUCT_AVAILABLE = 'RTD_PRODUCT_AVAILABLE';
 }
 
 

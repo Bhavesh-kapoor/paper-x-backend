@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enums\NavigationType;
+use App\Enums\NotificationType;
 use App\Enums\RTDOrderStatus;
 use App\Events\RTD\OrderAccepted;
 use App\Events\RTD\OrderConnected;
@@ -9,7 +11,9 @@ use App\Exceptions\RTDDomainException;
 use App\Jobs\HandleOrderAcceptanceTimeout;
 use App\Models\RtdOrder;
 use App\Models\RtdProduct;
+use App\Models\User;
 use App\StateMachines\RTDOrderStateMachine;
+use App\Support\Notifications\RtdNotificationCopy;
 use Illuminate\Support\Facades\DB;
 
 class RTDOrderService
@@ -18,6 +22,7 @@ class RTDOrderService
         protected RTDOrderStateMachine $stateMachine,
         protected RTDProductService $productService,
         protected CommissionCalculator $commissionCalculator,
+        protected NotificationService $notificationService,
     ) {
     }
 
@@ -29,18 +34,18 @@ class RTDOrderService
 
         $this->validateOrderCreation($product, $data['quantity'], $brandUserId);
 
-        $slab = $this->resolveMatchingPriceSlab($product, $data['quantity']);
+        $unitPrice = $this->resolveUnitPrice($product, $data['quantity']);
 
         $sellerGstRegistered = !empty($product->converter?->gst_in);
         $breakdown = $this->commissionCalculator->calculateTotal(
             $data['quantity'],
-            $slab->price_per_unit,
+            $unitPrice,
             $sellerGstRegistered
         );
 
         $this->commissionCalculator->validateOrderCap($breakdown['subtotal']);
 
-        return DB::transaction(function () use ($data, $brandUserId, $product, $slab, $breakdown) {
+        return DB::transaction(function () use ($data, $brandUserId, $product, $unitPrice, $breakdown) {
             $existingActive = RtdOrder::where('brand_id', $brandUserId)
                 ->where('product_id', $product->id)
                 ->whereIn('status', RTDOrderStatus::activeStatuses())
@@ -63,7 +68,7 @@ class RTDOrderService
                 'converter_id'         => $product->converter_id,
                 'quantity'             => $data['quantity'],
                 'logo_path'            => $data['logo_path'] ?? null,
-                'unit_price'           => $slab->price_per_unit,
+                'unit_price'           => $unitPrice,
                 'subtotal'             => $breakdown['subtotal'],
                 'commission_percent'   => $breakdown['commission_percent'],
                 'commission_amount'    => $breakdown['commission_amount'],
@@ -76,6 +81,26 @@ class RTDOrderService
 
             HandleOrderAcceptanceTimeout::dispatch($order->id)
                 ->delay($deadline);
+
+            // Notify the converter that a brand wants to order their product.
+            $brandName = RtdNotificationCopy::displayName(User::find($brandUserId));
+            $productName = RtdNotificationCopy::productName($product);
+            $copy = RtdNotificationCopy::orderRequested($order, $brandName, $productName);
+            $this->notificationService->create(
+                $order->converter_id,
+                NotificationType::RTD_ORDER_REQUESTED,
+                $copy['title'],
+                $copy['body'],
+                NavigationType::RTD_ORDER,
+                $order->id,
+                [
+                    'rtd_order_id' => $order->id,
+                    'counterparty_name' => $brandName,
+                    'product_name' => $productName,
+                    'view_target' => 'converter',
+                ],
+                sprintf('rtd_order_requested_%s', $order->id),
+            );
 
             return $order->fresh(['product', 'converter']);
         });
@@ -107,6 +132,27 @@ class RTDOrderService
 
             OrderAccepted::dispatch($order);
 
+            // Notify the brand that the converter accepted their order.
+            $order->loadMissing(['product', 'converter']);
+            $converterName = RtdNotificationCopy::displayName($order->converter);
+            $productName = RtdNotificationCopy::productName($order->product);
+            $copy = RtdNotificationCopy::orderAccepted($converterName, $productName);
+            $this->notificationService->create(
+                $order->brand_id,
+                NotificationType::RTD_ORDER_ACCEPTED,
+                $copy['title'],
+                $copy['body'],
+                NavigationType::RTD_ORDER,
+                $order->id,
+                [
+                    'rtd_order_id' => $order->id,
+                    'counterparty_name' => $converterName,
+                    'product_name' => $productName,
+                    'view_target' => 'brand',
+                ],
+                sprintf('rtd_order_accepted_%s', $order->id),
+            );
+
             return $order->fresh(['product']);
         });
     }
@@ -132,6 +178,26 @@ class RTDOrderService
             $this->stateMachine->transition($order, RTDOrderStatus::DECLINED);
 
             $this->productService->incrementDecline($order->product);
+
+            // Notify the brand that the converter declined their order.
+            $order->loadMissing(['product', 'converter']);
+            $converterName = RtdNotificationCopy::displayName($order->converter);
+            $productName = RtdNotificationCopy::productName($order->product);
+            $copy = RtdNotificationCopy::orderDeclined($converterName, $productName);
+            $this->notificationService->create(
+                $order->brand_id,
+                NotificationType::RTD_ORDER_DECLINED,
+                $copy['title'],
+                $copy['body'],
+                NavigationType::RTD_ORDER,
+                $order->id,
+                [
+                    'rtd_order_id' => $order->id,
+                    'counterparty_name' => $converterName,
+                    'view_target' => 'brand',
+                ],
+                sprintf('rtd_order_declined_%s', $order->id),
+            );
 
             return $order->fresh();
         });
@@ -167,6 +233,44 @@ class RTDOrderService
 
             OrderConnected::dispatch($order);
 
+            // Notify BOTH parties that payment landed and the order is connected.
+            $order->loadMissing(['product', 'brand', 'converter']);
+            $brandName = RtdNotificationCopy::displayName($order->brand);
+            $converterName = RtdNotificationCopy::displayName($order->converter);
+            $productName = RtdNotificationCopy::productName($order->product);
+
+            $converterCopy = RtdNotificationCopy::orderConnectedForConverter($brandName, $productName);
+            $this->notificationService->create(
+                $order->converter_id,
+                NotificationType::RTD_ORDER_CONNECTED,
+                $converterCopy['title'],
+                $converterCopy['body'],
+                NavigationType::RTD_ORDER,
+                $order->id,
+                [
+                    'rtd_order_id' => $order->id,
+                    'counterparty_name' => $brandName,
+                    'view_target' => 'converter',
+                ],
+                sprintf('rtd_order_connected_%s_%s', $order->id, $order->converter_id),
+            );
+
+            $brandCopy = RtdNotificationCopy::orderConnectedForBrand($converterName, $productName);
+            $this->notificationService->create(
+                $order->brand_id,
+                NotificationType::RTD_ORDER_CONNECTED,
+                $brandCopy['title'],
+                $brandCopy['body'],
+                NavigationType::RTD_ORDER,
+                $order->id,
+                [
+                    'rtd_order_id' => $order->id,
+                    'counterparty_name' => $converterName,
+                    'view_target' => 'brand',
+                ],
+                sprintf('rtd_order_connected_%s_%s', $order->id, $order->brand_id),
+            );
+
             return $order->fresh(['brand', 'converter']);
         });
     }
@@ -181,6 +285,26 @@ class RTDOrderService
                 ->firstOrFail();
 
             $this->stateMachine->transition($order, RTDOrderStatus::CANCELLED);
+
+            // Notify the converter that the brand cancelled the order.
+            $order->loadMissing(['product', 'brand']);
+            $brandName = RtdNotificationCopy::displayName($order->brand);
+            $productName = RtdNotificationCopy::productName($order->product);
+            $copy = RtdNotificationCopy::orderCancelled($brandName, $productName);
+            $this->notificationService->create(
+                $order->converter_id,
+                NotificationType::RTD_ORDER_CANCELLED,
+                $copy['title'],
+                $copy['body'],
+                NavigationType::RTD_ORDER,
+                $order->id,
+                [
+                    'rtd_order_id' => $order->id,
+                    'counterparty_name' => $brandName,
+                    'view_target' => 'converter',
+                ],
+                sprintf('rtd_order_cancelled_%s', $order->id),
+            );
 
             return $order->fresh();
         });
@@ -202,6 +326,40 @@ class RTDOrderService
             $this->stateMachine->transition($order, RTDOrderStatus::EXPIRED);
 
             $this->productService->incrementDecline($order->product);
+
+            // Notify BOTH parties that the request expired unaccepted.
+            $order->loadMissing(['product']);
+            $productName = RtdNotificationCopy::productName($order->product);
+
+            $converterCopy = RtdNotificationCopy::orderExpiredForConverter($productName);
+            $this->notificationService->create(
+                $order->converter_id,
+                NotificationType::RTD_ORDER_EXPIRED,
+                $converterCopy['title'],
+                $converterCopy['body'],
+                NavigationType::RTD_ORDER,
+                $order->id,
+                [
+                    'rtd_order_id' => $order->id,
+                    'view_target' => 'converter',
+                ],
+                sprintf('rtd_order_expired_%s_%s', $order->id, $order->converter_id),
+            );
+
+            $brandCopy = RtdNotificationCopy::orderExpiredForBrand($productName);
+            $this->notificationService->create(
+                $order->brand_id,
+                NotificationType::RTD_ORDER_EXPIRED,
+                $brandCopy['title'],
+                $brandCopy['body'],
+                NavigationType::RTD_ORDER,
+                $order->id,
+                [
+                    'rtd_order_id' => $order->id,
+                    'view_target' => 'brand',
+                ],
+                sprintf('rtd_order_expired_%s_%s', $order->id, $order->brand_id),
+            );
         });
     }
 
@@ -276,17 +434,22 @@ class RTDOrderService
         }
     }
 
-    private function resolveMatchingPriceSlab(RtdProduct $product, int $quantity): \App\Models\RtdPriceSlab
+    /**
+     * Per-unit price for an order quantity. Price slabs are optional volume
+     * discounts on top of base_price: when a slab covers the quantity, use its
+     * price; otherwise (no slabs, or a gap between slabs) fall back to the
+     * product's required base_price. Quantity bounds are enforced separately in
+     * validateOrderCreation (moq / max_capacity).
+     */
+    private function resolveUnitPrice(RtdProduct $product, int $quantity): float
     {
         $slab = $product->priceSlabs
             ->first(fn ($s) => $quantity >= $s->min_qty && $quantity <= $s->max_qty);
 
-        if (!$slab) {
-            throw new RTDDomainException(
-                "No matching price slab found for quantity {$quantity}"
-            );
+        if ($slab) {
+            return (float) $slab->price_per_unit;
         }
 
-        return $slab;
+        return (float) $product->base_price;
     }
 }
