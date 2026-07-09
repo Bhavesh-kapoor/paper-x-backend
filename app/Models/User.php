@@ -77,6 +77,14 @@ class User extends Authenticatable
     }
 
     /**
+     * FCM device tokens registered for push notifications.
+     */
+    public function deviceTokens()
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
+
+    /**
      * Get the brand profile for this user.
      */
     public function brand()

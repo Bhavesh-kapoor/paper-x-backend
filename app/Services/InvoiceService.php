@@ -95,6 +95,123 @@ class InvoiceService
         return $invoice;
     }
 
+    /**
+     * Admin-facing: paginated, normalized list of ALL users' paid invoices,
+     * with optional filters and an aggregate revenue summary.
+     *
+     * @param array{search?: string, kind?: string, date_from?: string, date_to?: string} $filters
+     * @return array{data: array<int, array<string, mixed>>, meta: array<string, int>, summary: array<string, mixed>}
+     */
+    public function listAllForAdmin(array $filters, int $page = 1, int $perPage = 20): array
+    {
+        $page    = max(1, $page);
+        $perPage = max(1, min($perPage, 100));
+
+        $kind = $filters['kind'] ?? null;
+
+        $wallet = collect();
+        if ($kind === null || $kind === 'credit_pack' || $kind === 'direct_pay') {
+            $walletQuery = WalletPaymentOrder::query()
+                ->where('status', WalletPaymentOrder::STATUS_PAID)
+                ->with(['creditPack:id,name', 'user:id,name,company_name,mobile'])
+                ->orderByDesc('paid_at');
+
+            $this->applyAdminFilters($walletQuery, $filters);
+
+            $wallet = $walletQuery->get()->map(function (WalletPaymentOrder $order) {
+                $row = $this->normalizeWalletOrder($order);
+                $row['user'] = $this->userSummary($order->user);
+
+                return $row;
+            });
+
+            // A wallet order resolves to either credit_pack or direct_pay — narrow if asked.
+            if ($kind === 'credit_pack' || $kind === 'direct_pay') {
+                $wallet = $wallet->where('kind', $kind)->values();
+            }
+        }
+
+        $rtd = collect();
+        if ($kind === null || $kind === 'rtd_platform_fee') {
+            $rtdQuery = RtdOrderPaymentOrder::query()
+                ->where('status', RtdOrderPaymentOrder::STATUS_PAID)
+                ->with(['rtdOrder:id,subtotal,commission_percent,commission_amount,gst_percent,gst_amount,total_amount', 'user:id,name,company_name,mobile'])
+                ->orderByDesc('paid_at');
+
+            $this->applyAdminFilters($rtdQuery, $filters);
+
+            $rtd = $rtdQuery->get()->map(function (RtdOrderPaymentOrder $order) {
+                $row = $this->normalizeRtdOrder($order);
+                $row['user'] = $this->userSummary($order->user);
+
+                return $row;
+            });
+        }
+
+        /** @var Collection $merged */
+        $merged = $wallet->concat($rtd)
+            ->sortByDesc(fn (array $row) => $row['paid_at'] ?? '')
+            ->values();
+
+        $summary = $this->buildSummary($merged);
+
+        $total = $merged->count();
+        $items = $merged->slice(($page - 1) * $perPage, $perPage)->values()->all();
+
+        return [
+            'data'    => $items,
+            'meta'    => [
+                'current_page' => $page,
+                'per_page'     => $perPage,
+                'total'        => $total,
+                'last_page'    => (int) max(1, ceil($total / $perPage)),
+            ],
+            'summary' => $summary,
+        ];
+    }
+
+    /**
+     * Admin-facing: resolve one invoice by key ("W-{id}"/"R-{id}") without user scoping.
+     * Includes bill_to/seller and the owner user summary (for building a download URL).
+     */
+    public function findAny(string $key): array
+    {
+        [$type, $id] = $this->parseKey($key);
+
+        if ($type === 'W') {
+            $order = WalletPaymentOrder::query()
+                ->where('id', $id)
+                ->where('status', WalletPaymentOrder::STATUS_PAID)
+                ->with(['creditPack:id,name', 'user'])
+                ->firstOrFail();
+
+            $invoice = $this->normalizeWalletOrder($order);
+        } else {
+            $order = RtdOrderPaymentOrder::query()
+                ->where('id', $id)
+                ->where('status', RtdOrderPaymentOrder::STATUS_PAID)
+                ->with(['rtdOrder:id,subtotal,commission_percent,commission_amount,gst_percent,gst_amount,total_amount', 'user'])
+                ->firstOrFail();
+
+            $invoice = $this->normalizeRtdOrder($order);
+        }
+
+        $user = $order->user;
+
+        $invoice['bill_to'] = $user ? $this->billTo($user) : [];
+        $invoice['seller']  = [
+            'name'       => config('company.name'),
+            'legal_name' => config('company.legal_name'),
+            'address'    => config('company.address'),
+            'gstin'      => config('company.gstin'),
+            'email'      => config('company.email'),
+            'phone'      => config('company.phone'),
+        ];
+        $invoice['user'] = $this->userSummary($user);
+
+        return $invoice;
+    }
+
     public function billTo(User $user): array
     {
         return [
@@ -103,6 +220,57 @@ class InvoiceService
             'gstin'        => $user->gst_in,
             'city'         => $user->city,
             'state'        => $user->state,
+        ];
+    }
+
+    private function applyAdminFilters(\Illuminate\Database\Eloquent\Builder $query, array $filters): void
+    {
+        if (!empty($filters['date_from'])) {
+            $query->whereDate('paid_at', '>=', $filters['date_from']);
+        }
+        if (!empty($filters['date_to'])) {
+            $query->whereDate('paid_at', '<=', $filters['date_to']);
+        }
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->whereHas('user', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('mobile', 'like', "%{$search}%")
+                  ->orWhere('company_name', 'like', "%{$search}%");
+            });
+        }
+    }
+
+    private function userSummary(?User $user): array
+    {
+        return [
+            'id'           => $user?->id,
+            'name'         => $user?->name,
+            'company_name' => $user?->company_name,
+            'mobile'       => $user?->mobile,
+        ];
+    }
+
+    /**
+     * @param Collection<int, array<string, mixed>> $rows
+     * @return array{total_revenue_inr: float, count: int, by_kind: array<string, array{count: int, total_inr: float}>}
+     */
+    private function buildSummary(Collection $rows): array
+    {
+        $byKind = [];
+        foreach (['credit_pack', 'direct_pay', 'rtd_platform_fee'] as $k) {
+            $subset = $rows->where('kind', $k);
+            $byKind[$k] = [
+                'count'     => $subset->count(),
+                'total_inr' => round((float) $subset->sum('total_inr'), 2),
+            ];
+        }
+
+        return [
+            'total_revenue_inr' => round((float) $rows->sum('total_inr'), 2),
+            'count'             => $rows->count(),
+            'by_kind'           => $byKind,
         ];
     }
 

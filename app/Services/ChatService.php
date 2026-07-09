@@ -7,6 +7,7 @@ use App\Domain\MatchEngine\Models\MatchHistory;
 use App\Enums\NavigationType;
 use App\Enums\NotificationType;
 use App\Enums\SessionStatus;
+use App\Jobs\SendPushNotificationJob;
 use App\Models\Brand;
 use App\Models\ChatMessage;
 use App\Models\ChatThread;
@@ -25,6 +26,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ChatService
 {
@@ -932,10 +934,49 @@ class ChatService
         ]);
 
         if ($isFirstResponderMessage) {
+            // First responder message: poster gets the dedicated FIRST_RESPONSE
+            // notification, which already covers this message.
             $this->notifyPosterAboutFirstResponse($thread, $actor);
+        } else {
+            // Every subsequent message pushes the other participant.
+            $this->notifyRecipientOfNewMessage($thread, $actor, $message);
         }
 
         return $message;
+    }
+
+    /**
+     * Push the thread's other participant about a new chat message.
+     *
+     * Sent directly (not via NotificationService) so chat messages do NOT
+     * appear in the general notification feed / unread bell — chat has its own
+     * per-thread unread UI. The push is suppressed client-side if the recipient
+     * is currently viewing this thread's chat screen.
+     */
+    private function notifyRecipientOfNewMessage(ChatThread $thread, User $actor, Message $message): void
+    {
+        $recipientId = (int) $thread->responder_user_id === (int) $actor->id
+            ? (int) $thread->poster_user_id
+            : (int) $thread->responder_user_id;
+
+        if ($recipientId <= 0) {
+            return;
+        }
+
+        $preview = $message->body
+            ? Str::limit($message->body, 120)
+            : 'Sent an attachment';
+
+        SendPushNotificationJob::dispatch(
+            $recipientId,
+            'New message',
+            $preview,
+            [
+                'type' => 'NEW_MESSAGE',
+                'navigation_type' => NavigationType::CHAT_THREAD->value,
+                'navigation_id' => (string) $thread->id,
+            ]
+        );
     }
 
     private function notifyPosterAboutFirstResponse(ChatThread $thread, User $responder): void

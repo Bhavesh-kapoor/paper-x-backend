@@ -98,8 +98,12 @@ class ManagementController extends Controller
             'converter.rawMaterials',
             'machineDealer.machineListings'
         ]);
-        
-        return view('admin.management.user-detail', compact('user'));
+
+        $invoiceResult = app(\App\Services\InvoiceService::class)->listForUser($user, 1, 100);
+        $invoices = $invoiceResult['data'];
+        $invoicesTotalPaid = collect($invoices)->sum('total_inr');
+
+        return view('admin.management.user-detail', compact('user', 'invoices', 'invoicesTotalPaid'));
     }
 
     /**

@@ -52,4 +52,13 @@ return [
         'currency' => env('RAZORPAY_CURRENCY', 'INR'),
     ],
 
+    'push' => [
+        // Master switch for FCM push delivery. DB notifications are always
+        // written; only the push send is gated by this flag.
+        'enabled' => env('PUSH_NOTIFICATIONS_ENABLED', true),
+        // Android notification channel id — must match the channel the app
+        // creates via notifee (see pushNotificationService.ts).
+        'android_channel_id' => env('PUSH_ANDROID_CHANNEL_ID', 'default'),
+    ],
+
 ];

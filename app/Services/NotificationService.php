@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\NavigationType;
 use App\Enums\NotificationType;
+use App\Jobs\SendPushNotificationJob;
 use App\Models\Notification;
 use App\Support\Notifications\NotificationMetaSchema;
 use Illuminate\Database\QueryException;
@@ -29,7 +30,7 @@ class NotificationService
         NotificationMetaSchema::validate($notificationType, $meta);
 
         try {
-            return Notification::create([
+            $notification = Notification::create([
                 'user_id' => $userId,
                 'type' => $notificationType,
                 'title' => $title,
@@ -42,6 +43,7 @@ class NotificationService
             ]);
         } catch (QueryException $e) {
             // Duplicate dedupe keys are expected under retries/races.
+            // We deliberately do NOT re-send a push for the deduped duplicate.
             if ($dedupeKey !== null && $this->isDuplicateKeyException($e)) {
                 return Notification::where('user_id', $userId)
                     ->where('dedupe_key', $dedupeKey)
@@ -50,6 +52,34 @@ class NotificationService
 
             throw $e;
         }
+
+        // Fan out a push for this freshly-created notification (queued, off the
+        // request path). DB persistence is the source of truth; push is a
+        // best-effort delivery layer on top of it.
+        $this->dispatchPush($notification);
+
+        return $notification;
+    }
+
+    /**
+     * Queue an FCM push mirroring a persisted notification. The data payload
+     * matches the app's navigation resolver contract so a tap deep-links to the
+     * same destination as the in-app notification feed.
+     */
+    private function dispatchPush(Notification $notification): void
+    {
+        SendPushNotificationJob::dispatch(
+            $notification->user_id,
+            $notification->title,
+            $notification->body,
+            [
+                'notification_id' => (string) $notification->id,
+                'type' => $notification->type->value,
+                'navigation_type' => $notification->navigation_type->value,
+                'navigation_id' => (string) $notification->navigation_id,
+                'meta' => $notification->meta ?? [],
+            ]
+        );
     }
 
     public function getNotifications(int $userId, bool $unreadOnly = false, array $filters = []): array

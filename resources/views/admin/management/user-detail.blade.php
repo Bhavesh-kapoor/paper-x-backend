@@ -565,6 +565,61 @@
         </div>
     </div>
     @endif
+
+    <!-- Invoices / Payments -->
+    @php
+        $kindLabels = [
+            'credit_pack'      => 'Credit Pack',
+            'direct_pay'       => 'Direct Pay',
+            'rtd_platform_fee' => 'RTD Platform Fee',
+        ];
+    @endphp
+    <div class="card user-detail-card mb-4">
+        <h5 class="section-title">
+            <i class="icon-base ti tabler-file-invoice"></i>Invoices &amp; Payments
+            <span class="badge bg-light text-dark ms-2">{{ count($invoices) }}</span>
+            @if($invoicesTotalPaid > 0)
+                <span class="ms-auto" style="font-size: 0.95rem;">Total Paid: ₹{{ number_format($invoicesTotalPaid, 2) }}</span>
+            @endif
+        </h5>
+        <div class="card-body">
+            @if(count($invoices) > 0)
+            <div class="table-responsive">
+                <table class="table table-borderless info-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Invoice No</th>
+                            <th>Type</th>
+                            <th class="text-end">Amount</th>
+                            <th>Paid On</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($invoices as $inv)
+                        <tr>
+                            <td style="font-family: 'Courier New', monospace; font-weight: 700;">{{ $inv['invoice_no'] }}</td>
+                            <td>{{ $kindLabels[$inv['kind']] ?? ucfirst(str_replace('_', ' ', $inv['kind'])) }}</td>
+                            <td class="text-end" style="font-weight: 700;">₹{{ number_format($inv['total_inr'], 2) }}</td>
+                            <td>{{ $inv['paid_at'] ? \Carbon\Carbon::parse($inv['paid_at'])->format('d M Y') : 'N/A' }}</td>
+                            <td class="text-end">
+                                <a href="{{ route('admin.invoices.detail', $inv['key']) }}" class="badge bg-primary text-white" style="padding: 0.5rem 0.85rem; text-decoration: none;">
+                                    <i class="icon-base ti tabler-eye"></i> View
+                                </a>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @else
+            <div class="text-center py-4">
+                <i class="icon-base ti tabler-file-off" style="font-size: 2.5rem; color: #dee2e6;"></i>
+                <p class="text-muted mb-0 mt-2">No payments or invoices for this user yet.</p>
+            </div>
+            @endif
+        </div>
+    </div>
 </div>
 @endsection
 

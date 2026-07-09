@@ -12,6 +12,7 @@ use App\Http\Controllers\api\ChatController;
 use App\Http\Controllers\api\ChatThreadController;
 use App\Http\Controllers\api\QuotationController;
 use App\Http\Controllers\api\NotificationController;
+use App\Http\Controllers\api\DeviceTokenController;
 use App\Http\Controllers\api\RoleController;
 use App\Http\Controllers\api\DashboardController;
 use App\Http\Controllers\api\RegistrationDetailsController;
@@ -259,6 +260,12 @@ Route::prefix('v1')->group(function () {
     #role switching (common for all roles)
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('user')->group(function () {
         Route::post('/switch-role', [RoleController::class, 'switchRole'])->name('user.switch-role');
+    });
+
+    #push notification device tokens (register on login/refresh, remove on logout)
+    Route::middleware(['token.exists', 'auth:sanctum'])->prefix('user/device-tokens')->group(function () {
+        Route::post('/', [DeviceTokenController::class, 'store'])->name('user.device-tokens.store');
+        Route::delete('/', [DeviceTokenController::class, 'destroy'])->name('user.device-tokens.destroy');
     });
 
     #notifications routes (canonical for all roles)

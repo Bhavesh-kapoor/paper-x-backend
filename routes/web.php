@@ -296,7 +296,11 @@ Route::prefix('admin')->group(function () {
         Route::get('/sessions/active', [\App\Http\Controllers\Admin\ManagementController::class, 'activeSessions'])->name('admin.sessions.active');
         Route::get('/sessions/completed', [\App\Http\Controllers\Admin\ManagementController::class, 'completedSessions'])->name('admin.sessions.completed');
         Route::get('/sessions/all', [\App\Http\Controllers\Admin\ManagementController::class, 'allSessions'])->name('admin.sessions.all');
-        
+
+        // Finance - Invoices
+        Route::get('/invoices', [\App\Http\Controllers\Admin\InvoiceController::class, 'index'])->name('admin.invoices');
+        Route::get('/invoices/{key}', [\App\Http\Controllers\Admin\InvoiceController::class, 'show'])->name('admin.invoices.detail');
+
         // Reference Data Routes - Materials
         Route::get('/reference/materials', [\App\Http\Controllers\Admin\ManagementController::class, 'materials'])->name('admin.reference.materials');
         Route::post('/reference/materials', [\App\Http\Controllers\Admin\ManagementController::class, 'storeMaterial'])->name('admin.reference.materials.store');
