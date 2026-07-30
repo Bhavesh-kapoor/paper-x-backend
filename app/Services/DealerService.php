@@ -125,6 +125,46 @@ class DealerService
         return $dealer;
     }
 
+    /**
+     * Partial per-section update from the Registration Details editor.
+     * Phase 1 handles company (common), capacity, and machines. Materials &
+     * locations remain full-profile only. Never flips profile_complete.
+     */
+    public function updateSection(array $data, int $userId): Dealer
+    {
+        $dealer = DB::transaction(function () use ($data, $userId) {
+            $dealer = Dealer::firstOrCreate(
+                ['user_id' => $userId],
+                ['status' => DealerStatus::PENDING]
+            );
+
+            $userFields = array_intersect_key(
+                $data,
+                array_flip(['company_name', 'gst_in', 'city', 'state', 'operation_area'])
+            );
+            if (!empty($userFields)) {
+                User::where('id', $userId)->update($userFields);
+            }
+
+            $scalars = array_intersect_key($data, array_flip([
+                'capacity_daily', 'capacity_monthly', 'capacity_unit',
+            ]));
+            if (!empty($scalars)) {
+                $dealer->update($scalars);
+            }
+
+            if (array_key_exists('machine_ids', $data)) {
+                $dealer->machines()->sync($data['machine_ids'] ?? []);
+            }
+
+            return $dealer->load(['materials', 'machines', 'locations']);
+        });
+
+        EnsureUserMatchesJob::dispatchAfterResponse($userId);
+
+        return $dealer;
+    }
+
     public function getDashboard(int $userId): array
     {
         $dealer = Dealer::where('user_id', $userId)

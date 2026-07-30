@@ -16,6 +16,8 @@ use App\Models\Response;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Domain\MatchEngine\MatchEngineOrchestrator;
+use App\Jobs\EnsureUserMatchesJob;
+use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\Concerns\ChargesPostingFee;
 use Illuminate\Support\Facades\DB;
@@ -83,10 +85,55 @@ class BrandService
             // Reload brand with brandTypes relationship
             $brand->refresh();
             $brand->load('brandTypes');
-            
+
             // Return brand with brandTypes in response
             return $brand;
         });
+    }
+
+    /**
+     * Partial per-section update from the Registration Details editor.
+     * Merges only the sent keys; never flips profile_complete. Re-runs matchmaking.
+     */
+    public function updateSection(array $data, int $userId): Brand
+    {
+        $brand = DB::transaction(function () use ($data, $userId) {
+            $brand = Brand::firstOrCreate(
+                ['user_id' => $userId],
+                ['status' => BrandStatus::PENDING]
+            );
+
+            // Common users-table fields
+            $userFields = array_intersect_key(
+                $data,
+                array_flip(['company_name', 'gst_in', 'city', 'state', 'operation_area'])
+            );
+            if (!empty($userFields)) {
+                User::where('id', $userId)->update($userFields);
+            }
+
+            // Brand scalar fields — only present keys
+            $brandUpdate = array_intersect_key($data, array_flip([
+                'company_name', 'brand_name', 'contact_person_name', 'mobile', 'email',
+                'address', 'city', 'state', 'location', 'latitude', 'longitude',
+            ]));
+            if (array_key_exists('gst_in', $data)) {
+                $brandUpdate['gst'] = $data['gst_in'];
+            }
+            if (!empty($brandUpdate)) {
+                $brand->update($brandUpdate);
+            }
+
+            if (array_key_exists('brand_type_ids', $data)) {
+                $brand->brandTypes()->sync($data['brand_type_ids'] ?? []);
+            }
+
+            return $brand->load('brandTypes');
+        });
+
+        EnsureUserMatchesJob::dispatchAfterResponse($userId);
+
+        return $brand;
     }
 
     public function getDashboard(int $userId): array
@@ -238,6 +285,7 @@ class BrandService
                 'timeline' => $data['timeline'] ?? 'Normal 3-5 Days',
                 'special_needs' => $data['special_needs'] ?? null,
                 'design_attachments' => $data['design_attachments'] ?? null,
+                'reference_image' => $data['reference_image'] ?? null,
                 'location' => $data['location'] ?? $brand->location ?? $brand->city,
                 'latitude' => $data['latitude'] ?? $brand->latitude,
                 'longitude' => $data['longitude'] ?? $brand->longitude,

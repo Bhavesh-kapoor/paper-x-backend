@@ -308,6 +308,11 @@ class SessionController extends Controller
                 'responses_count' => $responses_count,
             ];
 
+            // Brand's optional reference image (shown to the brand on their own post).
+            if ($posterType === 'brand') {
+                $data['reference_image_url'] = $this->referenceImageUrl($inquiry);
+            }
+
             // Converter jobwork: expose jobwork_mode, jobwork details, and inquiry_type (jobwork_find | jobwork_give)
             $jobwork = $this->jobworkDetails($inquiry);
             if ($jobwork !== null) {
@@ -457,6 +462,11 @@ class SessionController extends Controller
                 ],
             ];
 
+            // Brand's optional reference image (shown to the responder/converter).
+            if ($posterType === 'brand') {
+                $data['reference_image_url'] = $this->referenceImageUrl($inquiry);
+            }
+
             // Converter jobwork: expose jobwork_mode, jobwork details, and inquiry_type (jobwork_find | jobwork_give)
             $jobwork = $this->jobworkDetails($inquiry);
             if ($jobwork !== null) {
@@ -528,6 +538,21 @@ class SessionController extends Controller
      * For jobwork-find inquiries (JOB type, converter poster), return sample_available and sample_image_url.
      * Returns null for other inquiry types so callers can omit the fields.
      */
+    /**
+     * Public URL for a brand's optional reference image (relative path stored on the inquiry).
+     */
+    private function referenceImageUrl(Inquiry $inquiry): ?string
+    {
+        $ref = $inquiry->reference_image;
+        if (!is_string($ref) || $ref === '') {
+            return null;
+        }
+
+        return str_starts_with($ref, 'http')
+            ? $ref
+            : asset(ltrim(str_replace('\\', '/', $ref), '/'));
+    }
+
     private function jobworkSampleFields(Inquiry $inquiry): ?array
     {
         if ($inquiry->inquiry_type !== InquiryType::JOB || $inquiry->poster_type !== 'converter') {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Brand\PostRequirementRequest;
+use App\Http\Requests\Brand\UpdateSectionRequest;
 use App\Http\Requests\CompleteBrandProfileRequest;
 use App\Services\BrandService;
 use App\Services\ChatService;
@@ -25,6 +26,22 @@ class BrandController extends Controller
             $brand = $this->brandService->completeProfile($request->validated(), $user->id);
 
             return Response::success('Brand profile completed successfully', $brand, null, HttpResponse::HTTP_CREATED);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    public function updateSection(UpdateSectionRequest $request)
+    {
+        try {
+            $user = $request->user();
+            $brand = $this->brandService->updateSection($request->validated(), $user->id);
+
+            return Response::success('Section updated successfully', $brand);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),

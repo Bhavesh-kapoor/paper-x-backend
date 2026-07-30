@@ -56,6 +56,7 @@ class Inquiry extends Model
         'attachments',
         'attachment_paths',
         'design_attachments', // Photos/videos/design ideas (array of file paths)
+        'reference_image', // Optional single brand reference image (relative path)
         'deadline',
         'posting_fee_paid',
         'posting_fee_amount',

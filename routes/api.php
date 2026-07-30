@@ -95,6 +95,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('dealer')->group(function () {
         // Profile completion
         Route::post('/profile/complete', [DealerController::class, 'completeProfile'])->name('dealer.profile.complete');
+        Route::post('/profile/section', [DealerController::class, 'updateSection'])->name('dealer.profile.section');
         
         // Dashboard
         Route::get('/dashboard', [DealerController::class, 'getDashboard'])->name('dealer.dashboard');
@@ -165,6 +166,7 @@ Route::prefix('v1')->group(function () {
     #machine dealer routes
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('machine-dealer')->group(function () {
         Route::post('/profile/complete', [\App\Http\Controllers\api\MachineDealerController::class, 'completeProfile'])->name('machine-dealer.profile.complete');
+        Route::post('/profile/section', [\App\Http\Controllers\api\MachineDealerController::class, 'updateSection'])->name('machine-dealer.profile.section');
         Route::get('/dashboard', [\App\Http\Controllers\api\MachineDealerController::class, 'getDashboard'])->name('machine-dealer.dashboard');
         Route::post('/machine/post', [\App\Http\Controllers\api\MachineDealerController::class, 'postMachine'])->name('machine-dealer.machine.post');
         Route::get('/listings', [\App\Http\Controllers\api\MachineDealerController::class, 'getActiveListings'])->name('machine-dealer.listings');
@@ -174,6 +176,7 @@ Route::prefix('v1')->group(function () {
     #converter routes
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('converter')->group(function () {
         Route::post('/profile/complete', [\App\Http\Controllers\api\ConverterController::class, 'completeProfile'])->name('converter.profile.complete');
+        Route::post('/profile/section', [\App\Http\Controllers\api\ConverterController::class, 'updateSection'])->name('converter.profile.section');
         Route::get('/dashboard', [\App\Http\Controllers\api\ConverterController::class, 'getDashboard'])->name('converter.dashboard');
         
         // Post requirement (buy/sell)
@@ -245,6 +248,7 @@ Route::prefix('v1')->group(function () {
     #brand routes
     Route::middleware(['token.exists', 'auth:sanctum'])->prefix('brand')->group(function () {
         Route::post('/profile/complete', [\App\Http\Controllers\api\BrandController::class, 'completeProfile'])->name('brand.profile.complete');
+        Route::post('/profile/section', [\App\Http\Controllers\api\BrandController::class, 'updateSection'])->name('brand.profile.section');
         Route::get('/dashboard', [\App\Http\Controllers\api\BrandController::class, 'getDashboard'])->name('brand.dashboard');
         
         // Post requirement

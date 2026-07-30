@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\EnsuresUserMatches;
 use App\Http\Requests\CompleteMachineDealerProfileRequest;
+use App\Http\Requests\MachineDealer\UpdateSectionRequest;
 use App\Http\Requests\PostMachineRequest;
 use App\Services\MachineDealerService;
 use Illuminate\Http\Response as HttpResponse;
@@ -26,6 +27,22 @@ class MachineDealerController extends Controller
             $machineDealer = $this->machineDealerService->completeProfile($request->validated(), $user->id);
 
             return Response::success('Machine dealer profile completed successfully', $machineDealer, null, HttpResponse::HTTP_CREATED);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    public function updateSection(UpdateSectionRequest $request)
+    {
+        try {
+            $user = $request->user();
+            $machineDealer = $this->machineDealerService->updateSection($request->validated(), $user->id);
+
+            return Response::success('Section updated successfully', $machineDealer);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),

@@ -85,6 +85,62 @@ class ConverterService
         return $converter;
     }
 
+    /**
+     * Partial per-section update from the Registration Details editor.
+     * Only touches keys present in $data; never flips profile_complete/status,
+     * never wipes sections that weren't sent. Re-runs matchmaking afterwards.
+     */
+    public function updateSection(array $data, int $userId): Converter
+    {
+        $converter = DB::transaction(function () use ($data, $userId) {
+            $converter = Converter::firstOrCreate(
+                ['user_id' => $userId],
+                ['status' => ConverterStatus::PENDING]
+            );
+
+            // Common users-table fields (company overview)
+            $userFields = array_intersect_key(
+                $data,
+                array_flip(['company_name', 'gst_in', 'city', 'state', 'operation_area'])
+            );
+            if (!empty($userFields)) {
+                \App\Models\User::where('id', $userId)->update($userFields);
+            }
+
+            // Converter scalar fields — only the keys that were sent
+            $scalars = array_intersect_key($data, array_flip([
+                'converter_type_custom', 'capacity_daily', 'capacity_monthly', 'capacity_unit',
+                'factory_address', 'factory_city', 'factory_state', 'factory_latitude', 'factory_longitude',
+            ]));
+            if (!empty($scalars)) {
+                $converter->update($scalars);
+            }
+
+            // Pivots — sync only when the ids key is present (empty array = clear all)
+            if (array_key_exists('converter_type_ids', $data)) {
+                $converter->converterTypes()->sync($data['converter_type_ids'] ?? []);
+            }
+            if (array_key_exists('finished_product_ids', $data)) {
+                $converter->finishedProducts()->sync($data['finished_product_ids'] ?? []);
+            }
+            if (array_key_exists('machine_ids', $data)) {
+                $converter->machines()->sync($data['machine_ids'] ?? []);
+            }
+            if (array_key_exists('scrap_type_ids', $data)) {
+                $converter->scrapTypes()->sync($data['scrap_type_ids'] ?? []);
+            }
+            if (array_key_exists('raw_material_ids', $data)) {
+                $converter->rawMaterials()->sync($data['raw_material_ids'] ?? []);
+            }
+
+            return $converter->load(['converterTypes', 'finishedProducts', 'machines', 'scrapTypes', 'rawMaterials']);
+        });
+
+        EnsureUserMatchesJob::dispatchAfterResponse($userId);
+
+        return $converter;
+    }
+
     public function getDashboard(int $userId): array
     {
         $converter = Converter::where('user_id', $userId)->first();

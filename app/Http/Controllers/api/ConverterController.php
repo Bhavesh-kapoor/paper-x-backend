@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\EnsuresUserMatches;
 use App\Http\Requests\CompleteConverterProfileRequest;
+use App\Http\Requests\Converter\UpdateSectionRequest;
 use App\Http\Requests\Converter\PostRequirementRequest;
 use App\Http\Requests\PostMachineRequest;
 use App\Http\Requests\SubmitResponseRequest;
@@ -30,6 +31,22 @@ class ConverterController extends Controller
             $converter = $this->converterService->completeProfile($request->validated(), $user->id);
 
             return Response::success('Converter profile completed successfully', $converter, null, HttpResponse::HTTP_CREATED);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    public function updateSection(UpdateSectionRequest $request)
+    {
+        try {
+            $user = $request->user();
+            $converter = $this->converterService->updateSection($request->validated(), $user->id);
+
+            return Response::success('Section updated successfully', $converter);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),

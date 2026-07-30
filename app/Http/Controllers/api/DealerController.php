@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\EnsuresUserMatches;
 use App\Http\Requests\Dealer\ProfileCompleteRequest;
+use App\Http\Requests\Dealer\UpdateSectionRequest;
 use App\Http\Requests\Dealer\PostRequirementRequest;
 use App\Services\DealerService;
 use Illuminate\Http\Response as HttpResponse;
@@ -26,6 +27,22 @@ class DealerController extends Controller
             $dealer = $this->dealerService->completeProfile($request->validated(), $user->id);
 
             return Response::success('dealer.profile_complete', $dealer, null, HttpResponse::HTTP_CREATED);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode') ? $e->getStatusCode() : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
+    public function updateSection(UpdateSectionRequest $request)
+    {
+        try {
+            $user = $request->user();
+            $dealer = $this->dealerService->updateSection($request->validated(), $user->id);
+
+            return Response::success('Section updated successfully', $dealer);
         } catch (\Exception $e) {
             return Response::error(
                 $e->getMessage(),

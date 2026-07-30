@@ -67,9 +67,16 @@ class PostRequirementRequest extends ApiRequest
                 'between:-90,90'
             ],
             'longitude' => [
-                'required', 
-                'numeric', 
+                'required',
+                'numeric',
                 'between:-180,180'
+            ],
+
+            // Optional reference image (relative path returned by /upload/single)
+            'reference_image' => [
+                'nullable',
+                'string',
+                'max:2048',
             ],
         ];
     }

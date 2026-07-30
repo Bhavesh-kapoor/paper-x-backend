@@ -71,6 +71,46 @@ class MachineDealerService
         return $machineDealer;
     }
 
+    /**
+     * Partial per-section update from the Registration Details editor.
+     * Phase 1: company overview (common + machine_dealers scalars). Never flips
+     * profile_complete. Re-runs matchmaking.
+     */
+    public function updateSection(array $data, int $userId): MachineDealer
+    {
+        $machineDealer = DB::transaction(function () use ($data, $userId) {
+            $md = MachineDealer::firstOrCreate(
+                ['user_id' => $userId],
+                ['status' => MachineDealerStatus::PENDING, 'profile_complete' => false]
+            );
+
+            $userFields = array_intersect_key(
+                $data,
+                array_flip(['company_name', 'gst_in', 'city', 'state', 'operation_area'])
+            );
+            if (!empty($userFields)) {
+                User::where('id', $userId)->update($userFields);
+            }
+
+            // MachineDealer scalars — map + only present keys
+            $mdUpdate = array_intersect_key($data, array_flip([
+                'company_name', 'contact_person_name', 'mobile', 'email', 'city', 'location', 'latitude', 'longitude',
+            ]));
+            if (array_key_exists('gst_in', $data)) {
+                $mdUpdate['gst'] = $data['gst_in'];
+            }
+            if (!empty($mdUpdate)) {
+                $md->update($mdUpdate);
+            }
+
+            return $md;
+        });
+
+        EnsureUserMatchesJob::dispatchAfterResponse($userId);
+
+        return $machineDealer;
+    }
+
     public function getDashboard(int $userId): array
     {
         $machineDealer = MachineDealer::where('user_id', $userId)->first();
