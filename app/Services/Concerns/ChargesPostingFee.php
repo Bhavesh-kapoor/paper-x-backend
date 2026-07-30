@@ -24,6 +24,17 @@ trait ChargesPostingFee
     protected function chargePostingFee(int $userId, array $specs, ?int $inquiryId = null, array $metadata = []): array
     {
         $quote = app(PricingService::class)->quote($specs);
+
+        // Free-launch mode: skip the wallet check + deduction entirely so posting is free.
+        if (! config('features.payments_enabled', true)) {
+            return [
+                'base_fee'  => 0,
+                'gst'       => 0,
+                'total'     => 0,
+                'breakdown' => ['free_mode' => true, 'would_be' => $quote['breakdown'] ?? null],
+            ];
+        }
+
         $total = (int) $quote['total'];
 
         $wallet = Wallet::firstOrCreate(

@@ -79,7 +79,10 @@ class RTDOrderController extends Controller
 
     public function confirmPayment(ConfirmPaymentRequest $request)
     {
-        if (! config('rtd.allow_direct_confirm_payment', false)) {
+        // Allow connecting without Razorpay when direct-confirm is enabled OR payments
+        // are globally off (free-launch mode).
+        $freeMode = ! config('features.payments_enabled', true);
+        if (! config('rtd.allow_direct_confirm_payment', false) && ! $freeMode) {
             return Response::error(
                 'Direct payment confirmation is disabled. Complete payment through Razorpay checkout.',
                 null,

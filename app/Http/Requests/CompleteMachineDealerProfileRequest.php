@@ -27,6 +27,12 @@ class CompleteMachineDealerProfileRequest extends FormRequest
             'primary_machine_id' => ['nullable', 'integer'],
             'preferred_brand_names' => ['nullable', 'array'],
             'preferred_brand_names.*' => ['string', 'max:255'],
+            // Full list of machine preferences (category + type + optional brands per item)
+            'machine_preferences' => ['nullable', 'array'],
+            'machine_preferences.*.machine_category' => ['required', 'string', 'max:100'],
+            'machine_preferences.*.machine_id' => ['required', 'integer'],
+            'machine_preferences.*.brand_names' => ['nullable', 'array'],
+            'machine_preferences.*.brand_names.*' => ['string', 'max:255'],
         ];
     }
 }

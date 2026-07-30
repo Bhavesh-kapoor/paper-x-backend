@@ -112,8 +112,9 @@ class ConverterService
 
         $converterId = $converter->id;
         
-        // Get active sessions count (own posted only – sessions are private per user)
-        $activeSessionsCount = MatchingSession::ownSessionsByConverter($converterId)
+        // Active sessions = own posted + matched opportunities from other users
+        // (mirrors SessionController@getActive / the full Sessions dashboard).
+        $activeSessionsCount = MatchingSession::visibleToConverter($converterId)
             ->where('status', SessionStatus::ACTIVE)
             ->where('expires_at', '>', now())
             ->count();
@@ -131,13 +132,13 @@ class ConverterService
             ->where('read_at', null)
             ->count();
 
-        // Get top 5 active sessions for dashboard (own posted only)
-        $activeSessionModels = MatchingSession::ownSessionsByConverter($converterId)
+        // Top 3 active sessions for dashboard: own posted + matched opportunities
+        $activeSessionModels = MatchingSession::visibleToConverter($converterId)
             ->where('status', SessionStatus::ACTIVE)
             ->where('expires_at', '>', now())
             ->with(['inquiry.items'])
             ->orderBy('created_at', 'desc')
-            ->limit(5)
+            ->limit(3)
             ->get();
 
         // Batch matchmaking-log counts for all sessions' inquiries in ONE query
@@ -235,7 +236,7 @@ class ConverterService
             'my_inquiries_count' => $myInquiries,
             'responses_received_count' => $responsesReceived,
             'unread_notifications_count' => $unreadNotifications,
-            'active_sessions' => $activeSessions, // Top 5 active sessions
+            'active_sessions' => $activeSessions, // Top 3 active sessions
             'rtd_snapshot' => [
                 'active_listings' => $activeListings,
                 'active_listings_change' => $activeListings > 0 ? 'Live' : 'No listings',

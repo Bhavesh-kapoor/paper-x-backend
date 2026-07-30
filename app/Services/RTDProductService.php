@@ -25,7 +25,8 @@ class RTDProductService
 
     public function createProduct(array $data, int $userId): RtdProduct
     {
-        if (!$this->listingPackService->canAddProduct($userId)) {
+        // In free-launch mode, listing packs are not required — anyone can list.
+        if (config('features.payments_enabled', true) && !$this->listingPackService->canAddProduct($userId)) {
             throw new RTDDomainException(
                 'Purchase a listing pack to add RTD products, or your current pack has no slots left or has expired.',
                 422

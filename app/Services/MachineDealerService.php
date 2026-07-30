@@ -29,6 +29,9 @@ class MachineDealerService
     public function completeProfile(array $data, int $userId): MachineDealer
     {
         $machineDealer = DB::transaction(function () use ($data, $userId) {
+            $preferences = $data['machine_preferences'] ?? null;
+            $firstPreference = is_array($preferences) && count($preferences) > 0 ? $preferences[0] : null;
+
             $createAttributes = [
                 'company_name' => $data['company_name'],
                 'contact_person_name' => $data['contact_person_name'],
@@ -39,9 +42,12 @@ class MachineDealerService
                 'location' => $data['location'] ?? null,
                 'latitude' => $data['latitude'] ?? null,
                 'longitude' => $data['longitude'] ?? null,
-                'primary_machine_category' => $data['primary_machine_category'] ?? null,
-                'primary_machine_id' => $data['primary_machine_id'] ?? null,
+                // Keep the legacy single columns in sync (matching engine reads these):
+                // prefer an explicit primary_* value, otherwise fall back to the first preference.
+                'primary_machine_category' => $data['primary_machine_category'] ?? ($firstPreference['machine_category'] ?? null),
+                'primary_machine_id' => $data['primary_machine_id'] ?? ($firstPreference['machine_id'] ?? null),
                 'preferred_brand_names' => $data['preferred_brand_names'] ?? null,
+                'machine_preferences' => $preferences,
                 'profile_complete' => true,
                 'status' => MachineDealerStatus::ACTIVE,
             ];
