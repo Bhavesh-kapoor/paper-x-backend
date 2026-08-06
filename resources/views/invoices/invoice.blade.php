@@ -1,116 +1,250 @@
+@php
+    use App\Support\AmountInWords;
+
+    $seller  = config('company');
+    $bill    = $invoice['bill_to'] ?? [];
+
+    $dated   = $invoice['paid_at'] ? \Carbon\Carbon::parse($invoice['paid_at'])->format('d-M-Y') : '—';
+    $taxable = (float) ($invoice['base_amount_inr'] ?? 0);
+    $gst     = (float) ($invoice['gst_amount_inr'] ?? 0);
+    $gstRate = (float) ($invoice['gst_percent'] ?? 0);
+    $total   = (float) ($invoice['total_inr'] ?? 0);
+    $cgst    = round($gst / 2, 2);
+    $sgst    = round($gst - $cgst, 2);
+    $halfRate = $gstRate / 2;
+    $roundOff = round($total - ($taxable + $gst), 2);
+
+    $buyerName    = $bill['company_name'] ?: ($bill['name'] ?? '');
+    $buyerAddr    = collect([$bill['city'] ?? null, $bill['state'] ?? null])->filter()->implode(', ');
+    $buyerState   = $bill['state'] ?? '';
+    $buyerGstin   = $bill['gstin'] ?? '';
+
+    $qty = $invoice['credits'] !== null ? number_format($invoice['credits']) : '1';
+    $n2  = fn ($v) => number_format((float) $v, 2);
+@endphp
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: DejaVu Sans, sans-serif; font-size: 12px; color: #1F2937; padding: 36px; }
-  .header { width: 100%; border-bottom: 3px solid #1D4ED8; padding-bottom: 16px; margin-bottom: 24px; }
-  .brand { font-size: 26px; font-weight: bold; color: #1D4ED8; }
-  .company-details { font-size: 10px; color: #6B7280; margin-top: 6px; line-height: 1.5; }
-  .invoice-meta { text-align: right; }
-  .invoice-title { font-size: 20px; font-weight: bold; color: #111827; }
-  .paid-badge { display: inline-block; background: #DCFCE7; color: #15803D; font-weight: bold; font-size: 10px; padding: 3px 10px; border-radius: 10px; margin-top: 6px; letter-spacing: 1px; }
-  .meta-line { font-size: 11px; color: #6B7280; margin-top: 4px; }
-  table.layout { width: 100%; border-collapse: collapse; }
-  .section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9CA3AF; font-weight: bold; margin-bottom: 6px; }
-  .bill-box { margin-bottom: 24px; }
-  .bill-name { font-size: 13px; font-weight: bold; color: #111827; }
-  .bill-line { font-size: 11px; color: #4B5563; line-height: 1.6; }
-  table.items { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-  table.items th { background: #F3F4F6; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #6B7280; padding: 9px 12px; }
-  table.items th.right, table.items td.right { text-align: right; }
-  table.items td { padding: 11px 12px; border-bottom: 1px solid #E5E7EB; font-size: 12px; }
-  table.totals { width: 46%; margin-left: 54%; border-collapse: collapse; margin-top: 8px; }
-  table.totals td { padding: 6px 12px; font-size: 12px; }
-  table.totals td.label { color: #6B7280; }
-  table.totals td.value { text-align: right; color: #111827; }
-  table.totals tr.grand td { border-top: 2px solid #1D4ED8; font-weight: bold; font-size: 14px; padding-top: 10px; }
-  .payment-box { margin-top: 28px; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 6px; padding: 14px 16px; }
-  .payment-line { font-size: 11px; color: #4B5563; line-height: 1.8; }
-  .payment-line span { color: #111827; font-weight: bold; }
-  .footer { margin-top: 40px; border-top: 1px solid #E5E7EB; padding-top: 12px; font-size: 9px; color: #9CA3AF; text-align: center; line-height: 1.6; }
+  body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #000; padding: 18px; }
+  table { border-collapse: collapse; width: 100%; }
+  .outer { border: 1px solid #000; }
+  td { vertical-align: top; padding: 3px 5px; }
+  .b-r { border-right: 1px solid #000; }
+  .b-b { border-bottom: 1px solid #000; }
+  .b-t { border-top: 1px solid #000; }
+  .title { text-align: center; font-size: 13px; font-weight: bold; padding: 5px; }
+  .lbl { color: #333; font-size: 8px; }
+  .val { font-weight: bold; }
+  .seller-name { font-weight: bold; font-size: 11px; }
+  .small { font-size: 8px; line-height: 1.5; }
+  .right { text-align: right; }
+  .center { text-align: center; }
+  .muted { color: #444; }
+  .items th { border: 1px solid #000; background: #f2f2f2; font-size: 8px; padding: 4px; text-transform: uppercase; }
+  .items td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 4px 5px; }
+  .strong { font-weight: bold; }
+  .metarow td { font-size: 8px; height: 16px; }
 </style>
 </head>
 <body>
+  <div class="title">Tax Invoice</div>
 
-  <table class="layout header">
+  <table class="outer">
+    <!-- Seller + meta grid -->
     <tr>
-      <td>
-        <div class="brand">{{ $invoice['seller']['name'] }}</div>
-        <div class="company-details">
-          {{ $invoice['seller']['legal_name'] }}<br>
-          {{ $invoice['seller']['address'] }}<br>
-          @if(!empty($invoice['seller']['gstin'])) GSTIN: {{ $invoice['seller']['gstin'] }}<br> @endif
-          {{ $invoice['seller']['email'] }} @if(!empty($invoice['seller']['phone'])) · {{ $invoice['seller']['phone'] }} @endif
+      <td class="b-r b-b" style="width:52%;">
+        <div class="seller-name">{{ $seller['legal_name'] }}</div>
+        <div class="small">
+          @foreach($seller['address_lines'] as $line){{ $line }}<br>@endforeach
+          @if($seller['udyam']){{ $seller['udyam'] }}<br>@endif
+          @if($seller['cin'])CIN- {{ $seller['cin'] }}<br>@endif
+          @if($seller['gstin'])GSTIN/UIN: {{ $seller['gstin'] }}<br>@endif
+          State Name : {{ $seller['state'] }}, Code : {{ $seller['state_code'] }}
         </div>
       </td>
-      <td class="invoice-meta">
-        <div class="invoice-title">TAX INVOICE</div>
-        <div class="paid-badge">PAID</div>
-        <div class="meta-line">Invoice No: <strong>{{ $invoice['invoice_no'] }}</strong></div>
-        <div class="meta-line">Date: {{ $invoice['paid_at'] ? \Carbon\Carbon::parse($invoice['paid_at'])->format('d M Y, h:i A') : '—' }}</div>
+      <td class="b-b" style="width:48%; padding:0;">
+        <table>
+          <tr class="metarow">
+            <td class="b-r b-b" style="width:50%;"><span class="lbl">Invoice No.</span><br><span class="val">{{ $invoice['invoice_no'] }}</span></td>
+            <td class="b-b"><span class="lbl">Dated</span><br><span class="val">{{ $dated }}</span></td>
+          </tr>
+          <tr class="metarow">
+            <td class="b-r b-b"><span class="lbl">Reference No. &amp; Date</span><br><span class="val">{{ $invoice['receipt'] ?? '—' }}</span></td>
+            <td class="b-b"><span class="lbl">Mode/Terms of Payment</span><br><span class="val">Razorpay (Prepaid)</span></td>
+          </tr>
+          <tr class="metarow">
+            <td class="b-r b-b"><span class="lbl">Buyer's Order No.</span></td>
+            <td class="b-b"><span class="lbl">Dated</span></td>
+          </tr>
+          <tr class="metarow">
+            <td class="b-r"><span class="lbl">Dispatched through</span></td>
+            <td><span class="lbl">Destination</span></td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Consignee -->
+    <tr>
+      <td class="b-r b-b" colspan="2" style="padding:0;">
+        <table>
+          <tr>
+            <td class="b-r" style="width:52%;">
+              <span class="lbl">Consignee (Ship to)</span><br>
+              <span class="val">{{ $buyerName }}</span><br>
+              <span class="small">{{ $buyerAddr ?: '—' }}</span><br>
+              <span class="small">@if($buyerGstin)GSTIN/UIN : {{ $buyerGstin }}<br>@endif State Name : {{ $buyerState ?: '—' }}</span>
+            </td>
+            <td>
+              <span class="lbl">Buyer (Bill to)</span><br>
+              <span class="val">{{ $buyerName }}</span><br>
+              <span class="small">{{ $buyerAddr ?: '—' }}</span><br>
+              <span class="small">@if($buyerGstin)GSTIN/UIN : {{ $buyerGstin }}<br>@endif State Name : {{ $buyerState ?: '—' }}</span>
+            </td>
+          </tr>
+        </table>
       </td>
     </tr>
   </table>
 
-  <div class="bill-box">
-    <div class="section-title">Billed To</div>
-    <div class="bill-name">{{ $invoice['bill_to']['company_name'] ?: $invoice['bill_to']['name'] }}</div>
-    @if($invoice['bill_to']['company_name'] && $invoice['bill_to']['name'])
-      <div class="bill-line">{{ $invoice['bill_to']['name'] }}</div>
-    @endif
-    @if($invoice['bill_to']['city'] || $invoice['bill_to']['state'])
-      <div class="bill-line">{{ collect([$invoice['bill_to']['city'], $invoice['bill_to']['state']])->filter()->implode(', ') }}</div>
-    @endif
-    @if(!empty($invoice['bill_to']['gstin']))
-      <div class="bill-line">GSTIN: {{ $invoice['bill_to']['gstin'] }}</div>
-    @endif
-  </div>
-
-  <table class="items">
+  <!-- Items -->
+  <table class="items" style="border:1px solid #000; border-top:0;">
     <tr>
-      <th style="width: 55%;">Description</th>
-      <th class="right">Credits</th>
-      <th class="right">Amount (₹)</th>
+      <th style="width:5%;">Sl<br>No.</th>
+      <th style="width:43%;">Description of Goods</th>
+      <th style="width:12%;">HSN/SAC</th>
+      <th style="width:10%;" class="right">Quantity</th>
+      <th style="width:12%;" class="right">Rate</th>
+      <th style="width:5%;">per</th>
+      <th style="width:13%;" class="right">Amount</th>
     </tr>
     <tr>
-      <td>{{ $invoice['title'] }}</td>
-      <td class="right">{{ $invoice['credits'] !== null ? number_format($invoice['credits']) : '—' }}</td>
-      <td class="right">{{ number_format($invoice['base_amount_inr'], 2) }}</td>
+      <td class="center">1</td>
+      <td class="strong">{{ $invoice['title'] }}</td>
+      <td class="center">{{ $seller['sac_code'] }}</td>
+      <td class="right">{{ $qty }}</td>
+      <td class="right">{{ $n2($taxable) }}</td>
+      <td class="center"></td>
+      <td class="right">{{ $n2($taxable) }}</td>
+    </tr>
+    @if($gst > 0)
+    <tr>
+      <td></td>
+      <td class="right muted">OUTPUT CGST @ {{ rtrim(rtrim(number_format($halfRate,2),'0'),'.') }}%</td>
+      <td></td><td></td><td></td>
+      <td class="center muted">{{ rtrim(rtrim(number_format($halfRate,2),'0'),'.') }}%</td>
+      <td class="right">{{ $n2($cgst) }}</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td class="right muted">OUTPUT SGST @ {{ rtrim(rtrim(number_format($halfRate,2),'0'),'.') }}%</td>
+      <td></td><td></td><td></td>
+      <td class="center muted">{{ rtrim(rtrim(number_format($halfRate,2),'0'),'.') }}%</td>
+      <td class="right">{{ $n2($sgst) }}</td>
+    </tr>
+    @endif
+    @if(abs($roundOff) >= 0.01)
+    <tr>
+      <td></td><td class="right muted">Round Off</td><td></td><td></td><td></td><td></td>
+      <td class="right">{{ $n2($roundOff) }}</td>
+    </tr>
+    @endif
+    <tr>
+      <td class="b-t"></td>
+      <td class="b-t right strong">Total</td>
+      <td class="b-t"></td><td class="b-t"></td><td class="b-t"></td><td class="b-t"></td>
+      <td class="b-t right strong">₹ {{ $n2($total) }}</td>
     </tr>
   </table>
 
-  <table class="totals">
+  <!-- Amount in words -->
+  <table class="outer" style="border-top:0;">
     <tr>
-      <td class="label">Subtotal</td>
-      <td class="value">₹{{ number_format($invoice['base_amount_inr'], 2) }}</td>
-    </tr>
-    @if($invoice['gst_amount_inr'] > 0)
-    <tr>
-      <td class="label">GST ({{ rtrim(rtrim(number_format($invoice['gst_percent'], 2), '0'), '.') }}%)</td>
-      <td class="value">₹{{ number_format($invoice['gst_amount_inr'], 2) }}</td>
-    </tr>
-    @endif
-    <tr class="grand">
-      <td class="label">Total Paid</td>
-      <td class="value">₹{{ number_format($invoice['total_inr'], 2) }}</td>
+      <td class="b-b">
+        <span class="lbl">Amount Chargeable (in words)</span>
+        <span class="right" style="float:right;">E. &amp; O.E</span><br>
+        <span class="val">{{ AmountInWords::inr($total) }}</span>
+      </td>
     </tr>
   </table>
 
-  <div class="payment-box">
-    <div class="section-title">Payment Details</div>
-    <div class="payment-line">Payment Method: <span>Razorpay</span></div>
-    @if(!empty($invoice['razorpay_payment_id']))
-      <div class="payment-line">Payment ID: <span>{{ $invoice['razorpay_payment_id'] }}</span></div>
-    @endif
-    <div class="payment-line">Receipt: <span>{{ $invoice['receipt'] }}</span></div>
-  </div>
+  <!-- Tax summary -->
+  <table class="items" style="border:1px solid #000; border-top:0;">
+    <tr>
+      <th rowspan="2" style="width:34%;">Taxable<br>Value</th>
+      <th colspan="2">CGST</th>
+      <th colspan="2">SGST/UTGST</th>
+      <th rowspan="2" class="right" style="width:18%;">Total<br>Tax Amount</th>
+    </tr>
+    <tr>
+      <th class="center">Rate</th><th class="right">Amount</th>
+      <th class="center">Rate</th><th class="right">Amount</th>
+    </tr>
+    <tr>
+      <td class="right">{{ $n2($taxable) }}</td>
+      <td class="center">{{ rtrim(rtrim(number_format($halfRate,2),'0'),'.') }}%</td>
+      <td class="right">{{ $n2($cgst) }}</td>
+      <td class="center">{{ rtrim(rtrim(number_format($halfRate,2),'0'),'.') }}%</td>
+      <td class="right">{{ $n2($sgst) }}</td>
+      <td class="right">{{ $n2($gst) }}</td>
+    </tr>
+    <tr>
+      <td class="right strong b-t">{{ $n2($taxable) }}</td>
+      <td class="b-t"></td>
+      <td class="right strong b-t">{{ $n2($cgst) }}</td>
+      <td class="b-t"></td>
+      <td class="right strong b-t">{{ $n2($sgst) }}</td>
+      <td class="right strong b-t">{{ $n2($gst) }}</td>
+    </tr>
+  </table>
 
-  <div class="footer">
-    This is a computer-generated invoice and does not require a signature.<br>
-    For any queries, contact {{ $invoice['seller']['email'] }}.
-  </div>
+  <table class="outer" style="border-top:0;">
+    <tr>
+      <td class="b-b"><span class="lbl">Tax Amount (in words) :</span> <span class="val">{{ AmountInWords::inr($gst) }}</span></td>
+    </tr>
+    <tr>
+      <td class="b-b" style="padding:0;">
+        <table>
+          <tr>
+            <td class="b-r" style="width:60%;">
+              <span class="lbl">Company's PAN :</span> <span class="val">{{ $seller['pan'] }}</span>
+              <div class="small" style="margin-top:6px;">
+                <span class="strong">Declaration</span><br>
+                We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+              </div>
+            </td>
+            <td>
+              <span class="lbl">Company's Bank Details</span>
+              <div class="small">
+                Bank Name : {{ $seller['bank']['name'] ?: '—' }}<br>
+                A/c No. : {{ $seller['bank']['account'] ?: '—' }}<br>
+                Branch &amp; IFS Code : {{ $seller['bank']['branch_ifsc'] ?: '—' }}
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:0;">
+        <table>
+          <tr>
+            <td class="b-r" style="width:60%; height:52px;">
+              <span class="small">Customer's Seal and Signature</span>
+            </td>
+            <td class="right">
+              <span class="small">for {{ $seller['legal_name'] }}</span>
+              <div class="small" style="margin-top:34px;">Authorised Signatory</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 
+  <div class="center small" style="margin-top:6px;">This is a Computer Generated Invoice</div>
 </body>
 </html>

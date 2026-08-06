@@ -4,6 +4,7 @@ namespace App\Domain\MatchEngine;
 
 use App\Domain\MatchEngine\Models\MatchHistory;
 use App\Enums\InquiryStatus;
+use App\Enums\SessionStatus;
 use App\Models\Inquiry;
 use App\Models\MatchmakingLog;
 use App\Models\User;
@@ -98,6 +99,20 @@ class MatchEngineOrchestrator
             ->pluck('inquiry_id')
             ->toArray();
 
+        // Terminal / closed session states — a session in any of these is no
+        // longer open to new responders, so a newly registered user must NOT be
+        // matched to (or notified about) it.
+        $closedSessionStatuses = [
+            SessionStatus::LOCKED->value,
+            SessionStatus::CHAT_ACTIVE->value,
+            SessionStatus::DEAL_SUCCESS->value,
+            SessionStatus::DEAL_FAILED->value,
+            SessionStatus::DEAL_WON->value,
+            SessionStatus::DEAL_LOST->value,
+            SessionStatus::EXPIRED->value,
+            SessionStatus::CANCELLED->value,
+        ];
+
         $inquiries = Inquiry::query()
             ->whereIn('status', [InquiryStatus::POSTED, InquiryStatus::MATCHING])
             ->whereNull('locked_at')
@@ -107,6 +122,15 @@ class MatchEngineOrchestrator
             ->whereNotIn('id', $alreadyMatchedInquiryIds)
             ->where(function ($q) use ($user) {
                 $this->excludeOwnInquiries($q, $user);
+            })
+            // The 24h window + lock/close state live on the MatchingSession, which
+            // is the source of truth. inquiry.expires_at is usually NULL, so without
+            // this gate expired/closed sessions slip through and new users get
+            // notified about sessions that already ended.
+            ->whereHas('session', function ($q) use ($closedSessionStatuses) {
+                $q->where('expires_at', '>', now())
+                    ->whereNull('locked_at')
+                    ->whereNotIn('status', $closedSessionStatuses);
             })
             ->with(['items', 'materials', 'session'])
             ->limit($maxEvaluations)
