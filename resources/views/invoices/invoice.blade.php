@@ -4,6 +4,12 @@
     $seller  = config('company');
     $bill    = $invoice['bill_to'] ?? [];
 
+    // Zupply brand logo, embedded as base64 so dompdf renders it without file access.
+    $logoPath = public_path('assets/img/zupply-logo.png');
+    $logoSrc  = is_file($logoPath)
+        ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath))
+        : null;
+
     $dated   = $invoice['paid_at'] ? \Carbon\Carbon::parse($invoice['paid_at'])->format('d-M-Y') : '—';
     $taxable = (float) ($invoice['base_amount_inr'] ?? 0);
     $gst     = (float) ($invoice['gst_amount_inr'] ?? 0);
@@ -56,7 +62,9 @@
     <!-- Seller + meta grid -->
     <tr>
       <td class="b-r b-b" style="width:52%;">
-        <div class="seller-name">{{ $seller['legal_name'] }}</div>
+        @if($logoSrc)<img src="{{ $logoSrc }}" alt="Zupply" style="height:36px; margin-bottom:3px;"><br>@endif
+        <div class="seller-name" style="font-size:13px;">{{ $seller['name'] }}</div>
+        <div class="small muted" style="margin-bottom:2px;">A unit of {{ $seller['legal_name'] }}</div>
         <div class="small">
           @foreach($seller['address_lines'] as $line){{ $line }}<br>@endforeach
           @if($seller['udyam']){{ $seller['udyam'] }}<br>@endif
