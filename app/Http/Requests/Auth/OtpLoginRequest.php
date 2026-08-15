@@ -13,7 +13,7 @@ class OtpLoginRequest extends ApiRequest
             'mobile' => ['required', 'digits:10'],
             'otp' => [
                 request()->routeIs('auth.otp.verify') ? 'required' : 'nullable',
-                'digits:4'
+                'digits:6'
             ],
         ];
     }

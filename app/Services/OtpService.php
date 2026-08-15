@@ -17,7 +17,7 @@ class OtpService
     public function generateOtp($user)
     {
         try {
-            $otpCode = config('app.env') === 'local' ? '1234' : (string) random_int(1000, 9999);
+            $otpCode = config('app.env') === 'local' ? '123456' : (string) random_int(100000, 999999);
 
             $otp = Otp::updateOrCreate(
                 ['user_id' => $user->id],
