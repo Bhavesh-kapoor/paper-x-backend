@@ -52,6 +52,11 @@ return [
         'currency' => env('RAZORPAY_CURRENCY', 'INR'),
     ],
 
+    'msg91' => [
+        'auth_key' => env('MSG91_AUTH_KEY'),
+        'template_id' => env('MSG91_TEMPLATE_ID'),
+    ],
+
     'push' => [
         // Master switch for FCM push delivery. DB notifications are always
         // written; only the push send is gated by this flag.
