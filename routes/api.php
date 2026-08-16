@@ -58,6 +58,8 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['token.exists', 'auth:sanctum'])->group(function () {
         Route::get('/user/profile', [UserController::class, 'getProfile']);
         Route::post('/user/profile', [UserController::class, 'updateProfile']);
+        // In-app account deletion (Apple 5.1.1(v))
+        Route::delete('/user/account', [UserController::class, 'deleteAccount'])->name('user.account.delete');
     });
 
     #materials

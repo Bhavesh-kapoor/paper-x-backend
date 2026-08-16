@@ -1,7 +1,13 @@
 <?php
 
 namespace App\Services;
+
+use App\Enums\InquiryStatus;
+use App\Enums\SessionStatus;
+use App\Models\Inquiry;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 class UserService
 {
@@ -50,6 +56,164 @@ class UserService
             throw $e;
         }
 
+    }
+
+    /**
+     * Permanently delete the authenticated user's account (Apple 5.1.1(v)).
+     *
+     * Strategy: anonymize + delete. We scrub all personal data, null the unique
+     * mobile/email (which frees the number for future re-registration and makes
+     * the account unreachable via OTP login), revoke all access, and mark the row
+     * deleted. Role-profile rows are kept (PII scrubbed) so historical inquiries
+     * that reference them polymorphically don't break.
+     */
+    public function deleteAccount(): void
+    {
+        $user = request()->user();
+
+        if (! $user) {
+            throw new \RuntimeException('Not authenticated');
+        }
+
+        DB::transaction(function () use ($user) {
+            $user->loadMissing(['dealer.locations', 'converter', 'brand', 'machineDealer']);
+
+            // 1) Best-effort: expire this user's active listings so they stop
+            //    matching others. Never let a listing-expiry hiccup (e.g. a DB
+            //    enum quirk) block the account deletion itself.
+            try {
+                $this->expireUserListings($user);
+            } catch (\Throwable $e) {
+                Log::warning('Account deletion: expiring listings failed', [
+                    'user_id' => $user->id,
+                    'error'   => $e->getMessage(),
+                ]);
+            }
+
+            // 2) Scrub role-profile PII (keep the rows for referential integrity).
+            if ($user->dealer) {
+                // Dealer has no direct PII columns; remove saved warehouse addresses.
+                $user->dealer->locations()->delete();
+            }
+            if ($user->converter) {
+                $user->converter->update([
+                    'factory_address'   => null,
+                    'factory_city'      => null,
+                    'factory_state'     => null,
+                    'factory_latitude'  => null,
+                    'factory_longitude' => null,
+                ]);
+            }
+            if ($user->brand) {
+                $user->brand->update([
+                    'company_name'        => null,
+                    'brand_name'          => null,
+                    'contact_person_name' => null,
+                    'mobile'              => null,
+                    'email'               => null,
+                    'gst'                 => null,
+                    'state'               => null,
+                    'city'                => null,
+                    'address'             => null,
+                    'location'            => null,
+                    'latitude'            => null,
+                    'longitude'           => null,
+                ]);
+            }
+            if ($user->machineDealer) {
+                $user->machineDealer->update([
+                    'company_name'         => null,
+                    'gst'                  => null,
+                    'contact_person_name'  => null,
+                    'mobile'               => null,
+                    'email'                => null,
+                    'city'                 => null,
+                    'location'             => null,
+                    'latitude'             => null,
+                    'longitude'            => null,
+                    'preferred_brand_names' => null,
+                    'machine_preferences'  => null,
+                ]);
+            }
+
+            // 3) Remove uploaded personal files (best-effort).
+            foreach (['udyam_certificate', 'avatar'] as $fileCol) {
+                if ($user->{$fileCol} && File::exists(public_path($user->{$fileCol}))) {
+                    File::delete(public_path($user->{$fileCol}));
+                }
+            }
+
+            // 4) Stop push notifications for this account.
+            $user->deviceTokens()->delete();
+
+            // 5) Revoke all API access (Sanctum personal access tokens).
+            $user->tokens()->delete();
+
+            // 6) Scrub the base user row + mark it deleted. forceFill bypasses
+            //    $fillable so we can set deleted_at directly.
+            $user->forceFill([
+                'name'               => 'Deleted User',
+                'mobile'             => null,
+                'email'              => null,
+                'company_name'       => null,
+                'gst_in'             => null,
+                'avatar'             => null,
+                'udyam_certificate'  => null,
+                'udyam_verified_at'  => null,
+                'operation_area'     => null,
+                'state'              => null,
+                'city'               => null,
+                'deleted_at'         => now(),
+            ])->save();
+        });
+    }
+
+    /**
+     * Set every non-terminal inquiry (and its session) posted by this user to
+     * EXPIRED, so a deleted user no longer appears as a live match/opportunity.
+     */
+    private function expireUserListings($user): void
+    {
+        $posters = [];
+        if ($user->dealer)        { $posters[] = ['dealer', $user->dealer->id]; }
+        if ($user->converter)     { $posters[] = ['converter', $user->converter->id]; }
+        if ($user->brand)         { $posters[] = ['brand', $user->brand->id]; }
+        if ($user->machineDealer) { $posters[] = ['machine_dealer', $user->machineDealer->id]; }
+
+        if (empty($posters)) {
+            return;
+        }
+
+        $terminal = [
+            InquiryStatus::DEAL_SUCCESS,
+            InquiryStatus::DEAL_FAILED,
+            InquiryStatus::DEAL_WON,
+            InquiryStatus::DEAL_LOST,
+            InquiryStatus::EXPIRED,
+            InquiryStatus::SESSION_EXPIRED,
+            InquiryStatus::BRAND_CANCELLED,
+        ];
+
+        $inquiries = Inquiry::query()
+            ->where(function ($q) use ($posters) {
+                foreach ($posters as [$type, $id]) {
+                    $q->orWhere(function ($sub) use ($type, $id) {
+                        $sub->where('poster_type', $type)->where('poster_id', $id);
+                    });
+                }
+            })
+            ->whereNotIn('status', $terminal)
+            ->with('session')
+            ->get();
+
+        foreach ($inquiries as $inquiry) {
+            // NOTE: the inquiries DB enum uses SESSION_EXPIRED (it has no EXPIRED
+            // value); matching_sessions does have EXPIRED.
+            $inquiry->update(['status' => InquiryStatus::SESSION_EXPIRED]);
+            if ($inquiry->session) {
+                $inquiry->session->update(['status' => SessionStatus::EXPIRED]);
+            }
+        }
     }
 
     public function getProfile()

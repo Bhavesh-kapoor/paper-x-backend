@@ -56,4 +56,24 @@ class UserController extends Controller
         }
     }
 
+    /**
+     * deleteAccount — permanently deletes the authenticated user's account
+     * (anonymize + delete). Required for Apple Guideline 5.1.1(v).
+     */
+    public function deleteAccount(Request $request)
+    {
+        try {
+            $this->userService->deleteAccount();
+            return Response::success("user.account_deleted", null);
+        } catch (\Exception $e) {
+            return Response::error(
+                $e->getMessage(),
+                null,
+                method_exists($e, 'getStatusCode')
+                ? $e->getStatusCode()
+                : HttpResponse::HTTP_BAD_REQUEST
+            );
+        }
+    }
+
 }
