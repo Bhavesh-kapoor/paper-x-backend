@@ -7,6 +7,7 @@ use App\Models\MarketInsight;
 use App\Services\MarketInsightGeneratorService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Response;
 
@@ -17,12 +18,94 @@ class MarketInsightController extends Controller
     ) {
     }
 
+    /**
+     * Generate today's insight AFTER the response is flushed, so no user ever
+     * waits on the RSS + Gemini pipeline. A short-lived cache flag makes sure
+     * concurrent requests don't kick off duplicate generations.
+     */
+    private function queueTodayGeneration(string $today): void
+    {
+        $lockKey = 'market-insight:generating:'.$today;
+        $lockAcquired = false;
+
+        try {
+            // Cache::add() is atomic — only the first caller acquires it.
+            if (! Cache::add($lockKey, true, now()->addMinutes(10))) {
+                return; // another request is already generating today's insight
+            }
+            $lockAcquired = true;
+        } catch (\Throwable $e) {
+            // Cache unavailable (missing cache table, driver misconfigured, etc.).
+            // Degrade gracefully: still generate, just without de-duplication.
+            // generateForDate() re-checks for an existing row, so a duplicate
+            // run is wasteful at worst, never incorrect.
+            Log::warning('Market insight lock unavailable; generating without it', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        dispatch(function () use ($today, $lockKey, $lockAcquired) {
+            try {
+                app(MarketInsightGeneratorService::class)
+                    ->generateForDate(\Illuminate\Support\Carbon::parse($today));
+            } catch (\Throwable $e) {
+                Log::warning('Background market insight generation failed', [
+                    'insight_date' => $today,
+                    'error' => $e->getMessage(),
+                ]);
+            } finally {
+                if ($lockAcquired) {
+                    try {
+                        Cache::forget($lockKey);
+                    } catch (\Throwable $e) {
+                        // Cache went away mid-flight; the 10-min TTL clears it.
+                    }
+                }
+            }
+        })->afterResponse();
+    }
+
     public function today()
     {
         try {
-            // First-hit generation may include RSS + AI calls; allow longer request time.
-            @set_time_limit(120);
+            $today = now()->toDateString();
 
+            // Fast path: today's insight already exists (scheduler ran, or an
+            // earlier background generation finished) — plain DB read.
+            $existing = MarketInsight::query()->whereDate('insight_date', $today)->first();
+            if ($existing) {
+                return Response::success(
+                    'Today market insight retrieved successfully',
+                    $this->transformInsight($existing)
+                );
+            }
+
+            // Today's isn't ready yet. NEVER make the user wait on the
+            // RSS + Gemini pipeline (that took 30s+). Serve the most recent
+            // insight instantly and generate today's after the response.
+            $latest = MarketInsight::query()->orderByDesc('insight_date')->first();
+
+            if ($latest) {
+                // Queueing must never affect what the user sees — if anything
+                // here fails (cache down, dispatcher error), we still serve the
+                // last stored insight from the database.
+                try {
+                    $this->queueTodayGeneration($today);
+                } catch (\Throwable $e) {
+                    Log::warning('Could not queue market insight generation', [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+
+                return Response::success(
+                    'Latest market insight retrieved successfully',
+                    $this->transformInsight($latest)
+                );
+            }
+
+            // Nothing at all in the table (very first run) — generate inline as
+            // a last resort so the screen isn't empty.
+            @set_time_limit(120);
             $result = $this->marketInsightGeneratorService->generateForDate(now());
 
             return Response::success(
