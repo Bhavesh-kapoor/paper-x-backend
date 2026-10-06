@@ -122,9 +122,10 @@ class UserService
             }
             if ($user->machineDealer) {
                 $user->machineDealer->update([
-                    'company_name'         => null,
+                    // NOT NULL columns, so a placeholder instead of null.
+                    'company_name'         => 'Deleted User',
                     'gst'                  => null,
-                    'contact_person_name'  => null,
+                    'contact_person_name'  => 'Deleted User',
                     'mobile'               => null,
                     'email'                => null,
                     'city'                 => null,
